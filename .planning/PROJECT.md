@@ -48,7 +48,8 @@ O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com
 
 ## Constraints
 
-- **Tech stack**: TypeScript/Node de ponta a ponta — Mineflayer + `@langchain/langgraph` (JS) no mesmo processo — porque Mineflayer é Node-only e queremos uma única linguagem.
+- **Tech stack**: TypeScript de ponta a ponta — Mineflayer + `@langchain/langgraph` (JS) no mesmo processo — porque Mineflayer é Node-only e queremos uma única linguagem.
+- **Runtime**: Bun como runtime/gerenciador de pacotes (TS nativo, performático), com Node como fallback de compatibilidade caso o Mineflayer apresente casos-limite. A pesquisa deve validar a compatibilidade Bun↔Mineflayer.
 - **LLM (v1)**: LM Studio (modelo local) — custo zero e adequado a um loop sempre-ativo; reasoning local é mais fraco que frontier cloud.
 - **Plataforma de jogo**: Minecraft Java Edition em servidor local — Mineflayer não suporta Bedrock.
 - **Foco do projeto**: pesquisa/aprendizado — priorizar design limpo e instrutivo sobre features impressionantes.
@@ -60,6 +61,7 @@ O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Stack all-TypeScript (Mineflayer + LangGraph.js) | Mineflayer é Node-only; uma só linguagem evita ponte cross-process | — Pending |
+| Bun como runtime, Node como fallback | TS nativo e velocidade; Mineflayer oficialmente testado em Node | — Pending |
 | LLM local via LM Studio como alvo de v1 | Custo zero e sem rate limits para loop sempre-ativo | — Pending |
 | Servidor Java local para desenvolvimento | Controle total e testes fáceis | — Pending |
 | Foco em pesquisa/aprendizado | Direciona prioridade para clareza arquitetural | — Pending |
