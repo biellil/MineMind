@@ -3,7 +3,7 @@
 // FORA do grafo, usando o arbiter como fallback (D-17). Sem rede (provider MOCK).
 import { test, expect, mock } from 'bun:test'
 import { createDeliberator, shouldTrigger, type DeliberationState } from './deliberation'
-import { createCognitiveStateHolder, type CognitiveStateHolder } from './state'
+import { createCognitiveStateHolder } from './state'
 import type { LlmProvider } from '../llm/provider'
 import type { ActionDecision } from '../llm/schemas'
 import type { WorldSnapshot } from '../perception/types'
@@ -125,7 +125,7 @@ test('single-flight concorrente: segunda chamada durante a primeira não redispa
     available: mock(async () => true),
   }
   const { maybeDeliberate } = createDeliberator()
-  const state: CognitiveStateHolder extends never ? never : DeliberationState = freshState()
+  const state: DeliberationState = freshState()
   const snap = mockSnapshot()
   const first = maybeDeliberate(state, holder, provider, snap, 'goal_changed', 1000)
   // enquanto a 1ª está pendente (inFlight=true), a 2ª deve retornar sem nova chamada a available
