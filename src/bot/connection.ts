@@ -3,6 +3,7 @@
 // https://github.com/PrismarineJS/mineflayer/blob/master/examples/reconnector.js
 import mineflayer, { type Bot } from 'mineflayer'
 import { pathfinder, Movements } from 'mineflayer-pathfinder'
+import { plugin as collectBlock } from 'mineflayer-collectblock'
 import { config } from '../config'
 
 export type BotReadyCallback = (bot: Bot) => void
@@ -27,6 +28,9 @@ export function createBot(onReady?: BotReadyCallback): void {
   bot.once('spawn', () => {
     // Carregar pathfinder após spawn (ACT-01 — usado pelo navigate skill no Plano 03)
     bot.loadPlugin(pathfinder)
+    // Carregar collectblock — usado pelo dig skill (ACT-02) no estado Gathering.
+    // O import em dig.ts é só augmentação de tipos; o plugin precisa ser registrado em runtime.
+    bot.loadPlugin(collectBlock)
     const movements = new Movements(bot)
     movements.canDig = true           // permite mineração durante navegação
     movements.allowSprinting = true   // sprinting é comportamento humano normal
