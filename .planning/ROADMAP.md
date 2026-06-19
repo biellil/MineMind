@@ -45,10 +45,13 @@ Plans:
   2. O agente vagueia/coleta de forma autônoma e visível usando os skills da Fase 1, sem qualquer chamada a LLM.
   3. O loop detecta repetição de ações e ausência de progresso, evitando oscilar ou travar num mesmo comportamento.
   4. A memória de curto prazo mantém um buffer limitado (ring buffer) dos eventos/ações recentes, com esqueleto de orçamento de tokens já presente antes do LLM existir.
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] TBD durante /gsd:plan-phase 2
+- [ ] 02-01-PLAN.md — Fundacao: contratos de tipos, ring buffer de memoria (MEM-01) e maquina de modo de controle por chat literal
+- [ ] 02-02-PLAN.md — Nucleo de decisao: arbitragem por prioridade (D-05), escada de Gathering (D-07) e anti-repeticao/backoff (COG-04)
+- [ ] 02-03-PLAN.md — StateGraph + driver externo single-flight + wiring em onBotReady (COG-01)
+- [ ] 02-04-PLAN.md — Verificacao: smoke test multi-tick headless + checkpoint humano ao vivo
 
 ### Phase 3: Cognição com LLM — Loop Completo, Necessidades e Objetivos
 **Goal**: Com o loop já provado, o LLM local (LM Studio) passa a guiar análise, planejamento, reflexão e conversa coerente, sob uma arquitetura de duas taxas (camada reativa rápida + deliberação LLM sob gatilho, single-flight). O sistema de motivação intrínseca entra: necessidades internas que decaem alimentam objetivos dinâmicos priorizados, com comprometimento/histerese. Aqui se concentram os pitfalls mais perigosos do projeto.
@@ -89,6 +92,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Presença e Conexão | 3/3 | Complete | 2026-06-18 |
-| 2. Loop Autônomo e Memória CP | 0/TBD | Not started | - |
+| 2. Loop Autônomo e Memória CP | 0/4 | Not started | - |
 | 3. Cognição com LLM | 0/TBD | Not started | - |
 | 4. Persistência e Identidade | 0/TBD | Not started | - |
