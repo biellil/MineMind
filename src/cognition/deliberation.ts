@@ -17,13 +17,17 @@ import type { LlmProvider } from '../llm/provider'
 import { decideAction } from '../llm/structured'
 import { buildPersonaPrompt, serializeContext } from '../llm/prompts'
 import type { ActionDecision } from '../llm/schemas'
+import { ReflectionOutputSchema, type ReflectionOutput } from '../llm/schemas'
 import { arbitrate } from './arbiter'
 import type { CognitiveState, ControlMode } from './types'
 import { getEvents } from '../memory/shortTerm'
+import { consolidate, applyGoalUpdates } from './reflection'
+import { retrieve } from '../memory/longTerm'
+import { persistHolder } from '../memory/holder.persistence'
 import { config } from '../config'
 
-/** Gatilhos de deliberação (D-19). */
-export type DeliberationTrigger = 'chat' | 'goal_changed' | 'need_threshold' | 'periodic'
+/** Gatilhos de deliberação (D-19). `reflect` (REFL-01/D-12) reusa o single-flight existente. */
+export type DeliberationTrigger = 'chat' | 'goal_changed' | 'need_threshold' | 'periodic' | 'reflect'
 
 /** Estado single-flight da deliberação (vive no closure do deliberator — testável/sem global). */
 export interface DeliberationState {
@@ -45,6 +49,9 @@ export function shouldTrigger(trigger: DeliberationTrigger, holder: CognitiveSta
     case 'goal_changed':
     case 'need_threshold':
     case 'periodic':
+      return true
+    case 'reflect':
+      // QUANDO refletir é decidido por shouldReflect no loop; aqui o single-flight só evita sobreposição.
       return true
     default:
       return false
@@ -95,20 +102,90 @@ export async function maybeDeliberate(
 
   state.inFlight = true
   try {
-    const messages: BaseMessage[] = [
-      new SystemMessage(buildPersonaPrompt(holder.disposition)),
-      new HumanMessage(
-        serializeContext(snapshot, holder.needs, holder.currentGoal, getEvents(holder.memory)),
-      ),
-    ]
-    // D-17: arbiter como fallback determinístico (decideAction nunca lança — Plan 01).
-    const fallback = () => arbiterToDecision(snapshot, holder.control.getMode())
-    const decision = await decideAction(provider, messages, fallback)
-    holder.llmDecision = { decision, at: now }
+    if (trigger === 'reflect') {
+      // REFL-01/D-12: ramo de reflexão — reusa o lock single-flight herdado (não sobrepõe ação).
+      await runReflection(holder, provider, snapshot, now)
+    } else {
+      // Caminho de AÇÃO existente. SOC-02/D-14: injeta a personalidade evolutiva no prompt.
+      const messages: BaseMessage[] = [
+        new SystemMessage(buildPersonaPrompt(holder.disposition, holder.personality)),
+        new HumanMessage(
+          serializeContext(snapshot, holder.needs, holder.currentGoal, getEvents(holder.memory)),
+        ),
+      ]
+      // D-17: arbiter como fallback determinístico (decideAction nunca lança — Plan 01).
+      const fallback = () => arbiterToDecision(snapshot, holder.control.getMode())
+      const decision = await decideAction(provider, messages, fallback)
+      holder.llmDecision = { decision, at: now }
+    }
   } finally {
     state.inFlight = false
     state.lastRunAt = now
   }
+}
+
+/**
+ * Ramo de REFLEXÃO (REFL-01/D-12), executado sob o lock single-flight de maybeDeliberate.
+ * NUNCA lança (try/catch interno) — degrada graciosamente para a consolidação determinística.
+ *
+ * Fluxo:
+ *  1. (se LLM disponível) recupera memórias relevantes (D-08) e pede ao LLM um ReflectionOutput
+ *     (resumo + deltas de objetivo), restrito por ReflectionOutputSchema;
+ *  2. consolida SEMPRE CP→LP (D-13) — com ou sem LLM — gravando UM evento episódico em LP;
+ *  3. aplica os deltas de objetivo (fallback no-op se vazio);
+ *  4. faz flush da mente ao disco ao fim do ciclo de reflexão (D-02).
+ */
+export async function runReflection(
+  holder: CognitiveStateHolder,
+  provider: LlmProvider,
+  snapshot: WorldSnapshot,
+  now: number,
+): Promise<void> {
+  const recent = getEvents(holder.memory)
+  let summary: string | undefined
+  let updates: ReflectionOutput['goalUpdates'] = []
+
+  if (await provider.available()) {
+    try {
+      // Contexto recuperado (D-08): memórias relevantes ao colorir a reflexão (fallback sem embedding).
+      const recalled = holder.db ? retrieve(holder.db, null, now, { limit: 5 }) : []
+      const messages: BaseMessage[] = [
+        new SystemMessage(buildPersonaPrompt(holder.disposition, holder.personality)),
+        new HumanMessage(
+          'Reflita sobre os eventos recentes e atualize objetivos.\n' +
+            serializeContext(snapshot, holder.needs, holder.currentGoal, recent) +
+            (recalled.length
+              ? `\nMemórias relevantes:\n${recalled.map((r) => r.summary).join('\n')}`
+              : ''),
+        ),
+      ]
+      const out = ReflectionOutputSchema.parse(await provider.decide(ReflectionOutputSchema, messages))
+      summary = out.summary
+      updates = out.goalUpdates
+    } catch (e) {
+      console.error(
+        '[reflect] LLM inválido — consolidação determinística (no-op em goals):',
+        e instanceof Error ? e.message : e,
+      )
+    }
+  }
+
+  // SEMPRE consolida CP→LP (D-13), com ou sem LLM:
+  let emb: number[] | null = null
+  if (holder.db && summary) {
+    try {
+      emb = await provider.embed(summary)
+    } catch {
+      emb = null
+    }
+  }
+  if (holder.db) consolidate(holder.db, recent, now, emb, summary)
+
+  // Atualiza objetivos (fallback no-op se vazio):
+  holder.goals = applyGoalUpdates(holder.goals, updates, now)
+
+  // Flush da mente ao fim do ciclo de reflexão (D-02):
+  if (holder.db) persistHolder(holder.db, holder, now)
 }
 
 /**

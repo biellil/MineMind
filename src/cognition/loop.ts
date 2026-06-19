@@ -14,6 +14,9 @@ import { createLmStudioProvider } from '../llm/provider'
 import { urgency } from '../motivation/needs'
 import { motivationConfigFor } from '../config'
 import type { WorldSnapshot } from '../perception/types'
+import { shouldReflect, type ReflectionState } from './reflection'
+import { importanceOf } from '../memory/longTerm'
+import { getEvents } from '../memory/shortTerm'
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
@@ -61,6 +64,11 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
   const cfg = { configurable: { thread_id: 'minemind-agent' } }
   let lastSnapshot: WorldSnapshot | null = null
 
+  // REFL-01/D-10: estado do gatilho de reflexão por sessão. `seenEvents` rastreia quantos eventos
+  // da memória de curto prazo já foram contabilizados, para somar só a importância dos NOVOS.
+  const reflState: ReflectionState = { lastReflectionAt: -Infinity, importanceAccum: 0 }
+  let seenEvents = getEvents(holder.memory).length
+
   // driver assíncrono — não bloqueia onBotReady
   void (async () => {
     console.log(`[loop] iniciado (disposição=${holder.disposition})`)
@@ -81,6 +89,39 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
             trigger,
             Date.now(),
           )
+
+          // REFL-01/D-10: acumula a importância dos eventos NOVOS deste tick (ring buffer pode
+          // ter evictado os antigos, então só contamos a cauda além do que já vimos).
+          const events = getEvents(holder.memory)
+          if (events.length > seenEvents) {
+            for (const e of events.slice(seenEvents)) reflState.importanceAccum += importanceOf(e)
+          }
+          seenEvents = events.length
+
+          // Gatilho híbrido de reflexão (D-10): event-driven / acúmulo / piso temporal. Dispara via
+          // a deliberação single-flight com trigger 'reflect' (não bloqueia o tick; o lock inFlight
+          // garante que reflexão não sobrepõe ação).
+          const reflectNow = Date.now()
+          if (
+            shouldReflect({
+              enteredIdle: false, // heurística: sem sinal de transição do grafo; cobre-se por acúmulo/piso
+              goalDoneOrFailed: holder.currentGoal == null,
+              importanceAccum: reflState.importanceAccum,
+              lastReflectionAt: reflState.lastReflectionAt,
+              now: reflectNow,
+            })
+          ) {
+            reflState.lastReflectionAt = reflectNow
+            reflState.importanceAccum = 0
+            void deliberator.maybeDeliberate(
+              deliberator.state,
+              holder,
+              provider,
+              lastSnapshot,
+              'reflect',
+              reflectNow,
+            )
+          }
         }
       } catch (err) {
         console.error('[loop] erro no tick:', err instanceof Error ? err.message : err)
