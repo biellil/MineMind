@@ -31,14 +31,14 @@ test('mood é clampado em -1 sob dano repetido', () => {
 })
 
 test('action success sobe mood (+0.05) e confidence (+0.05)', () => {
-  const e: MemEvent = { type: 'action', skill: 'gather', target: 'wood', result: 'success', timestamp: 9 }
+  const e: MemEvent = { type: 'action', skill: 'gather', target: 'wood', outcome: 'success', observed: 1, expected: 1, result: 'success', timestamp: 9 }
   const p = applyEventToPersonality(defaultPersonality(0), e, 9)
   expect(p.mood).toBeCloseTo(0.05, 5)
   expect(p.confidence).toBeCloseTo(0.55, 5)
 })
 
 test('action failure baixa confidence (-0.08), mood inalterado', () => {
-  const e: MemEvent = { type: 'action', skill: 'gather', target: 'wood', result: 'failure', timestamp: 9 }
+  const e: MemEvent = { type: 'action', skill: 'gather', target: 'wood', outcome: 'no_effect', observed: 0, expected: 1, result: 'failure', timestamp: 9 }
   const p = applyEventToPersonality(defaultPersonality(0), e, 9)
   expect(p.confidence).toBeCloseTo(0.42, 5)
   expect(p.mood).toBe(0)
@@ -91,8 +91,8 @@ test('todos os campos permanecem nos ranges sob sequência arbitrária de evento
   let p = defaultPersonality(0)
   const events: MemEvent[] = [
     { type: 'world', event: 'damage', detail: 'a', timestamp: 1 },
-    { type: 'action', skill: 's', target: 't', result: 'failure', timestamp: 2 },
-    { type: 'action', skill: 's', target: 't', result: 'success', timestamp: 3 },
+    { type: 'action', skill: 's', target: 't', outcome: 'no_effect', observed: 0, expected: 1, result: 'failure', timestamp: 2 },
+    { type: 'action', skill: 's', target: 't', outcome: 'success', observed: 1, expected: 1, result: 'success', timestamp: 3 },
     { type: 'state_transition', from: 'idle', to: 'socializing', timestamp: 4 },
   ]
   for (let i = 0; i < 50; i++) {

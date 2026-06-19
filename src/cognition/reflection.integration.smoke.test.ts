@@ -61,7 +61,7 @@ const snapshot: WorldSnapshot = {
 }
 
 function actionEvent(target: string, ts: number): MemEvent {
-  return { type: 'action', skill: 'gather', target, result: 'success', timestamp: ts }
+  return { type: 'action', skill: 'gather', target, outcome: 'success', observed: 1, expected: 1, result: 'success', timestamp: ts }
 }
 
 function damageEvent(ts: number): MemEvent {

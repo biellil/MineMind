@@ -55,6 +55,9 @@ test('CONN-03: o holder reusado entre sessoes preserva memory/goals/disposition/
     type: 'action',
     skill: 'dig',
     target: 'oak_log',
+    outcome: 'success',
+    observed: 1,
+    expected: 1,
     result: 'success',
     timestamp: Date.now(),
   })

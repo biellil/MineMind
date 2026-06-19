@@ -91,7 +91,7 @@ function synthEmbedding(peak: number): number[] {
 
 const recentEvents: MemEvent[] = [
   { type: 'world', event: 'damage', detail: 'zombie atacou', timestamp: 1000 },
-  { type: 'action', skill: 'gather', target: 'oak_log', result: 'success', timestamp: 1100 },
+  { type: 'action', skill: 'gather', target: 'oak_log', outcome: 'success', observed: 1, expected: 1, result: 'success', timestamp: 1100 },
   { type: 'state_transition', from: 'idle', to: 'exploring', timestamp: 1200 },
 ]
 

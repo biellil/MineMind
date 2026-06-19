@@ -74,8 +74,13 @@ test('A) provider OFF (available:false) -> loop degrada ao arbiter sem travar; m
   expect(last).toBeDefined()
   expect(last.snapshot).toBeDefined()
   expect(last.cogState).toBeDefined()
-  // mundo vazio -> arbitragem autonoma cai em 'exploring' (acao degradada, agente continua agindo)
-  expect(last.cogState).toBe('exploring')
+  // Mundo vazio -> arbitragem autonoma cai em 'exploring' e dispara navigate. Com o GROUNDING da
+  // Fase 7 (07-03), um navigate que NAO move o bot (mock goto no-op, posicao fixa) e reportado como
+  // 'no_effect' (observed:0) em vez de 'success' por nao-throw. Repetidos no_effect alimentam o
+  // backoff D-11 (consecutiveFailures -> shouldFallbackToIdle), entao o estado final OSCILA entre
+  // 'exploring' (agindo) e 'idle' (backoff). Ambos sao saidas validas do arbiter autonomo — o ponto
+  // do teste (D-17: degrada ao arbiter, nao trava, memoria acumula) e provado abaixo.
+  expect(['exploring', 'idle']).toContain(last.cogState)
 
   // a deliberacao nunca rodou (so o grafo) -> nenhuma decisao LLM foi escrita no holder.
   // analyze degradou ao arbiter sem depender de holder.llmDecision (permanece null).

@@ -28,15 +28,18 @@ test('importanceOf: mapeamento heurístico por tipo (D-06)', () => {
   expect(
     importanceOf({ type: 'chat_command', command: '!vem', from: 'p', mode: 'autonomous', timestamp: 0 }),
   ).toBe(7)
-  // action
+  // action — importância agora deriva de outcome (D-13)
   expect(
-    importanceOf({ type: 'action', skill: 'navigate', target: 'x', result: 'failure', timestamp: 0 }),
+    importanceOf({ type: 'action', skill: 'navigate', target: 'x', outcome: 'no_effect', observed: 0, expected: 1, result: 'failure', timestamp: 0 }),
   ).toBe(6)
   expect(
-    importanceOf({ type: 'action', skill: 'navigate', target: 'x', result: 'success', timestamp: 0 }),
+    importanceOf({ type: 'action', skill: 'dig', target: 'x', outcome: 'partial', observed: 3, expected: 10, result: 'failure', timestamp: 0 }),
+  ).toBe(4)
+  expect(
+    importanceOf({ type: 'action', skill: 'navigate', target: 'x', outcome: 'success', observed: 1, expected: 1, result: 'success', timestamp: 0 }),
   ).toBe(2)
   expect(
-    importanceOf({ type: 'action', skill: 'gather', target: 'oak_log', result: 'success', timestamp: 0 }),
+    importanceOf({ type: 'action', skill: 'gather', target: 'oak_log', outcome: 'success', observed: 1, expected: 1, result: 'success', timestamp: 0 }),
   ).toBe(5)
   // state_transition
   expect(importanceOf({ type: 'state_transition', from: 'idle', to: 'exploring', timestamp: 0 })).toBe(1)
@@ -46,7 +49,7 @@ test('importanceOf: mapeamento heurístico por tipo (D-06)', () => {
 test('importanceOf é total: nenhum MemEvent retorna undefined (switch exaustivo)', () => {
   const samples: MemEvent[] = [
     { type: 'state_transition', from: 'idle', to: 'gathering', timestamp: 0 },
-    { type: 'action', skill: 'dig', target: 'stone', result: 'success', timestamp: 0 },
+    { type: 'action', skill: 'dig', target: 'stone', outcome: 'success', observed: 1, expected: 1, result: 'success', timestamp: 0 },
     { type: 'world', event: 'damage', detail: 'mob', timestamp: 0 },
     { type: 'chat_command', command: '!pausar', from: 'p', mode: 'paused', timestamp: 0 },
   ]
@@ -63,8 +66,9 @@ test('summarizeEvent: texto natural (não JSON cru) cobrindo os 4 tipos', () => 
   expect(st).toContain('exploring')
   expect(st).not.toContain('{"type"')
 
-  const ac = summarizeEvent({ type: 'action', skill: 'gather', target: 'oak_log', result: 'success', timestamp: 0 })
+  const ac = summarizeEvent({ type: 'action', skill: 'gather', target: 'oak_log', outcome: 'partial', observed: 3, expected: 10, result: 'failure', timestamp: 0 })
   expect(ac).toContain('gather')
+  expect(ac).toContain('(3/10)') // narra observed/expected (D-13)
   expect(ac).not.toContain('{"type"')
 
   const wl = summarizeEvent({ type: 'world', event: 'damage', detail: 'zombie', timestamp: 0 })
