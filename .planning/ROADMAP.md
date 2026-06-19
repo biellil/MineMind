@@ -29,10 +29,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. É possível ler, sob demanda, um snapshot imutável do mundo contendo status (vida, fome, posição, hora), blocos/entidades/jogadores próximos e inventário.
   4. O agente navega até uma posição-alvo e minera um bloco-alvo via skills de alto nível; toda ação tem timeout e detector de "sem progresso" que nunca trava o loop.
   5. As ações ocorrem com ritmo humanizado (sem kick por velocidade) e os skills são expostos como funções e como tools (Zod) sem expor o mineflayer cru.
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] TBD durante /gsd:plan-phase 1
+- [ ] 01-01-PLAN.md — Bootstrap: package.json, tsconfig, config.ts e WorldSnapshot types
+- [ ] 01-02-PLAN.md — Conexão e Percepção: createBot, reconexão automática e buildWorldSnapshot
+- [ ] 01-03-PLAN.md — Skills e Executor: executeWithSafety, navigate, dig, follow/attack stubs com Zod
 
 ### Phase 2: Loop Autônomo e Memória de Curto Prazo
 **Goal**: Um loop cognitivo cíclico real, implementado como `StateGraph` do LangGraph com aresta de retorno, roda continuamente com nós de regra fixa (sem LLM) — provando a arquitetura central com zero incerteza de raciocínio. A disciplina de execução de ações (camada centralizada, rechecagem de pré-condições) e a memória de curto prazo limitada guardam o loop desde o instante em que ele começa a agir de forma contínua.
@@ -86,7 +88,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Presença e Conexão | 0/TBD | Not started | - |
+| 1. Presença e Conexão | 0/3 | Not started | - |
 | 2. Loop Autônomo e Memória CP | 0/TBD | Not started | - |
 | 3. Cognição com LLM | 0/TBD | Not started | - |
 | 4. Persistência e Identidade | 0/TBD | Not started | - |
