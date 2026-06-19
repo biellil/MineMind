@@ -64,6 +64,7 @@ O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com
 | LLM local via LM Studio como alvo de v1 | Custo zero e sem rate limits para loop sempre-ativo | ✅ Validado (Fase 3, qwen3-vl-8b ao vivo + degradação D-17) |
 | Servidor Java local para desenvolvimento | Controle total e testes fáceis | — Pending |
 | Foco em pesquisa/aprendizado | Direciona prioridade para clareza arquitetural | — Pending |
+| Bound do pathfinding da coleta + raio de busca separado do raio de percepção | A* do collectBlock estourava memória (OOM ~78GB) e bloqueava o event loop síncrono no Gathering com `PERCEPTION_RADIUS` alto | ✅ Validado (Fase 999.1: searchRadius/thinkTimeout + pré-check getPathTo; smoke prova sem-OOM/timeout/lag<200ms com raio=32) |
 
 ## Evolution
 
@@ -83,4 +84,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-18 after initialization*
+*Last updated: 2026-06-19 after Phase 999.1 (fix OOM da coleta — loop cognitivo permanece responsivo no Gathering)*
