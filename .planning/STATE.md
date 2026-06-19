@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: v1.0 milestone complete
-stopped_at: Corrigido B1/B2 do 04-07; aguardando re-verificação humana ao vivo (Task 3)
-last_updated: "2026-06-19T20:35:16.715Z"
+milestone: v2.0
+milestone_name: Autonomia de Verdade
+status: Defining requirements
+stopped_at: Milestone v2.0 iniciado — definindo requisitos
+last_updated: "2026-06-19T00:00:00.000Z"
 last_activity: 2026-06-19
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 24
-  completed_plans: 24
-  percent: 50
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-18)
 
 **Core value:** O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com base em objetivos próprios e memória — sem intervenção humana. Se tudo falhar, o loop cognitivo (perceber → decidir → agir) precisa funcionar.
-**Current focus:** Phase 04 — persist-ncia-reflex-o-e-identidade-viva
+**Current focus:** Milestone v2.0 — Autonomia de Verdade (definindo requisitos)
 
 ## Current Position
 
-Phase: 999.1
-Plan: Not started
-Next: Phase 04 — Persistência, Reflexão e Identidade Viva
-Last activity: 2026-06-19
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-19 — Milestone v2.0 started
 
-Progress: [█████░░░░░] 50%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 

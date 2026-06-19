@@ -8,6 +8,22 @@ MineMind é um agente autônomo persistente que vive dentro do Minecraft. Difere
 
 O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com base em objetivos próprios e memória — sem intervenção humana. Se tudo mais falhar, o loop cognitivo (perceber → decidir → agir) precisa funcionar.
 
+## Current Milestone: v2.0 Autonomia de Verdade
+
+**Goal:** Transformar o MineMind num agente que joga Minecraft como um player real — sobrevive (não morre), coleta, crafta e progride na tech tree (madeira → ferro → diamante) por conta própria, sem ficar grudado em ninguém.
+
+**Target features:**
+- **Modo Autônomo (padrão):** o bot vive e joga sozinho — coração do estudo.
+- **Modo Assistente (temporário):** sob pedido direto de jogador (buscar item, quebrar bloco), atende e volta sozinho ao autônomo ao terminar.
+- **Sobrevivência ("não morrer"):** fome/comida, vida, fugir/defender de mobs, abrigo à noite.
+- **Progressão / tech tree:** cadeia coleta→craft (madeira→pedra→ferro→diamante) com objetivos mais ricos (hierarquia, dependências).
+- **Building:** estado/comportamento de construção real (abrigo, estruturas).
+- **Combate:** estado de combate real (defesa e ataque).
+- **Mais estados cognitivos:** implementar de fato os estados ainda incompletos/stub.
+- **Grounding de ações:** o que o LLM relata reflete o que de fato aconteceu no mundo (acabar com a alucinação "peguei 10 tábuas").
+- **Aprendizado por reflexão:** usar a memória/reflexão da Fase 4 para o bot ajustar as próprias decisões — sem observar/imitar outros jogadores.
+- **LLM configurável:** GPT (OpenAI) e LM Studio local via abstração de provider (troca por env/config).
+
 ## Requirements
 
 ### Validated
@@ -24,19 +40,29 @@ O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com
 
 ### Active
 
-<!-- Current scope. Building toward these. Definir no próximo milestone. -->
+<!-- Current scope. Building toward these. Escopo do milestone v2.0 — REQ-IDs detalhados em REQUIREMENTS.md. -->
 
-(A definir no próximo milestone — ver Known Gaps abaixo para o trabalho de re-verificação/correção pendente.)
+- [ ] Modo autônomo como padrão: o bot joga sozinho sem ficar preso a um jogador
+- [ ] Modo assistente temporário: atende pedido direto e retorna ao autônomo ao concluir
+- [ ] Sobreviver de forma sustentada (comida, vida, mobs hostis, abrigo noturno) — "não morrer"
+- [ ] Progredir na tech tree (madeira → pedra → ferro → diamante) com objetivos hierárquicos/dependentes
+- [ ] Construir (building) abrigo/estruturas de forma autônoma
+- [ ] Combater (defender e atacar) com estado de combate real
+- [ ] Implementar de fato os estados cognitivos ainda incompletos
+- [ ] Grounding de ações: relatos do LLM consistentes com o estado real do mundo
+- [ ] Aprender pela própria reflexão/memória (sem observar outros jogadores)
+- [ ] Provider de LLM configurável (GPT/OpenAI + LM Studio local)
 
 ### Out of Scope
 
 <!-- Explicit boundaries. Includes reasoning to prevent re-adding. -->
 
 - Backend em Python / ponte cross-process — escolhido stack all-TypeScript (Mineflayer + @langchain/langgraph no mesmo processo) para simplicidade de integração
-- Provedores de LLM em nuvem (Claude/GPT/Gemini/etc.) como alvo de v1 — foco inicial em LM Studio local; nuvem fica para depois via abstração de provedor
-- Servidores públicos/multiplayer reais em v1 — desenvolvimento em servidor Java local para controle e testes
+- Observar/imitar outros jogadores como mecanismo de aprendizado — o bot aprende pela própria experiência/reflexão (decisão explícita do milestone v2.0)
+- Meta final de "zerar o jogo" (Ender Dragon / Nether→End) em v2.0 — escopo deste milestone é sobreviver + tech tree até diamante; o end-game fica para depois
+- Servidores públicos/multiplayer reais em v2.0 — desenvolvimento em servidor Java local para controle e testes
 - Minecraft Bedrock Edition — Mineflayer suporta apenas Java Edition
-- Aprendizado contínuo / fine-tuning do modelo — fora do escopo de pesquisa do MVP
+- Aprendizado contínuo / fine-tuning do modelo — fora do escopo de pesquisa (o "aprendizado" é via memória/reflexão, não treino de pesos)
 
 ## Context
 
@@ -65,7 +91,7 @@ A espinha cognitiva (perceber → decidir → agir), o loop com LLM local, e tod
 
 - **Tech stack**: TypeScript de ponta a ponta — Mineflayer + `@langchain/langgraph` (JS) no mesmo processo — porque Mineflayer é Node-only e queremos uma única linguagem.
 - **Runtime**: Bun como runtime/gerenciador de pacotes (TS nativo, performático), com Node como fallback de compatibilidade caso o Mineflayer apresente casos-limite. A pesquisa deve validar a compatibilidade Bun↔Mineflayer.
-- **LLM (v1)**: LM Studio (modelo local) — custo zero e adequado a um loop sempre-ativo; reasoning local é mais fraco que frontier cloud.
+- **LLM (v2.0)**: provider configurável — GPT (OpenAI) **e** LM Studio local via abstração. Local é custo-zero para o loop sempre-ativo; GPT entra para reasoning mais forte onde necessário. Trocável por env/config.
 - **Plataforma de jogo**: Minecraft Java Edition em servidor local — Mineflayer não suporta Bedrock.
 - **Foco do projeto**: pesquisa/aprendizado — priorizar design limpo e instrutivo sobre features impressionantes.
 
@@ -84,6 +110,8 @@ A espinha cognitiva (perceber → decidir → agir), o loop com LLM local, e tod
 | Persistência: SQLite único (relacional + sqlite-vec) sob bun:sqlite | De-riscar D-01 antes de construir; um arquivo, sem serviço externo, KNN local | ✅ Validado (Fase 4: load + round-trip Float32Array no Windows) |
 | Reflexão reusa a deliberação single-flight (não é nó novo do StateGraph) | Uma inferência por vez no modelo local fraco (D-12) | ⚠️ Revisar (starvation B1 corrigido pós-execução; `[reflect]` ao vivo ainda não confirmado) |
 | Reconexão sem cap (reconnector canônico) | Simplicidade | ⚠️ Revisar→corrigido (vazava ~24GB com servidor fora; cap de 5 tentativas adicionado) |
+| [v2.0] LLM com provider configurável (GPT/OpenAI + LM Studio) | Reasoning local fraco limitava autonomia real; GPT dá reasoning forte mantendo local como opção custo-zero | 🚧 Planejado (revisa a restrição "só local em v1") |
+| [v2.0] Modo autônomo é o default; assistente é estado temporário sob pedido | O comportamento de "grudar no jogador" contradiz o core value (autonomia); estudo exige o bot jogando sozinho | 🚧 Planejado |
 
 ## Evolution
 
@@ -103,4 +131,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-19 after v1.0 MVP milestone (persistência, reflexão e identidade viva — shipped com Known Gaps de verificação ao vivo)*
+*Last updated: 2026-06-19 — início do milestone v2.0 Autonomia de Verdade (player autônomo: sobreviver + tech tree, building, combate, modos autônomo/assistente, provider LLM configurável)*
