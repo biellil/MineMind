@@ -106,11 +106,11 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 **Goal:** Permitir `PERCEPTION_RADIUS` maior (ex: 32) sem estourar memória/OOM no estado Gathering. Hoje o A* do mineflayer-pathfinder via `bot.collectBlock.collect()` explode a memória (~78GB VM) e o processo é morto pelo OOM killer ao entrar em gathering com raio alto — bloqueando o event loop de forma síncrona (os timeouts da rede de segurança nem disparam). Workaround atual: `PERCEPTION_RADIUS=8` no `.env` (degrada percepção). Fix proper: bound o pathfinding (thinkTimeout/maxIterations no Movements), validar alcançabilidade antes de coletar, e/ou separar "raio de percepção" do "raio de busca de coleta". Origem: Fase 2, descoberto na verificação humana ao vivo do Plano 02-04. Ver `.planning/todos/pending/gathering-collectblock-oom.md`.
 **Requirements:** D-01..D-07 (decisões travadas em 999.1-CONTEXT.md — fase de backlog sem REQ-IDs canônicos)
-**Plans:** 2/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 - [x] 999.1-01-PLAN.md — Config: GATHER_SEARCH_RADIUS + PATHFINDER_SEARCH_RADIUS/THINK_TIMEOUT_MS + validação (D-01/D-02)
-- [ ] 999.1-02-PLAN.md — Bounds do A* em connection.ts: globais + bot.collectBlock.movements (D-03)
-- [ ] 999.1-03-PLAN.md — dig.ts: gatherSearchRadius + pré-check getPathTo por instância (D-01/D-04/D-05)
+- [x] 999.1-02-PLAN.md — Bounds do A* em connection.ts: globais + bot.collectBlock.movements (D-03)
+- [x] 999.1-03-PLAN.md — dig.ts: gatherSearchRadius + pré-check getPathTo por instância (D-01/D-04/D-05)
 - [x] 999.1-04-PLAN.md — Remover double-wrap em nodes.ts; skills auto-embrulham (D-06)
 - [ ] 999.1-05-PLAN.md — Verificação: smoke headless do tripé sem-OOM/rejeita/lag<200ms (D-07)
