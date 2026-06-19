@@ -5,7 +5,9 @@
 import type { Bot } from 'mineflayer'
 import { config } from '../config'
 import { buildGraph } from './graph'
-import { registerChatCommands } from '../control/commands'
+import { parseCommand } from '../control/commands'
+import { parseDisposition } from '../control/disposition'
+import { shouldRespond, handleConversation } from '../chat/conversation'
 import type { CognitiveStateHolder } from './state'
 import { createDeliberator, type DeliberationTrigger } from './deliberation'
 import { createLmStudioProvider } from '../llm/provider'
@@ -26,9 +28,29 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
   const deliberator = createDeliberator()
   const graph = buildGraph({ bot, holder, provider })
 
-  // parser de comando literal de chat (D-09) — registrado 1x por sessão (handler morre com a sessão).
-  // Usa o control do holder (durável). O caminho conversacional/disposição entra no Plan 04.
-  registerChatCommands(bot, holder.control)
+  // UM ÚNICO handler de chat por sessão (Pattern 5 / Pitfall 6 — handler morre com a sessão).
+  // Ordem ESTRITA, tudo literal/sem-LLM exceto o passo 3:
+  //   1) controle literal (!auto/!livre/!pausar/... — D-09/D-14) -> muda modo
+  //   2) disposição literal (!ajudante/!sozinho — D-05) -> muda disposição em runtime
+  //   3) conversa (CHAT-01/02) — SÓ se permitido (AUTONOMOUS mínimo, D-07); void (não bloqueia).
+  // Comandos literais são imunes a prompt injection: lookup exato, parseados ANTES da conversa.
+  bot.on('chat', (username: string, message: string) => {
+    if (username === bot.username) return // Pitfall 5: ignora a si mesmo
+    const mode = parseCommand(message) // 1) controle literal (D-09/D-14)
+    if (mode) {
+      holder.control.setMode(mode)
+      return
+    }
+    const disp = parseDisposition(message) // 2) disposição literal (D-05)
+    if (disp) {
+      holder.disposition = disp
+      return
+    }
+    // 3) conversa — única chamada com LLM; não bloqueia o tick reativo (void).
+    if (shouldRespond(holder.disposition, config.proactivity, username, bot.username)) {
+      void handleConversation(provider, holder, bot, username, message, Date.now())
+    }
+  })
 
   // stop-on-disconnect: a sessão morre -> o while termina
   let alive = true
