@@ -19,6 +19,9 @@ import { createMemory } from '../memory/shortTerm'
 import type { Disposition, Goal, Need } from '../motivation/types'
 import { createNeeds } from '../motivation/needs'
 import type { ActionDecision } from '../llm/schemas'
+import type { Database } from 'bun:sqlite'
+import type { PersonalityState } from './personality'
+import { defaultPersonality } from './personality'
 
 /**
  * A "mente" durável do agente, viva no processo e compartilhada entre sessões de bot.
@@ -43,6 +46,10 @@ export interface CognitiveStateHolder {
   playerRequestPending: boolean
   /** Última decisão LLM escrita pela deliberação (com timestamp p/ checagem de frescor). */
   llmDecision: { decision: ActionDecision; at: number } | null
+  /** Handle do DB durável (D-04). Aberto 1x no boot (bot/index.ts); null em testes que não persistem. */
+  db: Database | null
+  /** Estado de personalidade evolutivo (SOC-02/D-14), reinjetado no prompt sobre a baseline. */
+  personality: PersonalityState
 }
 
 /**
@@ -60,5 +67,7 @@ export function createCognitiveStateHolder(now: number = Date.now()): CognitiveS
     disposition: config.dispositionDefault,
     playerRequestPending: false,
     llmDecision: null,
+    db: null,
+    personality: defaultPersonality(now),
   }
 }
