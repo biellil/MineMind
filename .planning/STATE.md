@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 999.1-03-PLAN.md
-last_updated: "2026-06-19T17:08:52.938Z"
+stopped_at: Completed 999.1-05-PLAN.md
+last_updated: "2026-06-19T17:14:35.119Z"
 last_activity: 2026-06-19
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 17
-  completed_plans: 16
+  completed_plans: 17
   percent: 50
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-18)
 ## Current Position
 
 Phase: 999.1 (otimizar-pathfinding-da-coleta-collectblock-para-suportar-ra) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Next: Phase 03 — Cognição com LLM
 Last activity: 2026-06-19
 
@@ -57,6 +57,7 @@ Progress: [█████░░░░░] 50%
 | Phase 999.1 P04 | 2 | 2 tasks | 3 files |
 | Phase 999.1 P02 | 6 | 1 tasks | 1 files |
 | Phase 999.1 P03 | 6 | 2 tasks | 2 files |
+| Phase 999.1 P05 | 3 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,7 @@ Recent decisions affecting current work:
 - [Phase 999.1]: D-01: GATHER_SEARCH_RADIUS (16) independente de PERCEPTION_RADIUS; D-02: bounds do A* via PATHFINDER_SEARCH_RADIUS (48)/THINK_TIMEOUT (2000) com validação de range
 - [Phase 999.1]: D-06: double-wrap de executeWithSafety removido — nó execute chama skill diretamente; cada skill se auto-embrulha com seu watchdog próprio. Stubs (follow/attack) não-embrulhados por design.
 - [Phase 999.1]: D-03: bounds do A* aplicados nos globais bot.pathfinder.* E em bot.collectBlock.movements (instância interna que ignora setMovements) — raiz do fix de OOM
+- [Phase 999.1]: D-07 provado por smoke headless (dig.oom.smoke.test.ts): sem OOM (heap sob teto), rejeita dentro de digTimeoutMs, lag<200ms via heartbeat — sob PERCEPTION_RADIUS=32
 
 ### Pending Todos
 
@@ -89,6 +91,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-19T17:08:52.933Z
-Stopped at: Completed 999.1-03-PLAN.md
+Last session: 2026-06-19T17:14:35.114Z
+Stopped at: Completed 999.1-05-PLAN.md
 Resume file: None
