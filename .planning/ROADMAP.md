@@ -69,7 +69,12 @@ Plans:
   2. As skills existentes navigate/dig/follow/attack são convertidas para retornar `SkillResult` grounded (generaliza o `progressChecker` do dig)
   3. Ao vivo, o que o bot diz no chat e grava na memória bate com o inventário real do jogo em centenas de ações (o "peguei 10 tábuas" não ocorre mais)
   4. Uma ação cujo `observed` não satisfaz o `expected` é registrada na memória como falha (não como sucesso)
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 07-01-PLAN.md — Modulo grounding/: SkillResult + GroundState + captureGroundState + evaluate puro (GRND-01)
+- [ ] 07-02-PLAN.md — Converter navigate/dig/follow/attack para retornar SkillResult grounded; delta capturado mesmo em throw (GRND-03)
+- [ ] 07-03-PLAN.md — Execute node deriva memoria do delta (mata o bug); MemEvent estendido (D-13); prompt autoritativo (GRND-02/GRND-04)
+- [ ] 07-04-PLAN.md — Post-filter deterministico reescreve quantidade da fala para o grounded antes do bot.chat (GRND-02)
 
 ### Phase 8: System 1 — Sobrevivência Reflexa
 **Goal**: O agente sobrevive aos assassinos rápidos (fome, mob hostil, perigos ambientais) reagindo em sub-segundo por uma camada reflexa pura sem LLM, que tem precedência de execução física sobre a ação deliberada por preempção — sem bloquear a inferência single-flight.
@@ -158,7 +163,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 6. LLM Provider Factory | v2.0 | 0/3 | Planned | - |
-| 7. Grounding + SkillResult | v2.0 | 0/TBD | Not started | - |
+| 7. Grounding + SkillResult | v2.0 | 0/4 | Planned | - |
 | 8. System 1 — Sobrevivência Reflexa | v2.0 | 0/TBD | Not started | - |
 | 9. Placement + Crafting/Smelting Grounded | v2.0 | 0/TBD | Not started | - |
 | 10. Tech Tree DAG + Needs | v2.0 | 0/TBD | Not started | - |
