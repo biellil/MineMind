@@ -45,7 +45,7 @@ const cfg = (thread_id: string) => ({ configurable: { thread_id } })
 
 test('grafo roda 26 ticks via driver externo sem GraphRecursionError (prova negativa do Pitfall 1)', async () => {
   const bot = makeMockBot()
-  const graph = buildGraph({ bot, holder: createCognitiveStateHolder(), provider: stubProvider })
+  const { graph } = buildGraph({ bot, holder: createCognitiveStateHolder(), provider: stubProvider })
   let last: any
   // 26 > recursionLimit (25): se houvesse self-loop interno, estouraria com GraphRecursionError.
   // O ciclo aqui e o driver EXTERNO (re-invoke por tick) — cada invoke e um grafo finito ate END.
@@ -58,7 +58,7 @@ test('grafo roda 26 ticks via driver externo sem GraphRecursionError (prova nega
 
 test('memoria acumula eventos entre ticks (MemorySaver + thread_id)', async () => {
   const bot = makeMockBot()
-  const graph = buildGraph({ bot, holder: createCognitiveStateHolder(), provider: stubProvider })
+  const { graph } = buildGraph({ bot, holder: createCognitiveStateHolder(), provider: stubProvider })
   let last: any
   for (let i = 0; i < 5; i++) last = await graph.invoke({}, cfg('smoke-mem'))
   expect(last.memory).toBeDefined()
@@ -71,7 +71,7 @@ test('modo paused mantem o agente em idle (sem skill)', async () => {
   const bot = makeMockBot()
   const holder = createCognitiveStateHolder()
   holder.control.setMode('paused')
-  const graph = buildGraph({ bot, holder, provider: stubProvider })
+  const { graph } = buildGraph({ bot, holder, provider: stubProvider })
   const last = await graph.invoke({}, cfg('smoke-paused'))
   expect(last.cogState).toBe('idle')
   // paused nao dispara skill -> nenhum evento de acao registrado

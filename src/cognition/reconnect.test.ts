@@ -99,7 +99,7 @@ test('CONN-03: o holder reusado entre sessoes preserva memory/goals/disposition/
 
   // reconexao: novo bot, novo grafo, MESMO holder (referencia identica)
   const bot2 = makeMockBot()
-  const graphSession2 = buildGraph({ bot: bot2, holder, provider: stubProvider })
+  const { graph: graphSession2 } = buildGraph({ bot: bot2, holder, provider: stubProvider })
 
   // a sessao 2 roda alguns ticks (a mente continua de onde parou; observe re-avalia needs do snapshot)
   for (let i = 0; i < 2; i++) await graphSession2.invoke({}, { configurable: { thread_id: 'reconnect-s2' } })

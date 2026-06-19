@@ -21,10 +21,16 @@ const LoopAnnotation = Annotation.Root({
   disposition: Annotation<Disposition>({ reducer: (_p, u) => u, default: () => config.dispositionDefault }),
 })
 
-/** Compila um grafo finito-por-tick com bot/holder/provider injetados por closure. */
+/**
+ * Compila um grafo finito-por-tick com bot/holder/provider injetados por closure.
+ * Retorna { graph, checkpointer }: o checkpointer (MemorySaver in-memory) é exposto para que o
+ * driver (loop.ts) possa podá-lo periodicamente via deleteThread (CR#3) — com thread_id fixo,
+ * o MemorySaver acumula 1 checkpoint por super-step e a RAM cresce sem limite ao longo da sessão.
+ */
 export function buildGraph(deps: NodeDeps) {
   const n = createNodes(deps)
-  return new StateGraph(LoopAnnotation)
+  const checkpointer = new MemorySaver()
+  const graph = new StateGraph(LoopAnnotation)
     .addNode('observe', n.observe)
     .addNode('analyze', n.analyze)
     .addNode('updateMemory', n.updateMemory)
@@ -36,5 +42,6 @@ export function buildGraph(deps: NodeDeps) {
     .addEdge('updateMemory', 'decide')
     .addEdge('decide', 'execute')
     .addEdge('execute', END) // FINITO: driver externo (loop.ts) fecha o ciclo (D-01)
-    .compile({ checkpointer: new MemorySaver() })
+    .compile({ checkpointer })
+  return { graph, checkpointer }
 }

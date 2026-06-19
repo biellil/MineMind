@@ -70,7 +70,20 @@ export function createNodes(deps: NodeDeps) {
 
   // OBSERVE: snapshot imutável (D-04) + pipeline de motivação com pesos por disposição (D-06).
   const observe = async (_s: LoopState): Promise<Partial<LoopState>> => {
-    const snapshot = buildWorldSnapshot(bot)
+    // CR#1 a jusante: a percepção é defensiva (retorna null na morte/void). Um tick que falha na
+    // percepção deve degradar para idle, NUNCA derrubar o driver — por isso embrulhamos a chamada:
+    // null (corpo ausente) ou exceção inesperada => { snapshot: null }. analyze (if !s.snapshot ->
+    // idle) e execute (cada ramo guardado por `if (snap && ...)`) já tratam null com segurança.
+    let snapshot: WorldSnapshot | null
+    try {
+      snapshot = buildWorldSnapshot(bot)
+    } catch (err) {
+      log(`percepção falhou: ${err instanceof Error ? err.message : err} — tick degrada para idle`)
+      snapshot = null
+    }
+    if (!snapshot) {
+      return { snapshot: null }
+    }
     const t = now()
     const mcfg = motivationConfigFor(holder.disposition) // pesos POR DISPOSIÇÃO (D-06/D-10)
 
