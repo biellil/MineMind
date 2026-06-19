@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
 status: executing
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-06-19T22:01:11.306Z"
+stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-06-19T22:08:09.418Z"
 last_activity: 2026-06-19
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 ## Current Position
 
 Phase: 06 (llm-provider-factory) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-06-19
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 06 P01 | 3 | 2 tasks | 2 files |
+| Phase 06 P02 | 4 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,7 @@ Recent decisions affecting current work:
 - [Roadmap v2.0]: Bound do pathfinder do 999.1 aplicado a TODA nova chamada (flee/shelter/building/combate/tech-tree), não só collectblock — critério de aceite por feature.
 - [Roadmap v2.0]: Provider cloud = GPT-4.1-mini (decisão do usuário); embeddings sempre locais; teto de custo entra JUNTO com a abstração.
 - [Phase 06]: 06-01: createProvider() seleciona local/openai por LLM_PROVIDER; embed cloud delega a createLocalEmbedder (embeddings sempre locais); fallback z.toJSONSchema (D-16) blinda decide() nos dois providers
+- [Phase 06]: 06-02: teto de custo = decorator withSpendCap (hard-cap de chamadas/janela diária em SQLite); estourou -> fallback-to-local (D-08); local = no-op de cap; embed sempre local
 
 ### Pending Todos
 
@@ -84,6 +86,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-19T22:00:56.541Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-06-19T22:08:01.936Z
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None

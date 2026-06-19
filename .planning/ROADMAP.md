@@ -57,7 +57,7 @@ Continuação numérica do v1.0 (que terminou na Phase 5; 999.1 foi backlog/park
 **Plans**: 3 plans
 Plans:
 - [x] 06-01-PLAN.md — Factory + cloud provider (GPT-4.1-mini) + embeddings locais por composição + fallback zod v4 (PROV-01/02/03/04)
-- [ ] 06-02-PLAN.md — Teto de custo (withSpendCap hard-cap → fallback-to-local, contador SQLite) + fiação createProvider (PROV-05)
+- [x] 06-02-PLAN.md — Teto de custo (withSpendCap hard-cap → fallback-to-local, contador SQLite) + fiação createProvider (PROV-05)
 - [ ] 06-03-PLAN.md — Paridade de structured output: teste schema-only + fallback D-16 + live gated RUN_LIVE_PARITY (PROV-04)
 
 ### Phase 7: Grounding + SkillResult
