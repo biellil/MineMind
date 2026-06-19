@@ -1,0 +1,126 @@
+// src/chat/conversation.ts
+// CHAT-01/02 + D-07/D-12/D-13: caminho CONVERSACIONAL do agente, ISOLADO do parser
+// literal de controle/disposição (Pattern 5 / Pitfall 6). Esta é a ÚNICA conversa com LLM.
+//
+// Fluxo (chamado pelo handler do loop SÓ se shouldRespond === true):
+//   1. monta [system(persona), human(username: message)]
+//   2. provider.chat(...) dentro de try/catch — NUNCA propaga (degrada para silêncio/log).
+//   3. responde curto via bot.chat (D-01: resposta concisa, truncada).
+//   4. em ASSISTANT, se a mensagem casa um pedido de tipo SUPORTADO (conjunto FECHADO),
+//      sinaliza geração de objetivo dinâmico (holder.playerRequestPending + goal candidato).
+//
+// SEGURANÇA (T-03-13/T-03-14): o LLM de conversa é texto->texto (bot.chat); não dirige ação.
+// A AÇÃO só vem da deliberação com enum fechado + Zod + fallback (Plan 01/03). O objetivo
+// extraível é restrito a SUPPORTED_REQUEST_KINDS — pedido fora do conjunto NUNCA vira objetivo.
+import type { Bot } from 'mineflayer'
+import { SystemMessage, HumanMessage } from '@langchain/core/messages'
+import type { LlmProvider } from '../llm/provider'
+import { buildPersonaPrompt } from '../llm/prompts'
+import type { Disposition } from '../motivation/types'
+import type { CognitiveStateHolder } from '../cognition/state'
+import type { Goal } from '../motivation/types'
+
+/** Comprimento máximo de uma resposta de chat (D-01: respostas curtas). */
+const MAX_REPLY_LEN = 256
+
+/**
+ * Conjunto FECHADO de tipos de pedido extraíveis de um jogador (Open Question 3 / D-13).
+ * Pedido fora deste conjunto recebe resposta conversacional educada, NUNCA um objetivo inválido.
+ */
+export const SUPPORTED_REQUEST_KINDS = ['gather', 'follow', 'navigate'] as const
+export type SupportedRequestKind = (typeof SUPPORTED_REQUEST_KINDS)[number]
+
+/**
+ * Heurística literal simples por palavras-chave (pt/en) para detectar a INTENÇÃO de um pedido.
+ * Mapeia a um tipo do conjunto fechado, ou null se nenhum casar. Sem LLM, sem eval — só lookup.
+ */
+function detectRequestKind(message: string): SupportedRequestKind | null {
+  const m = message.toLowerCase()
+  if (/\b(coletar|coleta|colete|minerar|pegar|gather|collect|mine)\b/.test(m)) return 'gather'
+  if (/\b(vem|venha|segue|seguir|me\s+segue|follow|come)\b/.test(m)) return 'follow'
+  if (/\b(vai|leva|leve|ir\s+para|navegar|navigate|go\s+to|goto)\b/.test(m)) return 'navigate'
+  return null
+}
+
+/**
+ * Decide se o agente deve responder a uma mensagem de jogador (D-07/D-12).
+ * - Ignora a própria mensagem do bot (username === botUsername).
+ * - AUTONOMOUS reactive => false (D-07: conversa essencialmente desligada).
+ * - AUTONOMOUS proactive => false aqui também (mantemos simples nesta fase — proatividade
+ *   ativa de conversa fica para iteração futura; D-07 prioriza silêncio em autônomo).
+ * - ASSISTANT => true para qualquer jogador próximo (D-12: lê todo chat próximo).
+ */
+export function shouldRespond(
+  disposition: Disposition,
+  _proactivity: 'reactive' | 'proactive',
+  username: string,
+  botUsername: string,
+): boolean {
+  if (username === botUsername) return false // Pitfall 5: nunca responde a si mesmo
+  if (disposition === 'ASSISTANT') return true // D-12
+  return false // AUTONOMOUS: conversa mínima (D-07)
+}
+
+/** Cria um Goal candidato source:'player_request' (priority alta, progress 0). */
+function makePlayerRequestGoal(kind: SupportedRequestKind, now: number): Goal {
+  return {
+    id: `player_request:${kind}:${now}`,
+    kind,
+    priority: 1, // pedido de jogador em ASSISTANT preempta (D-13/D-15b) — prioridade alta
+    progress: 0,
+    dependsOn: [],
+    source: 'player_request',
+    committedAt: now,
+  }
+}
+
+/**
+ * Trata UMA mensagem de jogador pelo caminho conversacional (CHAT-02). NUNCA lança.
+ *
+ * @param provider LlmProvider (provider.chat — texto livre com persona).
+ * @param holder   mente durável: lê disposition, SETA playerRequestPending/goals quando aplicável.
+ * @param bot      bot da sessão (bot.chat para responder no jogo).
+ * @param username autor da mensagem.
+ * @param message  texto bruto do jogador (entrada NÃO confiável — usado só como contexto do LLM).
+ * @param now      timestamp (ms) — injetado para testabilidade.
+ */
+export async function handleConversation(
+  provider: LlmProvider,
+  holder: CognitiveStateHolder,
+  bot: Bot,
+  username: string,
+  message: string,
+  now: number,
+): Promise<void> {
+  // (1) monta o prompt com a persona estática da disposição atual + a mensagem do jogador.
+  const messages = [
+    new SystemMessage(buildPersonaPrompt(holder.disposition)),
+    new HumanMessage(`${username}: ${message}`),
+  ]
+
+  // (2) chama o LLM de conversa — degrada gracioso se falhar (D-17): log e segue sem responder.
+  let reply: string
+  try {
+    reply = await provider.chat(messages)
+  } catch (err) {
+    console.error('[chat] provider.chat falhou:', err instanceof Error ? err.message : err)
+    return
+  }
+
+  // (3) responde no jogo — curto (D-01). Reply vazia/branca => silêncio.
+  const trimmed = reply.trim()
+  if (trimmed.length > 0) {
+    bot.chat(trimmed.slice(0, MAX_REPLY_LEN))
+  }
+
+  // (4) em ASSISTANT, pedido de tipo SUPORTADO vira sinal de objetivo dinâmico (D-13/OQ3).
+  // Em AUTONOMOUS, pedidos NUNCA viram objetivo. Fora do conjunto fechado => sem objetivo
+  // (a resposta conversacional já cobriu o "não consigo isso ainda" via persona).
+  if (holder.disposition === 'ASSISTANT') {
+    const kind = detectRequestKind(message)
+    if (kind !== null) {
+      holder.playerRequestPending = true // o reset é feito pelo observe após selectGoal consumir
+      holder.goals.push(makePlayerRequestGoal(kind, now))
+    }
+  }
+}
