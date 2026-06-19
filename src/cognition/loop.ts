@@ -10,7 +10,7 @@ import { parseDisposition } from '../control/disposition'
 import { shouldRespond, handleConversation } from '../chat/conversation'
 import type { CognitiveStateHolder } from './state'
 import { createDeliberator, type DeliberationTrigger } from './deliberation'
-import { createLmStudioProvider } from '../llm/provider'
+import { createProvider } from '../llm/provider'
 import { urgency } from '../motivation/needs'
 import { motivationConfigFor } from '../config'
 import type { WorldSnapshot } from '../perception/types'
@@ -27,8 +27,10 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
  * (CONN-03/D-20) — a mente (needs/goals/memory) não reinicia.
  */
 export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void {
-  // provider + deliberator: baratos, 1x por sessão. O provider degrada graciosamente se o LLM estiver off (D-17).
-  const provider = createLmStudioProvider()
+  // provider + deliberator: baratos, 1x por sessão. createProvider seleciona local/cloud por env
+  // (D-13) e, no caminho cloud, envolve o teto de custo persistido em holder.db (D-06/D-09). O
+  // provider degrada graciosamente se o LLM estiver off (D-17) e cai para o local ao estourar o teto.
+  const provider = createProvider({ db: holder.db })
   const deliberator = createDeliberator()
   const graph = buildGraph({ bot, holder, provider })
 

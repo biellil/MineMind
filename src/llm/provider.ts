@@ -7,7 +7,9 @@
 import { ChatOpenAI } from '@langchain/openai'
 import type { BaseMessage } from '@langchain/core/messages'
 import { z, type ZodType } from 'zod'
+import type { Database } from 'bun:sqlite'
 import { config } from '../config'
+import { withSpendCap, sqliteSpendStore } from './spendCap'
 
 /**
  * Interface de provedor LLM (D-18). Três caminhos:
@@ -207,10 +209,27 @@ export function createOpenAiProvider(): LlmProvider {
 
 /**
  * Factory de seleção do provider por env (D-13). Lê config.llmProvider (LLM_PROVIDER):
- * 'openai' -> cloud GPT-4.1-mini; qualquer outro -> LM Studio local (default custo-zero, D-05).
- * O caminho openai compõe createLocalEmbedder -> embed local mesmo com chat cloud (D-03/D-11).
- * Chamada 1x por sessão no loop cognitivo, substituindo a chamada direta a createLmStudioProvider.
+ * 'openai' -> cloud GPT-4.1-mini envolto no teto de custo (D-06); qualquer outro -> LM Studio
+ * local SEM cap (D-05: local é custo-zero, o decorator seria no-op). embeddings sempre locais
+ * por composição (D-03/D-11). Chamada 1x por sessão no loop cognitivo.
+ *
+ * `opts.db` é `Database | null` (NÃO apenas `Database`) porque o chamador passa `holder.db`,
+ * cujo tipo é `Database | null` (src/cognition/state.ts L50). A guarda truthy `if (opts?.db)`
+ * estreita o tipo para `Database` antes de construir o store SQLite — sem cast nem `?? undefined`.
  */
-export function createProvider(): LlmProvider {
-  return config.llmProvider === 'openai' ? createOpenAiProvider() : createLmStudioProvider()
+export function createProvider(opts?: { db?: Database | null }): LlmProvider {
+  // D-05: local = no-op de cap. Devolve o provider local direto, sem decorator.
+  if (config.llmProvider !== 'openai') return createLmStudioProvider()
+
+  // Caminho cloud (D-06): envolve com o teto de custo se houver um DB para persistir o contador.
+  const cloud = createOpenAiProvider()
+  const local = createLmStudioProvider()
+  if (opts?.db) {
+    const store = sqliteSpendStore(opts.db)
+    return withSpendCap(cloud, local, store, { maxCalls: config.cloudMaxCallsPerWindow })
+  }
+  // Sem DB (ex.: testes que não persistem): o teto não pode sobreviver a restart (D-09), então
+  // desativa o cap em vez de usar um contador volátil que mascararia a brecha de crash-loop.
+  console.warn('[provider] sem db — spend-cap desativado (LLM_PROVIDER=openai sem persistência)')
+  return cloud
 }
