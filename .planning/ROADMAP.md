@@ -95,3 +95,14 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 2. Loop Autônomo e Memória CP | 0/4 | Not started | - |
 | 3. Cognição com LLM | 0/TBD | Not started | - |
 | 4. Persistência e Identidade | 0/TBD | Not started | - |
+
+## Backlog
+
+### Phase 999.1: Otimizar pathfinding da coleta (collectBlock) para suportar raio de percepção maior sem OOM (BACKLOG)
+
+**Goal:** Permitir `PERCEPTION_RADIUS` maior (ex: 32) sem estourar memória/OOM no estado Gathering. Hoje o A* do mineflayer-pathfinder via `bot.collectBlock.collect()` explode a memória (~78GB VM) e o processo é morto pelo OOM killer ao entrar em gathering com raio alto — bloqueando o event loop de forma síncrona (os timeouts da rede de segurança nem disparam). Workaround atual: `PERCEPTION_RADIUS=8` no `.env` (degrada percepção). Fix proper: bound o pathfinding (thinkTimeout/maxIterations no Movements), validar alcançabilidade antes de coletar, e/ou separar "raio de percepção" do "raio de busca de coleta". Origem: Fase 2, descoberto na verificação humana ao vivo do Plano 02-04. Ver `.planning/todos/pending/gathering-collectblock-oom.md`.
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (promote with /gsd-review-backlog when ready)
