@@ -423,22 +423,27 @@ export function selectGoal(current: Goal | null, candidates: Goal[], ctx, cfg): 
 | A4 | Holder em-memória + closure é suficiente p/ CONN-03 sem mexer no checkpoint do MemorySaver entre grafos recompilados | Pattern 4 | Se o planner preferir reusar o checkpoint, precisa garantir semântica de thread_id entre grafos recompilados (mais frágil). **Recomendação:** holder como fonte única — menor risco. |
 | A5 | Valores de decaimento/limiares/histerese/replan-interval precisarão de tuning empírico, não há "número certo" de literatura | Necessidades/Objetivos | Defaults ruins → oscilação ou letargia. **Mitigação:** todos configuráveis via `.env` (já é o desejo do usuário); começar conservador (replan lento, histerese alta). |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> Todas as três questões abertas foram resolvidas e as decisões já estão refletidas nos planos de execução (Plan 01 e Plan 04). Marcadores `RESOLVED` inline abaixo.
 
 1. **Qual modelo local exatamente?** (discretion do usuário, encaminhado a este research mas é decisão de produto)
    - What we know: precisa suportar structured output → ≥ 7B recomendado pelo LM Studio `[CITED]`; pt-BR razoável (D-02 espelha idioma).
    - What's unclear: o modelo específico instalado no LM Studio do usuário (nome em `LLM_MODEL`).
    - Recommendation: parametrizar via `.env` (`LLM_MODEL`); no spike inicial, testar 1 modelo ~7–8B instruct com bom suporte a tools/JSON (ex.: família Qwen/Llama-instruct) e confirmar structured output antes de tunar needs/goals.
+   - **RESOLVED:** o modelo é parametrizado por `.env` via `LLM_MODEL` (default `local-model`), exatamente como adotado no Plan 01 (`createLmStudioProvider`) e no Plan 03 (`config.llmModel`). A escolha do modelo específico permanece discretion do usuário (passo de `user_setup`/checkpoint), mas o código não fica acoplado a nenhum modelo — qualquer modelo ≥ 7B com structured output serve.
 
 2. **`method` do withStructuredOutput que o LM Studio honra melhor?**
    - What we know: existem `jsonSchema`, `functionCalling`, `jsonMode`; LM Studio suporta `response_format.json_schema` e `tools` `[CITED]`.
    - What's unclear: qual dá menos falhas com o modelo escolhido.
    - Recommendation: spike A/B no início do plano; default `jsonSchema`, fallback documentado p/ `jsonMode`.
+   - **RESOLVED:** default `jsonSchema` adotado no Plan 01 Task 2 (`withStructuredOutput(schema, { name: 'decide', method: 'jsonSchema' })`). O fallback documentado para `jsonMode`/`functionCalling` permanece como nota de spike (Assumption A2); a rede de segurança real é o repair/retry + fallback determinístico ao arbiter (LLM-02/D-17 no Plan 01 Task 3), que cobre qualquer método que o modelo honre mal.
 
 3. **Pedido de jogador → objetivo (D-13): quão estruturada a extração?**
    - What we know: é a maior superfície de falha (D-13). Deve ser enum fechado + Zod + fallback.
    - What's unclear: granularidade do objetivo extraível (ex.: "coletar madeira" mapeia limpo; "constrói uma casa" não — building é stub).
    - Recommendation: restringir o objetivo extraído a um conjunto fechado de tipos suportados (gather/follow/navigate); pedidos fora do conjunto → resposta conversacional educada ("não consigo isso ainda"), nunca objetivo inválido.
+   - **RESOLVED:** conjunto fechado `SUPPORTED_REQUEST_KINDS = ['gather','follow','navigate']` adotado no Plan 04 Task 2 (`src/chat/conversation.ts`). Pedidos fora do conjunto → resposta conversacional educada via persona, nunca objetivo inválido. Extração por heurística literal de palavra-chave (pt/en) restrita a esse conjunto.
 
 ## Environment Availability
 
