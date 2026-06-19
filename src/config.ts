@@ -14,6 +14,14 @@ export const config = {
   // Percepção (D-07)
   perceptionRadius: parseInt(process.env.PERCEPTION_RADIUS || '32', 10),
 
+  // 999.1 D-01: raio de busca de coleta — INDEPENDENTE de perceptionRadius.
+  // dig.ts usa este valor no findBlocks({ maxDistance }); percepção (snapshot.ts) mantém perceptionRadius.
+  gatherSearchRadius: parseInt(process.env.GATHER_SEARCH_RADIUS || '16', 10),
+  // 999.1 D-02: bounds do A* do pathfinder — ativam o gate maxCost (raiz do fix de OOM).
+  // searchRadius ≈ 1.5-2× perceptionRadius (default 48); thinkTimeout secundário (default 2000ms).
+  pathfinderSearchRadius: parseInt(process.env.PATHFINDER_SEARCH_RADIUS || '48', 10),
+  pathfinderThinkTimeoutMs: parseInt(process.env.PATHFINDER_THINK_TIMEOUT_MS || '2000', 10),
+
   // Timeouts de skills em ms (D-13, Claude's discretion: 30s navigate, 10s dig)
   navigateTimeoutMs: parseInt(process.env.NAVIGATE_TIMEOUT_MS || '30000', 10),
   digTimeoutMs: parseInt(process.env.DIG_TIMEOUT_MS || '10000', 10),
@@ -128,6 +136,16 @@ export const motivationConfig: MotivationConfig = motivationConfigFor(config.dis
 // Validação de sanidade em startup
 if (config.perceptionRadius < 1 || config.perceptionRadius > 128) {
   throw new Error(`PERCEPTION_RADIUS inválido: ${config.perceptionRadius}. Deve ser entre 1 e 128.`)
+}
+// 999.1 D-01/D-02: validação de range dos novos raios/timeout
+if (config.gatherSearchRadius < 1 || config.gatherSearchRadius > 128) {
+  throw new Error(`GATHER_SEARCH_RADIUS inválido: ${config.gatherSearchRadius}. Deve ser entre 1 e 128.`)
+}
+if (config.pathfinderSearchRadius < 1 || config.pathfinderSearchRadius > 256) {
+  throw new Error(`PATHFINDER_SEARCH_RADIUS inválido: ${config.pathfinderSearchRadius}. Deve ser entre 1 e 256.`)
+}
+if (config.pathfinderThinkTimeoutMs < 1) {
+  throw new Error(`PATHFINDER_THINK_TIMEOUT_MS inválido: ${config.pathfinderThinkTimeoutMs}. Deve ser >= 1.`)
 }
 if (config.port < 1 || config.port > 65535) {
   throw new Error(`MC_PORT inválido: ${config.port}. Deve ser entre 1 e 65535.`)
