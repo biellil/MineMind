@@ -23,6 +23,7 @@ function mockProvider(opts: {
   return {
     available: async () => opts.available,
     chat: async () => 'noop',
+    embed: async () => [],
     decide: opts.decide
       ? (async () => opts.decide!()) as LlmProvider['decide']
       : (async () => {

@@ -13,6 +13,7 @@ const stubProvider: LlmProvider = {
   decide: async () => ({}) as never,
   chat: async () => '',
   available: async () => false,
+  embed: async () => [],
 }
 
 // Mock MINIMO de Bot — fornece SO o que buildWorldSnapshot le (ver src/perception/snapshot.ts)

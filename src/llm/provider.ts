@@ -21,6 +21,8 @@ export interface LlmProvider {
   chat(messages: BaseMessage[]): Promise<string>
   /** True se o servidor LLM responde; nunca lança (timeout/erro -> false). */
   available(): Promise<boolean>
+  /** Retorna o vetor de embedding de um texto via /v1/embeddings. Lança em erro de rede/HTTP. */
+  embed(text: string): Promise<number[]>
 }
 
 /** Timeout curto do probe de disponibilidade (ms). Curto para não travar o loop (T-03-03). */
@@ -80,6 +82,22 @@ export function createLmStudioProvider(): LlmProvider {
       } finally {
         clearTimeout(timer)
       }
+    },
+
+    async embed(text: string): Promise<number[]> {
+      // Pitfall 1: fetch direto a /v1/embeddings (NÃO usar OpenAIEmbeddings — trava com LM Studio).
+      // Mesma baseURL resolvida que o probe available() usa.
+      const res = await fetch(`${baseURL.replace(/\/$/, '')}/embeddings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: process.env.EMBEDDING_MODEL || 'text-embedding-nomic-embed-text-v1.5',
+          input: text.replace(/\n/g, ' '),
+        }),
+      })
+      if (!res.ok) throw new Error(`embeddings ${res.status}`)
+      const json = (await res.json()) as { data: { embedding: number[] }[] }
+      return json.data[0].embedding
     },
   }
 }

@@ -45,6 +45,7 @@ function makeMockBot(opts: { health?: number; food?: number } = {}): any {
 // LlmProvider MOCK "LM Studio OFF" — available:false forca o caminho fallback do arbiter (D-17).
 // decide/chat nunca devem ser chamados pelo decideAction quando available e false.
 const offProvider: LlmProvider = {
+  embed: async () => [],
   available: async () => false,
   decide: async () => {
     throw new Error('LLM off — decide nao deveria ser chamado')
@@ -139,6 +140,7 @@ test('C) tick reativo nao bloqueia na deliberacao lenta; segunda chamada concorr
     releaseDecide = r
   })
   const slowProvider: LlmProvider = {
+    embed: async () => [],
     available: async () => true,
     decide: async () => {
       decideCalls++

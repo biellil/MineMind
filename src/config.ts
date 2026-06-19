@@ -75,6 +75,25 @@ export const config = {
   survivalCriticalThreshold: parseFloat(process.env.SURVIVAL_CRITICAL_THRESHOLD || '0.3'),
   // Itens-alvo de recurso (satisfação de resources = fração presente no inventário)
   resourceTargets: (process.env.RESOURCE_TARGETS || 'oak_log,cobblestone,bread').split(','),
+
+  // === Fase 4: Persistência, reflexão, identidade ===
+  // D-01/D-02: caminho do arquivo SQLite (store único relacional + vetorial)
+  dbPath: process.env.DB_PATH || './minemind.sqlite',
+  // D-09: modelo de embedding no LM Studio + dimensão (Pitfall 2 — validar no boot)
+  embeddingModel: process.env.EMBEDDING_MODEL || 'text-embedding-nomic-embed-text-v1.5',
+  embeddingDim: parseInt(process.env.EMBEDDING_DIM || '768', 10),
+  // D-06: limiar de importância mínimo para persistir um evento em LP (descarta ticks triviais — Pitfall 6)
+  ltImportanceFloor: parseInt(process.env.LT_IMPORTANCE_FLOOR || '3', 10),
+  // D-07: meia-vida de recência (ms) e nº de candidatos KNN antes da reordenação ponderada
+  retrievalHalfLifeMs: parseInt(process.env.RETRIEVAL_HALF_LIFE_MS || String(6 * 60 * 60 * 1000), 10),
+  retrievalK: parseInt(process.env.RETRIEVAL_K || '12', 10),
+  // D-10: gatilho de reflexão (soma de importância) + teto temporal anti-starvation (ms)
+  reflectionImportanceThreshold: parseInt(process.env.REFLECTION_IMPORTANCE_THRESHOLD || '50', 10),
+  reflectionMaxIntervalMs: parseInt(process.env.REFLECTION_MAX_INTERVAL_MS || String(10 * 60 * 1000), 10),
+  // D-17: limiar de trust para pedido-vira-objetivo em ASSISTANT
+  trustRequestThreshold: parseFloat(process.env.TRUST_REQUEST_THRESHOLD || '0.0'),
+  // D-19: idade máxima (ms) de um goal comprometido antes de ser descartado no boot (decay-on-boot)
+  goalStaleMs: parseInt(process.env.GOAL_STALE_MS || String(30 * 60 * 1000), 10),
 } as const
 
 // === Fase 3: pesos de necessidade POR DISPOSIÇÃO (D-06/D-10) ===
@@ -171,3 +190,9 @@ for (const [name, v] of [
 if (config.dispositionDefault !== 'AUTONOMOUS' && config.dispositionDefault !== 'ASSISTANT') {
   throw new Error(`DISPOSITION_DEFAULT inválido: ${config.dispositionDefault}. Deve ser AUTONOMOUS ou ASSISTANT.`)
 }
+// Fase 4: validação dos parâmetros de persistência/reflexão
+if (config.embeddingDim < 1) throw new Error(`EMBEDDING_DIM inválido: ${config.embeddingDim}. Deve ser >= 1.`)
+if (config.ltImportanceFloor < 1 || config.ltImportanceFloor > 10) throw new Error(`LT_IMPORTANCE_FLOOR inválido: ${config.ltImportanceFloor}. Deve estar em [1,10].`)
+if (config.retrievalK < 1) throw new Error(`RETRIEVAL_K inválido: ${config.retrievalK}. Deve ser >= 1.`)
+if (config.retrievalHalfLifeMs < 1) throw new Error(`RETRIEVAL_HALF_LIFE_MS inválido: ${config.retrievalHalfLifeMs}. Deve ser >= 1.`)
+if (config.trustRequestThreshold < -1 || config.trustRequestThreshold > 1) throw new Error(`TRUST_REQUEST_THRESHOLD inválido: ${config.trustRequestThreshold}. Deve estar em [-1,1].`)

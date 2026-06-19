@@ -27,6 +27,7 @@ function okProvider(decision: ActionDecision): LlmProvider {
     decide: mock(async () => decision as never),
     chat: mock(async () => ''),
     available: mock(async () => true),
+    embed: mock(async () => []),
   }
 }
 
@@ -93,6 +94,7 @@ test('fallback ao arbiter: LLM off (available=false) ainda grava uma decisão', 
   const provider: LlmProvider = {
     decide: mock(async () => ({}) as never),
     chat: mock(async () => ''),
+    embed: mock(async () => []),
     available: mock(async () => false), // off → decideAction usa o fallback (arbiter)
   }
   const { maybeDeliberate } = createDeliberator()
@@ -122,6 +124,7 @@ test('single-flight concorrente: segunda chamada durante a primeira não redispa
   const provider: LlmProvider = {
     decide: mock(() => new Promise<never>((res) => { resolveDecide = res as never })),
     chat: mock(async () => ''),
+    embed: mock(async () => []),
     available: mock(async () => true),
   }
   const { maybeDeliberate } = createDeliberator()

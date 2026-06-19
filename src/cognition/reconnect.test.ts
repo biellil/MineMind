@@ -21,6 +21,7 @@ const stubProvider: LlmProvider = {
   available: async () => false,
   decide: async () => ({}) as never,
   chat: async () => '',
+  embed: async () => [],
 }
 
 // Mock minimo de bot (mesma forma do smoke): mundo vazio, sem jogadores/blocos.

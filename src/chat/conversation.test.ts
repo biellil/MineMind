@@ -15,6 +15,7 @@ function mockProvider(reply: string | Error): LlmProvider {
       return reply
     },
     available: async () => true,
+    embed: async () => [],
   }
 }
 
