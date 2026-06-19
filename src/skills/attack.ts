@@ -9,7 +9,12 @@ export const AttackSchema = z.object({
 
 export type AttackParams = z.infer<typeof AttackSchema>
 
-/** Stub — implementação real na Fase 2+ */
+/**
+ * Stub — implementação real na Fase 2+.
+ * 999.1 D-06: stub NÃO se auto-embrulha em executeWithSafety — não há operação async
+ * longa a proteger (lança imediatamente). Quando o combate real for implementado, deve
+ * envolver a operação (ex: pvp/strafing contínuo) em executeWithSafety com timeout próprio.
+ */
 export async function attack(_bot: Bot, rawParams: unknown): Promise<void> {
   AttackSchema.parse(rawParams)  // valida params mesmo como stub
   throw new Error('Skill attack não implementada na Fase 1 (stub). Será implementada em fase futura.')

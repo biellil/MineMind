@@ -11,7 +11,13 @@ export const FollowSchema = z.object({
 
 export type FollowParams = z.infer<typeof FollowSchema>
 
-/** Stub — implementação real na Fase 2+ */
+/**
+ * Stub — implementação real na Fase 2+.
+ * 999.1 D-06: stub NÃO se auto-embrulha em executeWithSafety — não há operação async
+ * longa a proteger (lança imediatamente). Quando a implementação real chegar, deve
+ * envolver a operação de seguir (ex: pathfinder.goto contínuo) em executeWithSafety
+ * com um timeout/progressChecker próprios.
+ */
 export async function follow(_bot: Bot, rawParams: unknown): Promise<void> {
   FollowSchema.parse(rawParams)  // valida params mesmo como stub
   throw new Error('Skill follow não implementada na Fase 1 (stub). Será implementada na Fase 2.')
