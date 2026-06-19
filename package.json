@@ -13,6 +13,8 @@
   "dependencies": {
     "@langchain/core": "^1.2.0",
     "@langchain/langgraph": "^1.4.4",
+    "@langchain/openai": "1.5.1",
+    "js-tiktoken": "1.0.21",
     "mineflayer": "4.37.1",
     "mineflayer-collectblock": "1.6.0",
     "mineflayer-pathfinder": "2.4.5",

@@ -1,19 +1,25 @@
 // src/memory/shortTerm.ts
 // MEM-01 / D-12 / D-13: ring buffer rico de eventos + evicção por orçamento de tokens estimado.
-// Esqueleto pronto para a Fase 3 trocar estimateTokens por um tokenizer real (js-tiktoken).
+// Fase 3: o tokenizer real (js-tiktoken, encoding o200k_base) já está em uso — substituiu a
+// antiga heurística ~4 chars/token sem alterar o contrato público da memória.
+import { getEncoding } from 'js-tiktoken'
 import type { MemEvent } from '../cognition/types'
 
 /** Orçamento padrão de tokens da memória de curto prazo (D-13, Claude's discretion). */
 export const DEFAULT_TOKEN_BUDGET = 2000
+
+// Encoding carregado UMA vez no escopo do módulo (a construção é cara — não fazer por chamada).
+// o200k_base aproxima modelos locais tipo Llama; erro tolerável (±3–12%) para orçamento FIFO.
+const enc = getEncoding('o200k_base')
 
 export interface ShortTermMemory {
   readonly events: MemEvent[]   // ordem cronológica: [0] = mais antigo
   readonly budget: number       // orçamento de tokens
 }
 
-/** Estima tokens de um evento via heurística ~4 chars/token (D-13). Fase 3 troca por tokenizer real. */
+/** Conta tokens de um evento via js-tiktoken (o200k_base). Assinatura preservada (D-13). */
 export function estimateTokens(e: MemEvent): number {
-  return Math.ceil(JSON.stringify(e).length / 4)
+  return enc.encode(JSON.stringify(e)).length
 }
 
 /** Cria uma memória vazia com o orçamento informado. */
