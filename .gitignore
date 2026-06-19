@@ -2,6 +2,11 @@
 NAPI_ERROR.txt
 bun.lockb
 
+# Test SQLite artifacts (smoke tests; Windows mantém o handle e gera WAL/SHM)
+*.test.sqlite
+*.test.sqlite-wal
+*.test.sqlite-shm
+
 # Logs
 logs
 *.log
