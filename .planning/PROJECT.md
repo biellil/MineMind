@@ -37,6 +37,7 @@ O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com
 - [x] Mover-se e navegar autonomamente pelo mundo — *Validado na Fase 1/2 (ACT-01; pathfinding com bounds de OOM na Fase 999.1)*
 - [x] Manter memória de curto prazo (eventos/conversas/ações recentes) — *Validado na Fase 2 (ring buffer limitado)*
 - [~] Persistência de longo prazo + semântica (SQLite + sqlite-vec), reflexão, perfis por jogador, personalidade evolutiva — *Entregue na Fase 4 e coberto por testes (227), MAS verificação humana AO VIVO PENDENTE (ver Known Gaps)*
+- [x] Grounding de ações: relatos do LLM consistentes com o estado real do mundo — *Validado na Fase 7 (GRND-01..04; toda skill retorna `SkillResult` derivado de delta real, execute node deriva memória do `outcome`, post-filter reescreve quantidades — mata "peguei 10 tábuas"). Métrica de volume ao vivo fica como item não-bloqueante*
 
 ### Active
 
@@ -49,7 +50,6 @@ O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com
 - [ ] Construir (building) abrigo/estruturas de forma autônoma
 - [ ] Combater (defender e atacar) com estado de combate real
 - [ ] Implementar de fato os estados cognitivos ainda incompletos
-- [ ] Grounding de ações: relatos do LLM consistentes com o estado real do mundo
 - [ ] Aprender pela própria reflexão/memória (sem observar outros jogadores)
 - [ ] Provider de LLM configurável (GPT/OpenAI + LM Studio local)
 
@@ -78,6 +78,8 @@ O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com
 **Shipped: v1.0 MVP — 2026-06-19** · 4 fases + 1 backlog (999.1) · 24 planos · ~7.122 LOC TypeScript · 227 testes (1 fail é teste de config que lê `.env` local).
 
 **v2.0 em andamento — Phase 6 (LLM Provider Factory) completa 2026-06-19:** GPT-4.1-mini (cloud) e LM Studio (local) atrás da mesma interface `LlmProvider`, trocáveis por `LLM_PROVIDER` sem tocar o loop cognitivo; embeddings sempre locais; teto de custo (`withSpendCap`, hard-cap persistido em SQLite → fallback-to-local); paridade de structured-output verificada (schema-only + mock + live). Paridade cloud confirmada ao vivo (GPT-4.1-mini); paridade local live (LM Studio) fica como item HUMAN-UAT pendente.
+
+**Phase 7 (Grounding + SkillResult) completa 2026-06-19:** módulo `grounding/` (contrato `SkillResult` tagueado por `outcome`, `captureGroundState` imutável, avaliadores puros `evaluateDig`/`evaluateNavigate`); as 4 skills (navigate/dig/follow/attack) sempre retornam `SkillResult` grounded e nunca lançam como fluxo normal (D-08/D-12); o execute node deriva a memória do `outcome`/`observed` real em vez da resolução da Promise (bug de raiz morto, D-09 B); `MemEvent` estendido com outcome/observed/expected (D-13); post-filter determinístico reescreve afirmações de quantidade na fala contra o delta real (D-10). 279 testes pass (1 fail pré-existente de config `.env`). Métrica de drift ao vivo (LM Studio + servidor) fica como verificação humana não-bloqueante.
 
 A espinha cognitiva (perceber → decidir → agir), o loop com LLM local, e toda a camada de persistência/reflexão/identidade (Fase 4) estão **implementadas e cobertas por testes unitários/smoke**. Persistência ao vivo foi parcialmente comprovada (perfil de jogador + holder gravados em SQLite/WAL).
 
@@ -133,4 +135,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-19 — Phase 6 (LLM Provider Factory) completa: provider cloud/local configurável com teto de custo e paridade de structured-output*
+*Last updated: 2026-06-19 — Phase 7 (Grounding + SkillResult) completa: toda skill retorna resultado verificado por delta real e o agente só relata o que o estado confirma (mata "peguei 10 tábuas")*
