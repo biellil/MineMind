@@ -5,7 +5,7 @@ milestone_name: Autonomia de Verdade
 status: verifying
 stopped_at: Phase 7 context gathered
 last_updated: "2026-06-19T22:55:01.796Z"
-last_activity: "2026-06-19 - Completed quick task 260619-qwx: Enriquecer percepção (lookingAt + underfoot + entities no prompt)"
+last_activity: "2026-06-19 - Completed quick task 260619-rv8: Morte/void do bot + poda do checkpointer (CR#1/CR#2/CR#3)"
 progress:
   total_phases: 9
   completed_phases: 1
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 Phase: 7
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-06-19 - Completed quick task 260619-qwx: Enriquecer percepção (lookingAt + underfoot + entities no prompt)
+Last activity: 2026-06-19 - Completed quick task 260619-rv8: Morte/void do bot + poda do checkpointer (CR#1/CR#2/CR#3)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -91,6 +91,7 @@ Recent decisions affecting current work:
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260619-qwx | Enriquecer percepção: lookingAt (bloco na mira), underfoot (bloco sob os pés) e render de entities/mobs no prompt | 2026-06-19 | f1b32d0 | [260619-qwx-enriquecer-percepcao-lookingat-bloco-na-](./quick/260619-qwx-enriquecer-percepcao-lookingat-bloco-na-/) |
+| 260619-rv8 | Tratar morte/void do bot (snapshot null + parada graciosa por deadTicks) e vazamento de RAM (poda periódica do MemorySaver via deleteThread) | 2026-06-19 | eb1df53 | [260619-rv8-tratar-morte-void-do-bot-e-vazamento-de-](./quick/260619-rv8-tratar-morte-void-do-bot-e-vazamento-de-/) |
 
 ## Session Continuity
 
