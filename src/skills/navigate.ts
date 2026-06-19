@@ -5,6 +5,9 @@ import { z } from 'zod'
 import type { Bot } from 'mineflayer'
 import { goals } from 'mineflayer-pathfinder'
 import { executeWithSafety } from './executor'
+import { captureGroundState } from '../grounding/capture'
+import { evaluateNavigate } from '../grounding/evaluate'
+import type { SkillResult } from '../grounding/types'
 import { config } from '../config'
 
 /** Schema Zod do skill navigate (D-11) — consumido pelo LangGraph na Fase 3 */
@@ -28,13 +31,18 @@ export type NavigateParams = z.infer<typeof NavigateSchema>
  * ACT-01: usa mineflayer-pathfinder com timeout e watchdog via executor centralizado.
  * PITFALL 2: pathfinder.goto sem timeout pode travar — executor resolve isso.
  *
+ * Fase 7: SEMPRE retorna SkillResult — outcome derivado da distância final ao alvo
+ * (success/partial/no_effect), nunca da resolução da Promise. Bloco não encontrado vira
+ * no_effect em vez de throw (D-12); o reason do timeout/stuck é anexado para diagnóstico.
+ *
  * @param bot - Instância do bot (deve ter pathfinder carregado após spawn)
  * @param rawParams - Parâmetros não validados (validados via Zod antes de usar)
  */
-export async function navigate(bot: Bot, rawParams: unknown): Promise<void> {
+export async function navigate(bot: Bot, rawParams: unknown): Promise<SkillResult> {
   const { target, range } = NavigateSchema.parse(rawParams)
 
   let goal: goals.Goal
+  let targetPos: { x: number; y: number; z: number }
 
   if (typeof target === 'string') {
     // Navegar até o bloco do tipo especificado mais próximo
@@ -43,27 +51,43 @@ export async function navigate(bot: Bot, rawParams: unknown): Promise<void> {
       maxDistance: config.perceptionRadius * 2,  // busca no dobro do raio de percepção
     })
     if (!block) {
-      throw new Error(`Bloco do tipo '${target}' não encontrado no raio de ${config.perceptionRadius * 2} blocos`)
+      // D-12: pré-condição não é throw de fluxo — alvo inexistente, bot não saiu do lugar → no_effect.
+      return { outcome: 'no_effect', observed: 0, expected: 1, delta: {}, reason: `Bloco do tipo '${target}' não encontrado no raio de ${config.perceptionRadius * 2} blocos` }
     }
     goal = new goals.GoalNear(block.position.x, block.position.y, block.position.z, range)
+    targetPos = { x: block.position.x, y: block.position.y, z: block.position.z }
   } else {
     goal = new goals.GoalNear(target.x, target.y, target.z, range)
+    targetPos = { x: target.x, y: target.y, z: target.z }
   }
 
-  // ACT-03: executor centralizado aplica timeout de 30s e watchdog de posição
-  await executeWithSafety(
-    () => bot.pathfinder.goto(goal),
-    {
-      timeoutMs: config.navigateTimeoutMs,  // 30000ms padrão
-      // Watchdog: posição que não muda indica bot preso
-      progressChecker: () => {
-        const pos = bot.entity.position
-        return Math.round(pos.x * 10) + Math.round(pos.y * 10) * 1000 + Math.round(pos.z * 10) * 1_000_000
-      },
-      progressIntervalMs: 2_000,
-      noProgressToleranceMs: 10_000,
-    }
-  )
+  const before = captureGroundState(bot)
+
+  let threw: unknown = null
+  try {
+    // ACT-03: executor centralizado aplica timeout de 30s e watchdog de posição
+    await executeWithSafety(
+      () => bot.pathfinder.goto(goal),
+      {
+        timeoutMs: config.navigateTimeoutMs,  // 30000ms padrão
+        // Watchdog: posição que não muda indica bot preso
+        progressChecker: () => {
+          const pos = bot.entity.position
+          return Math.round(pos.x * 10) + Math.round(pos.y * 10) * 1000 + Math.round(pos.z * 10) * 1_000_000
+        },
+        progressIntervalMs: 2_000,
+        noProgressToleranceMs: 10_000,
+      }
+    )
+  } catch (err) {
+    threw = err
+  }
+
+  // Fase 7: lê a posição final SEMPRE e julga por distância ao alvo (chegou ao range = success
+  // mesmo que o executor tenha disparado no pós-delay; o reason do throw é anexado para diagnóstico).
+  const after = captureGroundState(bot)
+  const result = evaluateNavigate(before, after, targetPos, range)
+  return threw ? { ...result, reason: threw instanceof Error ? threw.name : String(threw) } : result
 }
 
 /** Tool descriptor para LangGraph Fase 3 (D-11) */
