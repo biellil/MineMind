@@ -19,6 +19,8 @@ import { buildPersonaPrompt } from '../llm/prompts'
 import type { Disposition } from '../motivation/types'
 import type { CognitiveStateHolder } from '../cognition/state'
 import type { Goal } from '../motivation/types'
+import { upsertPlayer, applyTrustEvent, getProfile } from '../social/profiles'
+import { config } from '../config'
 
 /** Comprimento máximo de uma resposta de chat (D-01: respostas curtas). */
 const MAX_REPLY_LEN = 256
@@ -92,11 +94,30 @@ export async function handleConversation(
   message: string,
   now: number,
 ): Promise<void> {
-  // (1) monta o prompt com a persona estática da disposição atual + a mensagem do jogador.
+  // (0) registra a interação social (D-15/D-16): upsert do perfil + delta de trust de frequência.
+  // Só quando há DB durável (testes com db=null pulam — degradação graciosa).
+  if (holder.db) {
+    upsertPlayer(holder.db, username, now)
+    applyTrustEvent(holder.db, username, 'interaction') // +0.01 frequência
+  }
+
+  // Lê o perfil para colorir o prompt por interlocutor (D-17) e aplicar o gate de trust.
+  const prof = holder.db ? getProfile(holder.db, username) : undefined
+
+  // (1) monta o prompt: persona + personalidade (SOC-02/D-14) + a mensagem do jogador.
   const messages = [
-    new SystemMessage(buildPersonaPrompt(holder.disposition)),
+    new SystemMessage(buildPersonaPrompt(holder.disposition, holder.personality)),
     new HumanMessage(`${username}: ${message}`),
   ]
+
+  // Colore o prompt por interlocutor (D-17): trust baixo => cautela explícita.
+  if (prof && prof.trust < 0) {
+    messages.splice(
+      1,
+      0,
+      new SystemMessage(`Sobre ${username}: confiança baixa — seja cauteloso e mantenha distância.`),
+    )
+  }
 
   // (2) chama o LLM de conversa — degrada gracioso se falhar (D-17): log e segue sem responder.
   let reply: string
@@ -113,12 +134,14 @@ export async function handleConversation(
     bot.chat(trimmed.slice(0, MAX_REPLY_LEN))
   }
 
-  // (4) em ASSISTANT, pedido de tipo SUPORTADO vira sinal de objetivo dinâmico (D-13/OQ3).
-  // Em AUTONOMOUS, pedidos NUNCA viram objetivo. Fora do conjunto fechado => sem objetivo
+  // (4) em ASSISTANT, pedido de tipo SUPORTADO vira sinal de objetivo dinâmico (D-13/OQ3),
+  // SOMENTE se o trust do interlocutor atinge o limiar (D-17). Em AUTONOMOUS, pedidos NUNCA
+  // viram objetivo. Fora do conjunto fechado, ou com trust insuficiente => sem objetivo
   // (a resposta conversacional já cobriu o "não consigo isso ainda" via persona).
   if (holder.disposition === 'ASSISTANT') {
     const kind = detectRequestKind(message)
-    if (kind !== null) {
+    const trust = prof?.trust ?? 0
+    if (kind !== null && trust >= config.trustRequestThreshold) {
       holder.playerRequestPending = true // o reset é feito pelo observe após selectGoal consumir
       holder.goals.push(makePlayerRequestGoal(kind, now))
     }

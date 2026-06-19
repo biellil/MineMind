@@ -8,6 +8,7 @@
 // NÃO há evolução de personalidade aqui — isso é Fase 4.
 import type { WorldSnapshot } from '../perception/types'
 import type { MemEvent } from '../cognition/types'
+import type { PersonalityState } from '../cognition/personality'
 
 /** Eixo de disposição (D-04). Modula proatividade e relação com jogadores. */
 export type Disposition = 'AUTONOMOUS' | 'ASSISTANT'
@@ -32,13 +33,31 @@ Você é proativo e colaborativo com os jogadores próximos.
 Você ACEITA pedidos de jogadores como objetivos e busca ajudá-los, sem deixar de cuidar da própria sobrevivência.
 Responda às mensagens de chat de forma prestativa, mantendo o tom direto e pragmático.`
 
+/** Traduz o escalar de humor [-1,1] em uma palavra curta para o prompt (SOC-02/D-14). */
+function moodWord(m: number): string {
+  return m > 0.3 ? 'bom' : m < -0.3 ? 'ruim' : 'neutro'
+}
+
+/** Formata um valor [0,1] como porcentagem inteira. */
+function pct(x: number): string {
+  return `${Math.round(x * 100)}%`
+}
+
 /**
- * Monta o system prompt ESTÁTICO da persona, variando por disposição (CHAT-03 / D-04/D-06/D-07).
- * O prompt é determinístico — não há estado evolutivo (Fase 4).
+ * Monta o system prompt da persona, variando por disposição (CHAT-03 / D-04/D-06/D-07).
+ *
+ * SOC-02/D-14: quando um `PersonalityState` é fornecido, um bloco de "estado interno" é
+ * anexado APÓS o trecho de disposição — sobre a PERSONA_BASE imutável, sem substituí-la.
+ * Sem `personality`, o prompt continua determinístico (compatível com call-sites antigos).
  */
-export function buildPersonaPrompt(disposition: Disposition): string {
+export function buildPersonaPrompt(disposition: Disposition, personality?: PersonalityState): string {
   const tail = disposition === 'ASSISTANT' ? PERSONA_ASSISTANT : PERSONA_AUTONOMOUS
-  return `${PERSONA_BASE}\n\n${tail}`
+  const persona = `${PERSONA_BASE}\n\n${tail}`
+  if (!personality) return persona
+  return (
+    `${persona}\n\nEstado interno atual: humor ${moodWord(personality.mood)}, ` +
+    `energia social ${pct(personality.socialEnergy)}, confiança ${pct(personality.confidence)}.`
+  )
 }
 
 /** Trunca uma string longa para manter o orçamento de prompt sob controle. */
