@@ -39,6 +39,13 @@ export interface EntityInfo {
   readonly metadata: unknown   // dados extras do protocolo Minecraft
 }
 
+/** Bloco diretamente na mira do bot (via bot.blockAtCursor). NOVO — enriquecimento de percepção. */
+export interface LookingAtBlock {
+  readonly name: string          // ex.: "oak_log", "stone"
+  readonly position: Position3D
+  readonly distance: number      // metros do bot até o bloco encarado
+}
+
 /** Jogador no raio de percepção (D-08) */
 export interface PlayerInfo {
   readonly username: string
@@ -87,4 +94,10 @@ export interface WorldSnapshot {
 
   /** Inventário completo slot-a-slot (PERC-03, D-09) */
   readonly inventory: ReadonlyArray<InventorySlot>
+
+  /** Bloco na mira do bot (blockAtCursor); null quando não há bloco no alcance. NOVO. */
+  readonly lookingAt: LookingAtBlock | null
+
+  /** Nome do bloco sob os pés do bot (ex.: "air", "water", "stone"); "unknown" se indisponível. NOVO. */
+  readonly underfoot: string
 }
