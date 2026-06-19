@@ -5,8 +5,15 @@
 // Tambem prova: a memoria acumula entre ticks (MemorySaver + thread_id) e paused -> idle.
 import { test, expect } from 'bun:test'
 import { buildGraph } from './graph'
-import { createControlState } from '../control/commands'
-import { createSafetyState } from './safety'
+import { createCognitiveStateHolder } from './state'
+import type { LlmProvider } from '../llm/provider'
+
+// O grafo NÃO chama o LLM no tick (a deliberação é fora do grafo) — provider stub que nunca é usado.
+const stubProvider: LlmProvider = {
+  decide: async () => ({}) as never,
+  chat: async () => '',
+  available: async () => false,
+}
 
 // Mock MINIMO de Bot — fornece SO o que buildWorldSnapshot le (ver src/perception/snapshot.ts)
 // + o que a skill navigate exercita no caminho XYZ (bot.pathfinder.goto, bot.entity.position).
@@ -36,11 +43,7 @@ const cfg = (thread_id: string) => ({ configurable: { thread_id } })
 
 test('grafo roda 26 ticks via driver externo sem GraphRecursionError (prova negativa do Pitfall 1)', async () => {
   const bot = makeMockBot()
-  const graph = buildGraph({
-    bot,
-    control: createControlState('autonomous'),
-    safety: createSafetyState(),
-  })
+  const graph = buildGraph({ bot, holder: createCognitiveStateHolder(), provider: stubProvider })
   let last: any
   // 26 > recursionLimit (25): se houvesse self-loop interno, estouraria com GraphRecursionError.
   // O ciclo aqui e o driver EXTERNO (re-invoke por tick) — cada invoke e um grafo finito ate END.
@@ -53,11 +56,7 @@ test('grafo roda 26 ticks via driver externo sem GraphRecursionError (prova nega
 
 test('memoria acumula eventos entre ticks (MemorySaver + thread_id)', async () => {
   const bot = makeMockBot()
-  const graph = buildGraph({
-    bot,
-    control: createControlState('autonomous'),
-    safety: createSafetyState(),
-  })
+  const graph = buildGraph({ bot, holder: createCognitiveStateHolder(), provider: stubProvider })
   let last: any
   for (let i = 0; i < 5; i++) last = await graph.invoke({}, cfg('smoke-mem'))
   expect(last.memory).toBeDefined()
@@ -68,8 +67,9 @@ test('memoria acumula eventos entre ticks (MemorySaver + thread_id)', async () =
 
 test('modo paused mantem o agente em idle (sem skill)', async () => {
   const bot = makeMockBot()
-  const control = createControlState('paused')
-  const graph = buildGraph({ bot, control, safety: createSafetyState() })
+  const holder = createCognitiveStateHolder()
+  holder.control.setMode('paused')
+  const graph = buildGraph({ bot, holder, provider: stubProvider })
   const last = await graph.invoke({}, cfg('smoke-paused'))
   expect(last.cogState).toBe('idle')
   // paused nao dispara skill -> nenhum evento de acao registrado

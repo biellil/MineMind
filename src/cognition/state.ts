@@ -6,9 +6,9 @@
 // UMA vez em bot/index.ts (ANTES de createBot) e injetado em cada startCognitiveLoop(bot, holder).
 // Assim a reconexão (nova sessão de bot) REUSA o mesmo holder → a mente não reinicia (Pitfall 2).
 //
-// ESCOPO (D-20): persistência EM-PROCESSO apenas. NÃO há gravação em disco (sem bun:sqlite,
-// sem writeFileSync). O holder é um objeto mutável vivo no processo; quando o processo morre,
-// a mente recomeça do zero — a durabilidade através de RECONEXÕES é o objetivo desta fase.
+// ESCOPO (D-20): persistência EM-PROCESSO apenas. NÃO há gravação em disco (nenhum SQLite
+// embarcado nem escrita de arquivo). O holder é um objeto mutável vivo no processo; quando o
+// processo morre, a mente recomeça do zero — a durabilidade através de RECONEXÕES é o objetivo.
 import { config } from '../config'
 import type { ControlState } from '../control/commands'
 import { createControlState } from '../control/commands'

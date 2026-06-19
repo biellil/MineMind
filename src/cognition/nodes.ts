@@ -1,17 +1,24 @@
 // src/cognition/nodes.ts
-// Nós do StateGraph (Fase 2). bot/control/safety por closure (Pitfall 3). Sem LLM.
+// Nós do StateGraph. Fase 2: bot/control/safety por closure (Pitfall 3), sem LLM no tick.
+// Fase 3 (CONN-03/D-20): control/safety/memory vêm do holder (fonte única). observe roda a
+// motivação (evaluateNeeds/generateGoals/selectGoal) com pesos POR DISPOSIÇÃO (motivationConfigFor,
+// D-06/D-10). analyze prefere a decisão LLM FRESCA do holder; senão degrada ao arbiter (D-17).
 import type { Bot } from 'mineflayer'
 import type { WorldSnapshot } from '../perception/types'
 import { buildWorldSnapshot } from '../perception/snapshot'
 import { skillRegistry, executeWithSafety } from '../skills/index'
-import { config } from '../config'
+import { config, motivationConfigFor } from '../config'
 import type { CognitiveState } from './types'
 import type { ShortTermMemory } from '../memory/shortTerm'
 import { push } from '../memory/shortTerm'
-import type { ControlState } from '../control/commands'
+import type { CognitiveStateHolder } from './state'
+import type { LlmProvider } from '../llm/provider'
+import type { ActionDecision } from '../llm/schemas'
+import type { Disposition, Goal, Need } from '../motivation/types'
+import { evaluateNeeds, urgency } from '../motivation/needs'
+import { generateGoals, selectGoal } from '../motivation/goals'
 import { arbitrate, highestPriorityGatherTarget } from './arbiter'
 import {
-  type SafetyState,
   recordAttempt,
   shouldAbandon,
   recordFailure,
@@ -25,65 +32,135 @@ export interface LoopState {
   snapshot: WorldSnapshot | null
   cogState: CognitiveState
   memory: ShortTermMemory
+  needs: Need[]
+  goals: Goal[]
+  currentGoal: Goal | null
+  disposition: Disposition
 }
 
 export interface NodeDeps {
   bot: Bot
-  control: ControlState
-  safety: SafetyState
+  holder: CognitiveStateHolder
+  provider: LlmProvider
 }
 
 const now = () => Date.now()
 const log = (msg: string) => console.log(`[loop] ${msg}`)
 
-export function createNodes(deps: NodeDeps) {
-  const { bot, control, safety } = deps
+/** Mapeia a ação do enum LLM (fechado) para um CognitiveState da Fase 2. */
+function actionToCognitiveState(action: ActionDecision['action']): CognitiveState {
+  switch (action) {
+    case 'gather':
+      return 'gathering'
+    case 'explore':
+    case 'navigate':
+      return 'exploring'
+    case 'chat':
+      return 'socializing'
+    case 'idle':
+    default:
+      return 'idle'
+  }
+}
 
-  // OBSERVE: captura snapshot imutavel (D-04). bot via closure.
+export function createNodes(deps: NodeDeps) {
+  const { bot, holder } = deps
+  const control = holder.control
+  const safety = holder.safety
+
+  // OBSERVE: snapshot imutável (D-04) + pipeline de motivação com pesos por disposição (D-06).
   const observe = async (_s: LoopState): Promise<Partial<LoopState>> => {
-    return { snapshot: buildWorldSnapshot(bot) }
+    const snapshot = buildWorldSnapshot(bot)
+    const t = now()
+    const mcfg = motivationConfigFor(holder.disposition) // pesos POR DISPOSIÇÃO (D-06/D-10)
+
+    // necessidades (NEED-01/02) — escreve no holder (fonte única)
+    holder.needs = evaluateNeeds(holder.needs, snapshot, t, mcfg)
+
+    // objetivos (GOAL-01/02): gera candidatos e seleciona com histerese/preempção
+    const candidates = generateGoals(holder.needs, t, mcfg)
+    const survivalNeed = holder.needs.find((n) => n.kind === 'survival')
+    const survivalCritical =
+      survivalNeed !== undefined &&
+      urgency(survivalNeed, t, mcfg) > 0 &&
+      survivalNeed.value < mcfg.survivalCriticalThreshold
+    const selected = selectGoal(holder.currentGoal, candidates, {
+      survivalCritical,
+      playerRequestPending: holder.playerRequestPending,
+      disposition: holder.disposition,
+    }, mcfg)
+    holder.goals = candidates
+    holder.currentGoal = selected
+
+    // consumiu um pedido de jogador → reseta o sinal (Plan 04 volta a setá-lo)
+    if (selected?.source === 'player_request') holder.playerRequestPending = false
+
+    return {
+      snapshot,
+      needs: holder.needs,
+      goals: holder.goals,
+      currentGoal: holder.currentGoal,
+      disposition: holder.disposition,
+    }
   }
 
-  // ANALYZE: deriva estado por arbitragem de prioridade fixa (D-05), excluindo alvos em cooldown (D-11).
+  // ANALYZE: prefere a decisão LLM FRESCA do holder; senão degrada ao arbiter (D-17).
   const analyze = async (s: LoopState): Promise<Partial<LoopState>> => {
     if (!s.snapshot) return { cogState: 'idle' }
     const excluded = cooledDownTargets(safety, now())
-    let next = arbitrate(s.snapshot, control.getMode(), excluded)
+
+    let next: CognitiveState | null = null
+    const fresh = holder.llmDecision
+    // frescor: a decisão LLM vale por até 2x o intervalo de replan (D-19); modo de controle pode vetar.
+    if (
+      fresh &&
+      now() - fresh.at < config.replanMinIntervalMs * 2 &&
+      control.getMode() === 'autonomous' // paused/standby seguem a arbitragem determinística
+    ) {
+      next = actionToCognitiveState(fresh.decision.action)
+    }
+
+    if (next === null) next = arbitrate(s.snapshot, control.getMode(), excluded) // D-17 fallback
     if (shouldFallbackToIdle(safety)) next = 'idle' // D-11: backoff -> Idle
     return { cogState: next }
   }
 
-  // UPDATE MEMORY: no-op nominal — a transicao de estado e gravada no execute (precisa do from/to resolvido).
-  // Mantido no grafo para fidelidade ao ciclo nomeado Observe->Analyze->UpdateMemory->Decide->Execute (D-01).
+  // UPDATE MEMORY: no-op nominal — a transição de estado é gravada no execute (precisa do from/to).
   const updateMemory = async (_s: LoopState): Promise<Partial<LoopState>> => {
     return {}
   }
 
-  // DECIDE: no-op nominal — a logica de transicao/execucao foi consolidada no execute (cogState ja resolvido).
+  // DECIDE: resolve um target-hint a partir de currentGoal/llmDecision quando aplicável.
+  // Params físicos continuam montados pelo executor/skillRegistry (D-10) — nunca pelo LLM cru.
   const decide = async (_s: LoopState): Promise<Partial<LoopState>> => {
     return {}
   }
 
-  // EXECUTE: dispara NO MAXIMO uma skill via executeWithSafety (D-02 single-flight). Atualiza memoria + safety.
+  // EXECUTE: dispara NO MÁXIMO uma skill (D-02 single-flight). Grava memória NO HOLDER (fonte única).
   const execute = async (s: LoopState): Promise<Partial<LoopState>> => {
     const snap = s.snapshot
     const state = s.cogState
-    let memory = s.memory
+    const fresh = holder.llmDecision
+    const llmTarget =
+      fresh && now() - fresh.at < config.replanMinIntervalMs * 2 ? fresh.decision.target : undefined
 
-    // grava transicao de estado (D-12) — log torna o comportamento visivel (Criterio #2)
-    log(`estado=${state} modo=${control.getMode()}`)
+    log(`estado=${state} modo=${control.getMode()} objetivo=${holder.currentGoal?.id ?? '-'}`)
 
     // mapeia estado -> (skill, target). Apenas estados ativos disparam skill.
     let skill: string | null = null
     let target = ''
     if (snap && state === 'gathering') {
-      const t = highestPriorityGatherTarget(snap, cooledDownTargets(safety, now()))
+      // alvo do LLM (se for um bloco da escada presente) tem preferência; senão a escada de prioridade.
+      const cd = cooledDownTargets(safety, now())
+      const llmBlock =
+        llmTarget && snap.nearbyBlockTypes[llmTarget] && !cd.has(llmTarget) ? llmTarget : null
+      const t = llmBlock ?? highestPriorityGatherTarget(snap, cd)
       if (t) {
         skill = 'dig'
         target = t
       }
     } else if (snap && state === 'exploring') {
-      // exploring: navega para um ponto deslocado (vaguear visivel). Sem alvo de bloco.
+      // exploring: navega para um ponto deslocado (vaguear visível). Sem alvo de bloco.
       skill = 'navigate'
       const p = snap.status.position
       target = JSON.stringify({
@@ -92,7 +169,7 @@ export function createNodes(deps: NodeDeps) {
         z: Math.round(p.z + (Math.random() * 16 - 8)),
       })
     } else if (snap && state === 'socializing') {
-      // standby/jogador proximo: aproxima-se do jogador mais proximo e aguarda (usa navigate, nao o stub follow)
+      // standby/jogador próximo: aproxima-se do jogador mais próximo e aguarda
       const player = [...snap.players]
         .filter((p) => p.position)
         .sort((a, b) => (a.distance ?? 1e9) - (b.distance ?? 1e9))[0]
@@ -105,15 +182,15 @@ export function createNodes(deps: NodeDeps) {
 
     if (!skill) {
       log(`sem acao (estado=${state})`)
-      return { memory }
+      return { memory: holder.memory }
     }
 
-    // D-10: anti-repeticao
+    // D-10: anti-repetição
     recordAttempt(safety, skill, target)
     if (shouldAbandon(safety)) {
       log(`abandonando ${skill}:${target} (repetido ${config.antiRepeatN}x sem progresso)`)
-      recordFailure(safety, target, now()) // marca cooldown e conta como falha
-      memory = push(memory, {
+      recordFailure(safety, target, now())
+      holder.memory = push(holder.memory, {
         type: 'action',
         skill,
         target,
@@ -121,23 +198,23 @@ export function createNodes(deps: NodeDeps) {
         reason: 'anti-repeat',
         timestamp: now(),
       })
-      return { memory }
+      return { memory: holder.memory }
     }
 
-    // D-02: single-flight — UMA skill, aguardada. executeWithSafety ja faz timeout/watchdog (Fase 1).
+    // D-02: single-flight — UMA skill, aguardada. executeWithSafety já faz timeout/watchdog.
     try {
       const params = skill === 'dig' ? { target } : { target: JSON.parse(target) }
       await executeWithSafety(() => skillRegistry[skill!]!(bot, params))
       recordSuccess(safety)
-      memory = push(memory, { type: 'action', skill, target, result: 'success', timestamp: now() })
+      holder.memory = push(holder.memory, { type: 'action', skill, target, result: 'success', timestamp: now() })
       log(`OK ${skill} ${target}`)
     } catch (err) {
       const reason = err instanceof Error ? err.name : String(err)
-      recordFailure(safety, target, now()) // D-11: backoff
-      memory = push(memory, { type: 'action', skill, target, result: 'failure', reason, timestamp: now() })
+      recordFailure(safety, target, now())
+      holder.memory = push(holder.memory, { type: 'action', skill, target, result: 'failure', reason, timestamp: now() })
       log(`FALHA ${skill} ${target}: ${reason}`)
     }
-    return { memory }
+    return { memory: holder.memory }
   }
 
   return { observe, analyze, updateMemory, decide, execute }
