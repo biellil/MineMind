@@ -15,6 +15,16 @@ test('parseCommand(!livre) é autonomous, não standby', () => {
   expect(parseCommand('!livre')).not.toBe('standby')
 })
 
+test('parseCommand(!auto) é autonomous (D-14 alias) e !livre coexiste', () => {
+  expect(parseCommand('!auto')).toBe('autonomous')
+  expect(parseCommand('!livre')).toBe('autonomous') // D-14 não quebra a Fase 2
+})
+
+test('parseCommand ignora comandos de disposição (isolamento controle<->disposição)', () => {
+  expect(parseCommand('!ajudante')).toBeNull()
+  expect(parseCommand('!sozinho')).toBeNull()
+})
+
 test('parseCommand normaliza case e espaços', () => {
   expect(parseCommand('  !PAUSAR ')).toBe('paused')
   expect(parseCommand('!Vem')).toBe('standby')

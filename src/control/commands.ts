@@ -10,6 +10,7 @@ const COMMANDS: Readonly<Record<string, ControlMode>> = Object.freeze({
   '!vem': 'standby',
   '!aqui': 'standby',
   '!livre': 'autonomous',
+  '!auto': 'autonomous', // D-14: alias de controle de !livre (NÃO remove !livre — Fase 2 intacta)
 })
 
 /**
