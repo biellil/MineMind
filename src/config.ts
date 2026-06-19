@@ -104,6 +104,18 @@ export const config = {
   trustRequestThreshold: parseFloat(process.env.TRUST_REQUEST_THRESHOLD || '0.0'),
   // D-19: idade máxima (ms) de um goal comprometido antes de ser descartado no boot (decay-on-boot)
   goalStaleMs: parseInt(process.env.GOAL_STALE_MS || String(30 * 60 * 1000), 10),
+
+  // === Fase 6: Provider LLM configurável (cloud/local) ===
+  // D-05: default local custo-zero; cloud é opt-in via LLM_PROVIDER=openai
+  llmProvider: (process.env.LLM_PROVIDER || 'local') as 'local' | 'openai',
+  // D-10: chave da API OpenAI (obrigatória só quando llmProvider=openai)
+  openaiApiKey: process.env.OPENAI_API_KEY || '',
+  // D-01: modelo cloud = GPT-4.1-mini (família NÃO-reasoning, custo previsível)
+  openaiModel: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
+  // D-02: max_tokens baixo como corte de custo no caminho cloud
+  openaiMaxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '512', 10),
+  // D-04: reasoning.effort SÓ aplicado se o modelo for gpt-5.x/o-series (omitido p/ gpt-4.1-mini)
+  openaiReasoningEffort: (process.env.OPENAI_REASONING_EFFORT || 'low') as 'minimal' | 'low' | 'medium' | 'high',
 } as const
 
 // === Fase 3: pesos de necessidade POR DISPOSIÇÃO (D-06/D-10) ===
@@ -207,3 +219,13 @@ if (config.retrievalK < 1) throw new Error(`RETRIEVAL_K inválido: ${config.retr
 if (config.retrievalHalfLifeMs < 1) throw new Error(`RETRIEVAL_HALF_LIFE_MS inválido: ${config.retrievalHalfLifeMs}. Deve ser >= 1.`)
 if (config.trustRequestThreshold < -1 || config.trustRequestThreshold > 1) throw new Error(`TRUST_REQUEST_THRESHOLD inválido: ${config.trustRequestThreshold}. Deve estar em [-1,1].`)
 if (config.holderFlushIntervalMs < 0) throw new Error(`HOLDER_FLUSH_INTERVAL_MS inválido: ${config.holderFlushIntervalMs}. Deve ser >= 0.`)
+// Fase 6: validação do provider
+if (config.llmProvider !== 'local' && config.llmProvider !== 'openai') {
+  throw new Error(`LLM_PROVIDER inválido: ${config.llmProvider}. Deve ser local ou openai.`)
+}
+if (config.llmProvider === 'openai' && !config.openaiApiKey) {
+  throw new Error('LLM_PROVIDER=openai exige OPENAI_API_KEY definido.')
+}
+if (config.openaiMaxTokens < 1) {
+  throw new Error(`OPENAI_MAX_TOKENS inválido: ${config.openaiMaxTokens}. Deve ser >= 1.`)
+}
