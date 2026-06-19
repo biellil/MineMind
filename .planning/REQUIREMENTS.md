@@ -14,7 +14,7 @@ Escopo comprometido deste milestone. Cada requisito mapeia para uma fase do road
 - [x] **PROV-01**: O agente pode usar GPT-4.1-mini (OpenAI cloud) como provider de raciocínio, selecionável por env/config
 - [x] **PROV-02**: O agente mantém LM Studio local como provider default custo-zero, trocável sem alterar o loop cognitivo
 - [x] **PROV-03**: Os embeddings permanecem locais (custo-zero) independentemente do provider de chat ativo
-- [ ] **PROV-04**: O structured output (Zod) produz saída válida em ambos os providers (paridade verificada)
+- [x] **PROV-04**: O structured output (Zod) produz saída válida em ambos os providers (paridade verificada)
 - [x] **PROV-05**: As chamadas cloud respeitam um teto de gasto/frequência configurável (proteção do loop sempre-ativo)
 
 ### Grounding de Ações (GRND)
@@ -109,7 +109,7 @@ Quais fases cobrem quais requisitos. Preenchido durante a criação do roadmap.
 | PROV-01 | Phase 6 | Complete |
 | PROV-02 | Phase 6 | Complete |
 | PROV-03 | Phase 6 | Complete |
-| PROV-04 | Phase 6 | Pending |
+| PROV-04 | Phase 6 | Complete |
 | PROV-05 | Phase 6 | Complete |
 | GRND-01 | Phase 7 | Pending |
 | GRND-02 | Phase 7 | Pending |
