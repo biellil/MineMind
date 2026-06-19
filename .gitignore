@@ -7,6 +7,12 @@ bun.lockb
 *.test.sqlite-wal
 *.test.sqlite-shm
 
+# Runtime SQLite DB durável (default DB_PATH=./minemind.sqlite) + WAL/SHM — gerado em runtime
+minemind.sqlite
+minemind.sqlite-wal
+minemind.sqlite-shm
+*.sqlite.corrupt-*
+
 # Logs
 logs
 *.log

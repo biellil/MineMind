@@ -17,6 +17,7 @@ import type { WorldSnapshot } from '../perception/types'
 import { shouldReflect, type ReflectionState } from './reflection'
 import { importanceOf } from '../memory/longTerm'
 import { getEvents } from '../memory/shortTerm'
+import { persistHolder } from '../memory/holder.persistence'
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
@@ -55,10 +56,21 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
     }
   })
 
-  // stop-on-disconnect: a sessão morre -> o while termina
+  // stop-on-disconnect: a sessão morre -> o while termina. B2: ANTES de parar, faz flush da mente
+  // ao disco — bot.once('end') (desconexão/crash de sessão) só pararia o loop, perdendo todo o
+  // estado vivo desde o boot se a reflexão (que também faz flush) nunca tivesse rodado.
   let alive = true
   bot.once('end', () => {
     alive = false
+    try {
+      if (holder.db) {
+        persistHolder(holder.db, holder, Date.now())
+        console.log('[loop] mente persistida ao encerrar a sessão (bot end)')
+      }
+    } catch (err) {
+      // flush no shutdown NUNCA deve lançar (D-02): apenas registra.
+      console.error('[loop] flush no end falhou:', err instanceof Error ? err.message : err)
+    }
   })
 
   const cfg = { configurable: { thread_id: 'minemind-agent' } }
@@ -68,6 +80,10 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
   // da memória de curto prazo já foram contabilizados, para somar só a importância dos NOVOS.
   const reflState: ReflectionState = { lastReflectionAt: -Infinity, importanceAccum: 0 }
   let seenEvents = getEvents(holder.memory).length
+
+  // B2: flush periódico — limita a janela de perda em um crash duro (OOM/kill -9) a no máximo
+  // config.holderFlushIntervalMs. Independe da reflexão (que pode demorar a disparar) e do signal.
+  let lastFlushAt = -Infinity
 
   // driver assíncrono — não bloqueia onBotReady
   void (async () => {
@@ -111,16 +127,32 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
               now: reflectNow,
             })
           ) {
-            reflState.lastReflectionAt = reflectNow
-            reflState.importanceAccum = 0
-            void deliberator.maybeDeliberate(
-              deliberator.state,
-              holder,
-              provider,
-              lastSnapshot,
-              'reflect',
-              reflectNow,
-            )
+            // B1: NÃO rearmar o gatilho aqui. A reflexão pode no-op (uma ação está in-flight —
+            // D-12). Se zerássemos lastReflectionAt/importanceAccum incondicionalmente, o piso/
+            // acúmulo se auto-desarmaria e a reflexão NUNCA rodaria. Só rearmamos quando a
+            // reflexão DE FATO executou (ran === true); caso contrário o gatilho persiste e tenta
+            // de novo num tick posterior (na janela livre de inFlight entre ações).
+            void deliberator
+              .maybeDeliberate(deliberator.state, holder, provider, lastSnapshot, 'reflect', reflectNow)
+              .then((ran) => {
+                if (ran) {
+                  reflState.lastReflectionAt = reflectNow
+                  reflState.importanceAccum = 0
+                  console.log('[reflect] reflexão executada')
+                }
+              })
+          }
+        }
+
+        // B2: flush periódico da mente — bound na perda por crash duro (OOM). Independe de
+        // reflexão/signal. Guardado em holder.db (no-op gracioso quando ausente).
+        const flushNow = Date.now()
+        if (holder.db && flushNow - lastFlushAt >= config.holderFlushIntervalMs) {
+          try {
+            persistHolder(holder.db, holder, flushNow)
+            lastFlushAt = flushNow
+          } catch (err) {
+            console.error('[loop] flush periódico falhou:', err instanceof Error ? err.message : err)
           }
         }
       } catch (err) {

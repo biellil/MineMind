@@ -87,6 +87,15 @@ export function arbiterToDecision(snapshot: WorldSnapshot, mode: ControlMode): A
 /**
  * Tenta deliberar (single-flight + orçamento de replan + event-driven). NÃO bloqueia o tick:
  * o chamador dispara com `void` e segue para o próximo tick (Pattern 3/Pitfall 3).
+ *
+ * Retorna `true` SOMENTE quando o trabalho de deliberação/reflexão de fato executou; `false`
+ * quando faz no-op (inFlight, orçamento de replan, ou shouldTrigger=false). O loop usa esse
+ * booleano para só rearmar o gatilho de reflexão quando a reflexão realmente rodou (B1).
+ *
+ * D-19: o orçamento `replanMinIntervalMs` é o teto de REPLANEJAMENTO DE AÇÃO. A reflexão
+ * (`trigger === 'reflect'`) tem cadência própria via shouldReflect no loop (D-10) e NÃO é
+ * limitada por esse orçamento — mas continua sob o lock single-flight `inFlight` para nunca
+ * sobrepor uma ação (D-12 — o modelo local é fraco; uma inferência por vez).
  */
 export async function maybeDeliberate(
   state: DeliberationState,
@@ -95,10 +104,13 @@ export async function maybeDeliberate(
   snapshot: WorldSnapshot,
   trigger: DeliberationTrigger,
   now: number,
-): Promise<void> {
-  if (state.inFlight) return // single-flight (D-02/D-19)
-  if (now - state.lastRunAt < config.replanMinIntervalMs) return // orçamento de replan (D-19)
-  if (!shouldTrigger(trigger, holder)) return // event-driven (D-19)
+): Promise<boolean> {
+  if (state.inFlight) return false // single-flight (D-02/D-19/D-12) — vale p/ ação E reflexão
+  // D-19: o orçamento de replan é APENAS para o caminho de AÇÃO. A reflexão pula este gate
+  // (sua cadência é governada por shouldReflect no loop, D-10), evitando que o budget de ação
+  // a deixe faminta (B1).
+  if (trigger !== 'reflect' && now - state.lastRunAt < config.replanMinIntervalMs) return false
+  if (!shouldTrigger(trigger, holder)) return false // event-driven (D-19)
 
   state.inFlight = true
   try {
@@ -122,6 +134,7 @@ export async function maybeDeliberate(
     state.inFlight = false
     state.lastRunAt = now
   }
+  return true // executou o trabalho de deliberação/reflexão (B1)
 }
 
 /**
@@ -201,7 +214,7 @@ export function createDeliberator(): {
     snapshot: WorldSnapshot,
     trigger: DeliberationTrigger,
     now: number,
-  ) => Promise<void>
+  ) => Promise<boolean>
 } {
   const state: DeliberationState = { inFlight: false, lastRunAt: -Infinity }
   return { state, maybeDeliberate }

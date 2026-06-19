@@ -90,6 +90,9 @@ export const config = {
   // D-10: gatilho de reflexão (soma de importância) + teto temporal anti-starvation (ms)
   reflectionImportanceThreshold: parseInt(process.env.REFLECTION_IMPORTANCE_THRESHOLD || '50', 10),
   reflectionMaxIntervalMs: parseInt(process.env.REFLECTION_MAX_INTERVAL_MS || String(10 * 60 * 1000), 10),
+  // B2: intervalo do flush periódico da mente ao disco — bound na perda por crash duro (OOM/kill).
+  // Independe da reflexão e do SIGINT/SIGTERM. 0 desativa o flush periódico (só reflexão/signal/end).
+  holderFlushIntervalMs: parseInt(process.env.HOLDER_FLUSH_INTERVAL_MS || '30000', 10),
   // D-17: limiar de trust para pedido-vira-objetivo em ASSISTANT
   trustRequestThreshold: parseFloat(process.env.TRUST_REQUEST_THRESHOLD || '0.0'),
   // D-19: idade máxima (ms) de um goal comprometido antes de ser descartado no boot (decay-on-boot)
@@ -196,3 +199,4 @@ if (config.ltImportanceFloor < 1 || config.ltImportanceFloor > 10) throw new Err
 if (config.retrievalK < 1) throw new Error(`RETRIEVAL_K inválido: ${config.retrievalK}. Deve ser >= 1.`)
 if (config.retrievalHalfLifeMs < 1) throw new Error(`RETRIEVAL_HALF_LIFE_MS inválido: ${config.retrievalHalfLifeMs}. Deve ser >= 1.`)
 if (config.trustRequestThreshold < -1 || config.trustRequestThreshold > 1) throw new Error(`TRUST_REQUEST_THRESHOLD inválido: ${config.trustRequestThreshold}. Deve estar em [-1,1].`)
+if (config.holderFlushIntervalMs < 0) throw new Error(`HOLDER_FLUSH_INTERVAL_MS inválido: ${config.holderFlushIntervalMs}. Deve ser >= 0.`)
