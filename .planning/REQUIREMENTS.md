@@ -106,13 +106,44 @@ Quais fases cobrem quais requisitos. Preenchido durante a criação do roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (a preencher pelo roadmapper) | — | Pending |
+| CONN-01 | Phase 1 | Pending |
+| CONN-02 | Phase 1 | Pending |
+| PERC-01 | Phase 1 | Pending |
+| PERC-02 | Phase 1 | Pending |
+| PERC-03 | Phase 1 | Pending |
+| PERC-04 | Phase 1 | Pending |
+| ACT-01 | Phase 1 | Pending |
+| ACT-02 | Phase 1 | Pending |
+| ACT-03 | Phase 1 | Pending |
+| ACT-04 | Phase 1 | Pending |
+| ACT-05 | Phase 1 | Pending |
+| COG-01 | Phase 2 | Pending |
+| COG-02 | Phase 2 | Pending |
+| COG-04 | Phase 2 | Pending |
+| MEM-01 | Phase 2 | Pending |
+| COG-03 | Phase 3 | Pending |
+| CHAT-01 | Phase 3 | Pending |
+| CHAT-02 | Phase 3 | Pending |
+| CHAT-03 | Phase 3 | Pending |
+| LLM-01 | Phase 3 | Pending |
+| LLM-02 | Phase 3 | Pending |
+| LLM-03 | Phase 3 | Pending |
+| NEED-01 | Phase 3 | Pending |
+| NEED-02 | Phase 3 | Pending |
+| GOAL-01 | Phase 3 | Pending |
+| GOAL-02 | Phase 3 | Pending |
+| CONN-03 | Phase 3 | Pending |
+| MEM-02 | Phase 4 | Pending |
+| MEM-03 | Phase 4 | Pending |
+| REFL-01 | Phase 4 | Pending |
+| SOC-01 | Phase 4 | Pending |
+| SOC-02 | Phase 4 | Pending |
 
 **Coverage:**
-- v1 requirements: 28 total
-- Mapped to phases: 0 (pendente)
-- Unmapped: 28 ⚠️
+- v1 requirements: 32 total (contagem real dos IDs; a nota anterior de "28" estava desatualizada)
+- Mapped to phases: 32 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-18*
-*Last updated: 2026-06-18 after initial definition*
+*Last updated: 2026-06-18 after roadmap creation*
