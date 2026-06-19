@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: In progress
-stopped_at: Phase 4 context gathered
-last_updated: "2026-06-19T17:52:30.927Z"
+status: Ready to execute
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-06-19T18:36:07.670Z"
 last_activity: 2026-06-19
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 17
-  completed_plans: 17
+  total_plans: 24
+  completed_plans: 18
   percent: 50
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-18)
 
 **Core value:** O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com base em objetivos próprios e memória — sem intervenção humana. Se tudo falhar, o loop cognitivo (perceber → decidir → agir) precisa funcionar.
-**Current focus:** Phase 04 — Persistência, Reflexão e Identidade Viva
+**Current focus:** Phase 04 — persist-ncia-reflex-o-e-identidade-viva
 
 ## Current Position
 
-Phase: 04
-Plan: Not started
+Phase: 04 (persist-ncia-reflex-o-e-identidade-viva) — EXECUTING
+Plan: 2 of 7
 Next: Phase 04 — Persistência, Reflexão e Identidade Viva
 Last activity: 2026-06-19
 
@@ -58,6 +58,7 @@ Progress: [█████░░░░░] 50%
 | Phase 999.1 P02 | 6 | 1 tasks | 1 files |
 | Phase 999.1 P03 | 6 | 2 tasks | 2 files |
 | Phase 999.1 P05 | 3 | 2 tasks | 1 files |
+| Phase 04 P01 | 3 | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,7 @@ Recent decisions affecting current work:
 - [Phase 999.1]: D-06: double-wrap de executeWithSafety removido — nó execute chama skill diretamente; cada skill se auto-embrulha com seu watchdog próprio. Stubs (follow/attack) não-embrulhados por design.
 - [Phase 999.1]: D-03: bounds do A* aplicados nos globais bot.pathfinder.* E em bot.collectBlock.movements (instância interna que ignora setMovements) — raiz do fix de OOM
 - [Phase 999.1]: D-07 provado por smoke headless (dig.oom.smoke.test.ts): sem OOM (heap sob teto), rejeita dentro de digTimeoutMs, lag<200ms via heartbeat — sob PERCEPTION_RADIUS=32
+- [Phase 04]: D-01 de-riscada e CONFIRMADA: sqlite-vec@0.1.9 carrega em bun:sqlite no Windows (vec0.dll) e Float32Array faz round-trip por vec0 — fallback vectra descartado; Plan 03 usa Float32Array direto (sem Buffer.from)
 
 ### Pending Todos
 
@@ -91,6 +93,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-19T17:52:30.922Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-persist-ncia-reflex-o-e-identidade-viva/04-CONTEXT.md
+Last session: 2026-06-19T18:36:07.660Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: None

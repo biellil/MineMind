@@ -86,7 +86,7 @@ Plans:
 **Plans**: 7 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Wave 0 de-risk: instalar sqlite-vec + smoke de load/round-trip vetorial em bun:sqlite (Windows) (MEM-03)
+- [x] 04-01-PLAN.md — Wave 0 de-risk: instalar sqlite-vec + smoke de load/round-trip vetorial em bun:sqlite (Windows) (MEM-03)
 - [ ] 04-02-PLAN.md — Fundação de persistência: openDb (schema/PRAGMA/migrations/recovery) + config knobs + provider.embed() (MEM-02/03)
 - [ ] 04-03-PLAN.md — Memória de longo prazo (TDD): importância heurística + escrita atômica + retrieval scoring Generative Agents (MEM-02/03)
 - [ ] 04-04-PLAN.md — Identidade social (TDD): perfis por jogador + trust determinístico (SOC-01) + personalidade evolutiva estruturada (SOC-02)

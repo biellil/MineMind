@@ -61,7 +61,7 @@ Requisitos da versão inicial (MVP de 4 fases do PRD). Cada um mapeia para fases
 
 - [ ] **MEM-01**: O agente mantém memória de curto prazo (buffer limitado de eventos/conversas/ações recentes) com orçamento de tokens
 - [ ] **MEM-02**: O agente persiste memória de longo prazo (jogadores, locais, eventos) que sobrevive a reinícios
-- [ ] **MEM-03**: O agente recupera memórias semânticas relevantes por similaridade (recência × relevância × importância)
+- [x] **MEM-03**: O agente recupera memórias semânticas relevantes por similaridade (recência × relevância × importância)
 
 ### Reflection (REFL)
 
@@ -134,7 +134,7 @@ Quais fases cobrem quais requisitos. Preenchido durante a criação do roadmap.
 | GOAL-02 | Phase 3 | Pending |
 | CONN-03 | Phase 3 | Pending |
 | MEM-02 | Phase 4 | Pending |
-| MEM-03 | Phase 4 | Pending |
+| MEM-03 | Phase 4 | Complete |
 | REFL-01 | Phase 4 | Pending |
 | SOC-01 | Phase 4 | Pending |
 | SOC-02 | Phase 4 | Pending |
