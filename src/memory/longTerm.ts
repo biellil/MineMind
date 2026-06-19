@@ -35,7 +35,8 @@ export function importanceOf(e: MemEvent): number {
     case 'chat_command':
       return 7
     case 'action':
-      if (e.result === 'failure') return 6
+      if (e.outcome === 'error' || e.outcome === 'no_effect') return 6 // falha observada
+      if (e.outcome === 'partial') return 4 // progresso parcial (D-13 trata explícito)
       if (e.skill === 'gather' || e.skill === 'dig' || e.skill === 'collect') return 5
       return 2
     case 'state_transition':
@@ -52,7 +53,7 @@ export function summarizeEvent(e: MemEvent): string {
     case 'world':
       return `Evento de mundo: ${e.event} — ${e.detail}.`
     case 'action':
-      return `Ação ${e.skill} em ${e.target}: ${e.result}${e.reason ? ` (${e.reason})` : ''}.`
+      return `Ação ${e.skill} em ${e.target}: ${e.outcome} (${e.observed}/${e.expected})${e.reason ? ` (${e.reason})` : ''}.`
     case 'state_transition':
       return `Mudei de estado: ${e.from} → ${e.to}.`
     case 'chat_command':

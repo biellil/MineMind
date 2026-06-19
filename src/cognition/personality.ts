@@ -36,10 +36,14 @@ export function applyEventToPersonality(p: PersonalityState, e: MemEvent, now: n
   let { mood, socialEnergy, confidence } = p
   if (e.type === 'world' && e.event === 'damage') {
     mood = clampSigned(mood - 0.15)
-  } else if (e.type === 'action' && e.result === 'success') {
+  } else if (e.type === 'action' && e.outcome === 'success') {
     mood = clampSigned(mood + 0.05)
     confidence = clamp01(confidence + 0.05)
-  } else if (e.type === 'action' && e.result === 'failure') {
+  } else if (
+    e.type === 'action' &&
+    (e.outcome === 'error' || e.outcome === 'no_effect' || e.outcome === 'partial')
+  ) {
+    // partial conta como não-sucesso para o humor — coerente com GRND-04.
     confidence = clamp01(confidence - 0.08)
   } else if (e.type === 'state_transition' && e.to === 'socializing') {
     socialEnergy = clamp01(socialEnergy - 0.1)

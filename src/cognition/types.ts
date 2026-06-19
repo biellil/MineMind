@@ -1,5 +1,6 @@
 // src/cognition/types.ts
 // Contratos compartilhados da camada cognitiva (Fase 2). Sem LLM.
+import type { SkillOutcome } from '../grounding/types'
 
 /** Estados cognitivos (COG-02 / D-06). Fighting e Building são stub. */
 export type CognitiveState =
@@ -17,6 +18,16 @@ export type ControlMode = 'autonomous' | 'paused' | 'standby'
 /** Eventos ricos gravados na memória de curto prazo (D-12). Discriminados por `type`. */
 export type MemEvent =
   | { type: 'state_transition'; from: CognitiveState; to: CognitiveState; timestamp: number }
-  | { type: 'action'; skill: string; target: string; result: 'success' | 'failure'; reason?: string; timestamp: number }
+  | {
+      type: 'action'
+      skill: string
+      target: string
+      outcome: SkillOutcome // fonte de verdade (D-06) — deriva do delta observado, não da Promise
+      observed: number // quantidade REAL observada
+      expected: number // quantidade esperada
+      result: 'success' | 'failure' // DERIVADO de outcome (compat consumidores existentes)
+      reason?: string
+      timestamp: number
+    }
   | { type: 'world'; event: 'damage' | 'hunger' | 'player_joined' | 'player_left'; detail: string; timestamp: number }
   | { type: 'chat_command'; command: string; from: string; mode: ControlMode; timestamp: number }
