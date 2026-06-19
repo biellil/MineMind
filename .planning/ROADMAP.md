@@ -74,14 +74,14 @@ Plans:
 - [x] 07-01-PLAN.md — Modulo grounding/: SkillResult + GroundState + captureGroundState + evaluate puro (GRND-01)
 - [x] 07-02-PLAN.md — Converter navigate/dig/follow/attack para retornar SkillResult grounded; delta capturado mesmo em throw (GRND-03)
 - [x] 07-03-PLAN.md — Execute node deriva memoria do delta (mata o bug); MemEvent estendido (D-13); prompt autoritativo (GRND-02/GRND-04)
-- [ ] 07-04-PLAN.md — Post-filter deterministico reescreve quantidade da fala para o grounded antes do bot.chat (GRND-02)
+- [x] 07-04-PLAN.md — Post-filter deterministico reescreve quantidade da fala para o grounded antes do bot.chat (GRND-02)
 
 ### Phase 07.1: Loop Agentico - Percepcao Dirigida por Consequencia (INSERTED)
 
 **Goal:** [Urgent work - to be planned]
 **Requirements**: TBD
 **Depends on:** Phase 7
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 07.1 to break down)

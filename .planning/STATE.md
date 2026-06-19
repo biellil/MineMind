@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
-status: executing
-stopped_at: Completed 07-03-PLAN.md
-last_updated: "2026-06-19T23:47:22.268Z"
+status: verifying
+stopped_at: Completed 07-04-PLAN.md
+last_updated: "2026-06-19T23:52:34.827Z"
 last_activity: 2026-06-19
 progress:
   total_phases: 10
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 
 Phase: 07 (grounding-skillresult) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-19
 
 Progress: [░░░░░░░░░░] 0%
@@ -58,6 +58,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 07 P01 | 4 | 3 tasks | 4 files |
 | Phase 07 P02 | 8 | 4 tasks | 7 files |
 | Phase 07 P03 | 7 | 4 tasks | 13 files |
+| Phase 07 P04 | 5 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,7 @@ Recent decisions affecting current work:
 - [Phase 07]: 07-01: módulo grounding/ é o contrato da Fase 7 — SkillResult tagueado por outcome (deriva de observed/expected, nunca da Promise); captureGroundState imutável independente do executor (D-05); evaluateDig/evaluateNavigate puros classificam por delta numérico sem mock de bot; observed não tipado por skill (D-02)
 - [Phase 07]: 07-02: 4 skills retornam SkillResult — dig/navigate grounded (captureGroundState before/after + evaluateDig/Navigate, outcome do delta real não da Promise); D-08 delta lido após catch (timeout 3/10 -> observed:3); D-12 pré-condições viram no_effect e follow/attack stubs resolvem outcome:'error' sem lançar; SkillFunction retipada Promise<SkillResult>. Handoff: execute node (nodes.ts) ainda registra success em qualquer resolução — Plan 03 deve consumir r.outcome.
 - [Phase 07]: 07-03: execute node deriva memória do SkillResult observado (result.outcome), não do não-throw — mata 'peguei 10 tábuas' na raiz (D-09 B/GRND-02). MemEvent.action ganha outcome/observed/expected (D-13, result vira derivado); partial/no_effect/error=failure preservando observed (GRND-04). holder.lastObservedDelta + bloco FATO VERIFICADO autoritativo no prompt (D-09 A). Insumo do post-filter da Plan 04.
+- [Phase 07]: 07-04: post-filter determinístico (camada C/D-09 C/D-10) reconcilia a fala do LLM contra holder.lastObservedDelta antes do bot.chat — 'peguei 10' vira 'peguei 3' (ou 0 em no_effect). Escopo mínimo (quantidade de coleta pt-BR); A=instrução, C=gate (D-11). Fase 7 completa.
 
 ### Roadmap Evolution
 
@@ -105,6 +107,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-19T23:47:12.042Z
-Stopped at: Completed 07-03-PLAN.md
+Last session: 2026-06-19T23:52:34.817Z
+Stopped at: Completed 07-04-PLAN.md
 Resume file: None
