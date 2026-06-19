@@ -116,6 +116,12 @@ export const config = {
   openaiMaxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '512', 10),
   // D-04: reasoning.effort SÓ aplicado se o modelo for gpt-5.x/o-series (omitido p/ gpt-4.1-mini)
   openaiReasoningEffort: (process.env.OPENAI_REASONING_EFFORT || 'low') as 'minimal' | 'low' | 'medium' | 'high',
+  // D-07: hard-cap de CHAMADAS cloud por janela (default diária). Estourou -> fallback-to-local (D-08).
+  cloudMaxCallsPerWindow: parseInt(process.env.LLM_CLOUD_MAX_CALLS_PER_WINDOW || '500', 10),
+  // D-09: tamanho da janela em ms (métrica/futuro; o spendStore usa janela por dia-UTC via windowKey)
+  cloudWindowMs: parseInt(process.env.LLM_CLOUD_WINDOW_MS || String(24 * 60 * 60 * 1000), 10),
+  // D-08: ação ao estourar o teto — única suportada nesta fase é cair para o LM Studio local
+  cloudCapAction: (process.env.LLM_CLOUD_CAP_ACTION || 'fallback-local') as 'fallback-local',
 } as const
 
 // === Fase 3: pesos de necessidade POR DISPOSIÇÃO (D-06/D-10) ===
@@ -228,4 +234,10 @@ if (config.llmProvider === 'openai' && !config.openaiApiKey) {
 }
 if (config.openaiMaxTokens < 1) {
   throw new Error(`OPENAI_MAX_TOKENS inválido: ${config.openaiMaxTokens}. Deve ser >= 1.`)
+}
+if (config.cloudMaxCallsPerWindow < 1) {
+  throw new Error(`LLM_CLOUD_MAX_CALLS_PER_WINDOW inválido: ${config.cloudMaxCallsPerWindow}. Deve ser >= 1.`)
+}
+if (config.cloudWindowMs < 1) {
+  throw new Error(`LLM_CLOUD_WINDOW_MS inválido: ${config.cloudWindowMs}. Deve ser >= 1.`)
 }
