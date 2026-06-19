@@ -14,18 +14,17 @@ O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com
 
 <!-- Shipped and confirmed valuable. -->
 
-(Nenhum ainda — entregar para validar)
+- [x] Loop cognitivo básico funcionando (Observe → Analyze → Update Memory → Plan → Execute → Reflect) — *Validado na Fase 3 (loop com LLM + arbiter fallback; smoke headless + checkpoint ao vivo)*
+- [x] Ler o chat e responder mensagens de jogadores de forma coerente — *Validado na Fase 3 (CHAT-01/02 confirmado ao vivo, persona pt-BR)*
+- [x] Integração com LLM local via LM Studio para raciocínio e conversação — *Validado na Fase 3 (LLM-01/02/03; degradação graciosa D-17 confirmada ao vivo)*
 
 ### Active
 
 <!-- Current scope. Building toward these. -->
 
 - [ ] Conectar-se a um servidor Minecraft Java e permanecer online
-- [ ] Ler o chat e responder mensagens de jogadores de forma coerente
 - [ ] Mover-se e navegar autonomamente pelo mundo
 - [ ] Manter memória de curto prazo (eventos/conversas/ações recentes)
-- [ ] Loop cognitivo básico funcionando (Observe → Analyze → Update Memory → Plan → Execute → Reflect)
-- [ ] Integração com LLM local via LM Studio para raciocínio e conversação
 
 ### Out of Scope
 
@@ -60,9 +59,9 @@ O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Stack all-TypeScript (Mineflayer + LangGraph.js) | Mineflayer é Node-only; uma só linguagem evita ponte cross-process | — Pending |
-| Bun como runtime, Node como fallback | TS nativo e velocidade; Mineflayer oficialmente testado em Node | — Pending |
-| LLM local via LM Studio como alvo de v1 | Custo zero e sem rate limits para loop sempre-ativo | — Pending |
+| Stack all-TypeScript (Mineflayer + LangGraph.js) | Mineflayer é Node-only; uma só linguagem evita ponte cross-process | ✅ Validado (Fases 1-3, mesmo processo) |
+| Bun como runtime, Node como fallback | TS nativo e velocidade; Mineflayer oficialmente testado em Node | ✅ Validado (Bun 1.3.x ↔ Mineflayer 4.37.1 em MC 1.21.4) |
+| LLM local via LM Studio como alvo de v1 | Custo zero e sem rate limits para loop sempre-ativo | ✅ Validado (Fase 3, qwen3-vl-8b ao vivo + degradação D-17) |
 | Servidor Java local para desenvolvimento | Controle total e testes fáceis | — Pending |
 | Foco em pesquisa/aprendizado | Direciona prioridade para clareza arquitetural | — Pending |
 
