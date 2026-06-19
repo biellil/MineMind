@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 Phase: 7
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-06-19
+Last activity: 2026-06-19 - Completed quick task 260619-qwx: Enriquecer percepção (lookingAt + underfoot + entities no prompt)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -85,6 +85,12 @@ Recent decisions affecting current work:
 - [Known Gap v1.0 → gate da Phase 14]: Fase 4 NÃO verificada ao vivo (`[reflect]` dispara? KNN relevante? estado sobrevive a kill duro?). Resolver como gate de entrada da Phase 14 (Aprendizado), não em paralelo.
 - [Phase 8]: re-testar `[reflect]` AO VIVO depois de introduzir o System 1 — a nova camada muda quando o lock do LLM fica livre (regressão B1 pode reaparecer).
 - [Research flags]: Phases 10 (Tech-tree DAG), 13 (Combate) e 14 (Aprendizado) sinalizadas para /gsd:research-phase no planejamento.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260619-qwx | Enriquecer percepção: lookingAt (bloco na mira), underfoot (bloco sob os pés) e render de entities/mobs no prompt | 2026-06-19 | f1b32d0 | [260619-qwx-enriquecer-percepcao-lookingat-bloco-na-](./quick/260619-qwx-enriquecer-percepcao-lookingat-bloco-na-/) |
 
 ## Session Continuity
 
