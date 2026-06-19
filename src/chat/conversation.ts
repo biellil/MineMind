@@ -20,6 +20,7 @@ import type { Disposition } from '../motivation/types'
 import type { CognitiveStateHolder } from '../cognition/state'
 import type { Goal } from '../motivation/types'
 import { upsertPlayer, applyTrustEvent, getProfile } from '../social/profiles'
+import { reconcileQuantities } from './postFilter'
 import { config } from '../config'
 
 /** Comprimento máximo de uma resposta de chat (D-01: respostas curtas). */
@@ -129,9 +130,22 @@ export async function handleConversation(
   }
 
   // (3) responde no jogo — curto (D-01). Reply vazia/branca => silêncio.
+  // Antes do bot.chat (ÚNICO ponto de saída de fala), o post-filter determinístico (D-09 C/D-10)
+  // reconcilia afirmações de quantidade de coleta contra o último delta observado: "peguei 10
+  // tábuas" com observed:3 é reescrito para "peguei 3 tábuas". A sozinha (prompt autoritativo)
+  // é instrução, não gate — C é a rede determinística que fecha o drift do LLM local (D-11).
   const trimmed = reply.trim()
   if (trimmed.length > 0) {
-    bot.chat(trimmed.slice(0, MAX_REPLY_LEN))
+    const fact = holder.lastObservedDelta
+      ? {
+          skill: holder.lastObservedDelta.skill,
+          observed: holder.lastObservedDelta.observed,
+          outcome: holder.lastObservedDelta.outcome,
+          delta: holder.lastObservedDelta.delta,
+        }
+      : null
+    const grounded = reconcileQuantities(trimmed, fact)
+    bot.chat(grounded.slice(0, MAX_REPLY_LEN))
   }
 
   // (4) em ASSISTANT, pedido de tipo SUPORTADO vira sinal de objetivo dinâmico (D-13/OQ3),

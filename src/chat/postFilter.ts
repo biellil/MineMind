@@ -1,7 +1,8 @@
 // src/chat/postFilter.ts
 // Fase 7 D-09 C / D-10 — gate determinístico final: reconcilia QUANTIDADE de coleta da fala
 // do LLM contra o observedDelta real e REESCREVE para o número grounded. Escopo MÍNIMO
-// (padrão "peguei/coletei N <item>") — NÃO um validador semântico geral de NLG (deferido).
+// (padrão "peguei/coletei N <item>") — reescrita semântica ampla (preço/distância/tempo) fica
+// deferida; este módulo só toca quantidade de coleta.
 import type { SkillOutcome } from '../grounding/types'
 
 /**
@@ -26,7 +27,7 @@ const QUANTITY_RE = /\b(peguei|coletei|minerei|consegui|obtive|juntei)\s+(\d+)\b
  * Gate DETERMINÍSTICO final no ponto de saída de fala: o LLM local fraco drifta mesmo com o
  * prompt autoritativo (camada A), então esta camada C fecha o gap reescrevendo "peguei 10" →
  * "peguei 3" (ou "peguei 0" em no_effect). Escopo MÍNIMO — só o padrão de coleta que o
- * critério GRND-02 #3 mede; NÃO valida NLG em geral.
+ * critério GRND-02 #3 mede; reescrita semântica ampla fica deferida.
  *
  * @param reply  texto do LLM (não confiável).
  * @param fact   último delta observado (holder.lastObservedDelta) ou null.
