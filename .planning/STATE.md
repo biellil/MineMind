@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
 status: executing
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-06-19T23:36:46.004Z"
+stopped_at: Completed 07-03-PLAN.md
+last_updated: "2026-06-19T23:47:22.268Z"
 last_activity: 2026-06-19
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 ## Current Position
 
 Phase: 07 (grounding-skillresult) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-06-19
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 06 P03 | 8 | 2 tasks | 2 files |
 | Phase 07 P01 | 4 | 3 tasks | 4 files |
 | Phase 07 P02 | 8 | 4 tasks | 7 files |
+| Phase 07 P03 | 7 | 4 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,7 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-03: paridade PROV-04 por 3 camadas — schema-only (D-14, pega caveat zod v4 #8357 no CI), live gated RUN_LIVE_PARITY (D-15), e teste de fallback type:None (D-16/D-17); validate->repair->fallback preservado nos dois providers
 - [Phase 07]: 07-01: módulo grounding/ é o contrato da Fase 7 — SkillResult tagueado por outcome (deriva de observed/expected, nunca da Promise); captureGroundState imutável independente do executor (D-05); evaluateDig/evaluateNavigate puros classificam por delta numérico sem mock de bot; observed não tipado por skill (D-02)
 - [Phase 07]: 07-02: 4 skills retornam SkillResult — dig/navigate grounded (captureGroundState before/after + evaluateDig/Navigate, outcome do delta real não da Promise); D-08 delta lido após catch (timeout 3/10 -> observed:3); D-12 pré-condições viram no_effect e follow/attack stubs resolvem outcome:'error' sem lançar; SkillFunction retipada Promise<SkillResult>. Handoff: execute node (nodes.ts) ainda registra success em qualquer resolução — Plan 03 deve consumir r.outcome.
+- [Phase 07]: 07-03: execute node deriva memória do SkillResult observado (result.outcome), não do não-throw — mata 'peguei 10 tábuas' na raiz (D-09 B/GRND-02). MemEvent.action ganha outcome/observed/expected (D-13, result vira derivado); partial/no_effect/error=failure preservando observed (GRND-04). holder.lastObservedDelta + bloco FATO VERIFICADO autoritativo no prompt (D-09 A). Insumo do post-filter da Plan 04.
 
 ### Roadmap Evolution
 
@@ -103,6 +105,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-19T23:36:45.999Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-06-19T23:47:12.042Z
+Stopped at: Completed 07-03-PLAN.md
 Resume file: None
