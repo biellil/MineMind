@@ -32,7 +32,9 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
   // provider degrada graciosamente se o LLM estiver off (D-17) e cai para o local ao estourar o teto.
   const provider = createProvider({ db: holder.db })
   const deliberator = createDeliberator()
-  const graph = buildGraph({ bot, holder, provider })
+  // CR#3: desestrutura o checkpointer para podá-lo periodicamente (deleteThread) — sem poda, o
+  // MemorySaver acumula 1 checkpoint por super-step sob o thread_id fixo e a RAM cresce sem limite.
+  const { graph, checkpointer } = buildGraph({ bot, holder, provider })
 
   // UM ÚNICO handler de chat por sessão (Pattern 5 / Pitfall 6 — handler morre com a sessão).
   // Ordem ESTRITA, tudo literal/sem-LLM exceto o passo 3:
@@ -75,6 +77,13 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
     }
   })
 
+  // CR#2: na morte/void o Mineflayer zera bot.entity e NÃO emite 'end' — o loop não pode travar.
+  // O Mineflayer normalmente respawna sozinho; estes handlers são informativos. A percepção já é
+  // defensiva (Task 1/2), então NÃO chamamos buildWorldSnapshot aqui. A parada graciosa quando o
+  // corpo não volta é feita no while por deadTicks (abaixo).
+  bot.on('death', () => console.log('[loop] bot morreu — aguardando respawn'))
+  bot.on('respawn', () => console.log('[loop] respawn'))
+
   const cfg = { configurable: { thread_id: 'minemind-agent' } }
   let lastSnapshot: WorldSnapshot | null = null
 
@@ -87,6 +96,12 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
   // config.holderFlushIntervalMs. Independe da reflexão (que pode demorar a disparar) e do signal.
   let lastFlushAt = -Infinity
 
+  // CR#2: contador de ticks consecutivos SEM corpo (snapshot null = morte/void). Ao cruzar
+  // config.deathStopTicks o while encerra graciosamente (morte/void não emitem 'end').
+  let deadTicks = 0
+  // CR#3: timestamp da última poda do checkpointer (deleteThread do thread fixo).
+  let lastPruneAt = -Infinity
+
   // driver assíncrono — não bloqueia onBotReady
   void (async () => {
     console.log(`[loop] iniciado (disposição=${holder.disposition})`)
@@ -95,6 +110,30 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
       try {
         const result = (await graph.invoke({}, cfg)) as { snapshot?: WorldSnapshot | null }
         lastSnapshot = result.snapshot ?? lastSnapshot
+
+        // CR#2: rastreia ticks consecutivos sem corpo (snapshot null = morte/void). Se o bot ficar
+        // sem corpo por config.deathStopTicks ticks (respawn não veio), encerra o while em vez de
+        // girar em falso para sempre — morte/void NÃO emitem 'end'. Flush defensivo antes do break,
+        // espelhando o handler de 'end'.
+        if (!result.snapshot) {
+          deadTicks++
+          if (deadTicks >= config.deathStopTicks) {
+            console.warn(
+              `[loop] bot sem corpo por ${deadTicks} ticks — encerrando o loop para não girar em falso`,
+            )
+            try {
+              if (holder.db) {
+                persistHolder(holder.db, holder, Date.now())
+                console.log('[loop] mente persistida ao encerrar por morte/void')
+              }
+            } catch (err) {
+              console.error('[loop] flush no break por morte falhou:', err instanceof Error ? err.message : err)
+            }
+            break
+          }
+        } else {
+          deadTicks = 0
+        }
 
         // COG-03/D-19: dispara a deliberação LLM lenta SEM bloquear o tick (Pattern 3/Pitfall 3).
         if (lastSnapshot) {
@@ -155,6 +194,21 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
             lastFlushAt = flushNow
           } catch (err) {
             console.error('[loop] flush periódico falhou:', err instanceof Error ? err.message : err)
+          }
+        }
+
+        // CR#3: poda periódica do checkpointer. O thread_id é fixo ('minemind-agent'), então o
+        // MemorySaver acumula 1 checkpoint por super-step sem podar e a RAM sobe continuamente.
+        // deleteThread limpa o histórico do thread. A continuidade entre ticks vive no holder
+        // (fonte única), não no checkpointer — podar é seguro: o próximo invoke recria o estado
+        // inicial e observe re-semeia do holder.
+        const pruneNow = Date.now()
+        if (config.checkpointPruneIntervalMs > 0 && pruneNow - lastPruneAt >= config.checkpointPruneIntervalMs) {
+          try {
+            await checkpointer.deleteThread('minemind-agent')
+            lastPruneAt = pruneNow
+          } catch (err) {
+            console.error('[loop] poda do checkpointer falhou:', err instanceof Error ? err.message : err)
           }
         }
       } catch (err) {

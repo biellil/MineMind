@@ -100,6 +100,13 @@ export const config = {
   // B2: intervalo do flush periódico da mente ao disco — bound na perda por crash duro (OOM/kill).
   // Independe da reflexão e do SIGINT/SIGTERM. 0 desativa o flush periódico (só reflexão/signal/end).
   holderFlushIntervalMs: parseInt(process.env.HOLDER_FLUSH_INTERVAL_MS || '30000', 10),
+  // CR#3: intervalo (ms) da poda periódica do checkpointer (MemorySaver in-memory, thread_id fixo).
+  // deleteThread('minemind-agent') limpa o histórico acumulado. 0 desativa a poda.
+  checkpointPruneIntervalMs: parseInt(process.env.CHECKPOINT_PRUNE_INTERVAL_MS || '60000', 10),
+  // CR#2: ticks consecutivos SEM snapshot (bot sem corpo: morte/void) antes de encerrar o loop.
+  // Morte/void NÃO emitem 'end', então sem isto o while giraria em falso para sempre. ~20 ticks a
+  // 500ms/tick ≈ 10s — tempo para o respawn automático do Mineflayer sem girar indefinidamente.
+  deathStopTicks: parseInt(process.env.DEATH_STOP_TICKS || '20', 10),
   // D-17: limiar de trust para pedido-vira-objetivo em ASSISTANT
   trustRequestThreshold: parseFloat(process.env.TRUST_REQUEST_THRESHOLD || '0.0'),
   // D-19: idade máxima (ms) de um goal comprometido antes de ser descartado no boot (decay-on-boot)
@@ -225,6 +232,9 @@ if (config.retrievalK < 1) throw new Error(`RETRIEVAL_K inválido: ${config.retr
 if (config.retrievalHalfLifeMs < 1) throw new Error(`RETRIEVAL_HALF_LIFE_MS inválido: ${config.retrievalHalfLifeMs}. Deve ser >= 1.`)
 if (config.trustRequestThreshold < -1 || config.trustRequestThreshold > 1) throw new Error(`TRUST_REQUEST_THRESHOLD inválido: ${config.trustRequestThreshold}. Deve estar em [-1,1].`)
 if (config.holderFlushIntervalMs < 0) throw new Error(`HOLDER_FLUSH_INTERVAL_MS inválido: ${config.holderFlushIntervalMs}. Deve ser >= 0.`)
+// CR#2/CR#3: validação dos parâmetros de ciclo de vida do loop (morte/void + poda do checkpointer)
+if (config.checkpointPruneIntervalMs < 0) throw new Error(`CHECKPOINT_PRUNE_INTERVAL_MS inválido: ${config.checkpointPruneIntervalMs}. Deve ser >= 0.`)
+if (config.deathStopTicks < 1) throw new Error(`DEATH_STOP_TICKS inválido: ${config.deathStopTicks}. Deve ser >= 1.`)
 // Fase 6: validação do provider
 if (config.llmProvider !== 'local' && config.llmProvider !== 'openai') {
   throw new Error(`LLM_PROVIDER inválido: ${config.llmProvider}. Deve ser local ou openai.`)
