@@ -77,6 +77,8 @@ O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com
 
 **Shipped: v1.0 MVP — 2026-06-19** · 4 fases + 1 backlog (999.1) · 24 planos · ~7.122 LOC TypeScript · 227 testes (1 fail é teste de config que lê `.env` local).
 
+**v2.0 em andamento — Phase 6 (LLM Provider Factory) completa 2026-06-19:** GPT-4.1-mini (cloud) e LM Studio (local) atrás da mesma interface `LlmProvider`, trocáveis por `LLM_PROVIDER` sem tocar o loop cognitivo; embeddings sempre locais; teto de custo (`withSpendCap`, hard-cap persistido em SQLite → fallback-to-local); paridade de structured-output verificada (schema-only + mock + live). Paridade cloud confirmada ao vivo (GPT-4.1-mini); paridade local live (LM Studio) fica como item HUMAN-UAT pendente.
+
 A espinha cognitiva (perceber → decidir → agir), o loop com LLM local, e toda a camada de persistência/reflexão/identidade (Fase 4) estão **implementadas e cobertas por testes unitários/smoke**. Persistência ao vivo foi parcialmente comprovada (perfil de jogador + holder gravados em SQLite/WAL).
 
 ### Known Gaps (v1.0 shipped com dívida consciente)
@@ -131,4 +133,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-19 — início do milestone v2.0 Autonomia de Verdade (player autônomo: sobreviver + tech tree, building, combate, modos autônomo/assistente, provider LLM configurável)*
+*Last updated: 2026-06-19 — Phase 6 (LLM Provider Factory) completa: provider cloud/local configurável com teto de custo e paridade de structured-output*
