@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Presença e Conexão (fundação sem-LLM)** - Agente conecta, permanece online, percebe o mundo e executa skills cruas com timeout e ritmo humanizado.
 - [x] **Phase 2: Loop Autônomo e Memória de Curto Prazo** - StateGraph cíclico com nós de regra fixa, comportamento autônomo e buffer de memória limitado — ainda sem LLM. ✓ 2026-06-19
 - [x] **Phase 3: Cognição com LLM — Loop Completo, Necessidades e Objetivos** - LLM local guia análise/plano/conversa; necessidades internas decaem e geram objetivos dinâmicos com histerese. ✓ 2026-06-19
-- [ ] **Phase 4: Persistência, Reflexão e Identidade Viva** - Memória de longo prazo e semântica sobrevive a reinícios; reflexão, perfis por jogador e personalidade evolutiva.
+- [x] **Phase 4: Persistência, Reflexão e Identidade Viva** - Memória de longo prazo e semântica sobrevive a reinícios; reflexão, perfis por jogador e personalidade evolutiva. ✓ 2026-06-19
 
 ## Phase Details
 
@@ -103,8 +103,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Presença e Conexão | 3/3 | Complete | 2026-06-18 |
 | 2. Loop Autônomo e Memória CP | 4/4 | Complete | 2026-06-19 |
-| 3. Cognição com LLM | 0/5 | Not started | - |
-| 4. Persistência e Identidade | 0/7 | Not started | - |
+| 3. Cognição com LLM | 5/5 | Complete | 2026-06-19 |
+| 4. Persistência e Identidade | 7/7 | Complete | 2026-06-19 |
 
 ## Backlog
 
