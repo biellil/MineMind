@@ -63,10 +63,14 @@ Plans:
   3. O agente lê o chat e responde mensagens de jogadores de forma coerente, com uma personalidade base consistente.
   4. Necessidades internas (sobrevivência, recursos, abrigo, curiosidade, socialização) decaem com o tempo e influenciam estado e prioridade de objetivos, com anti-starvation; objetivos dinâmicos têm prioridade/progresso/dependências e o agente mantém comprometimento (não troca de alvo a cada tick) respeitando um orçamento de replanejamento.
   5. O estado cognitivo vive fora do objeto bot e sobrevive a uma reconexão (o agente não reinicia do zero ao reconectar).
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] TBD durante /gsd:plan-phase 3
+- [ ] 03-01-PLAN.md — Fundação LLM: provider abstraído (LLM-03), saída estruturada com enum fechado + repair/fallback (LLM-02), persona estática (CHAT-03) e tokenizer real (js-tiktoken)
+- [ ] 03-02-PLAN.md — Motivação (módulos puros TDD): necessidades híbridas com anti-starvation (NEED-01/02) e objetivos dinâmicos com histerese/preempção (GOAL-01/02)
+- [ ] 03-03-PLAN.md — Integração: holder de estado durável (CONN-03), deliberação single-flight fora do grafo (COG-03), wiring needs/goals no grafo + config .env
+- [ ] 03-04-PLAN.md — Conversa e disposição: caminho conversacional isolado (CHAT-01/02), eixo AUTONOMOUS/ASSISTANT por chat (D-04/D-05), !auto (D-14)
+- [ ] 03-05-PLAN.md — Verificação: smoke headless (degradação ao arbiter + tick não-bloqueante), teste de reconexão (CONN-03) e checkpoint humano ao vivo
 
 **UI hint**: no
 
@@ -93,7 +97,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Presença e Conexão | 3/3 | Complete | 2026-06-18 |
 | 2. Loop Autônomo e Memória CP | 4/4 | Complete | 2026-06-19 |
-| 3. Cognição com LLM | 0/TBD | Not started | - |
+| 3. Cognição com LLM | 0/5 | Not started | - |
 | 4. Persistência e Identidade | 0/TBD | Not started | - |
 
 ## Backlog
