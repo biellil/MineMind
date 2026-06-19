@@ -131,7 +131,7 @@ test('CONN-03: o holder reusado entre sessoes preserva memory/goals/disposition/
   // holder reusado; o teste prova que a mente nao foi recriada do zero (createNeeds value 1).
   // Validamos que a estrutura de needs persiste (mesmas 5 kinds) e que NAO houve recriacao do holder.
   expect(holder.needs.length).toBe(5)
-  expect(holder.needs.map((n) => n.kind).sort()).toEqual(
+  expect(holder.needs.map((n) => n.kind as string).sort()).toEqual(
     ['curiosity', 'resources', 'shelter', 'social', 'survival'].sort(),
   )
 })
