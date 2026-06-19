@@ -49,7 +49,7 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md — Fundacao: contratos de tipos, ring buffer de memoria (MEM-01) e maquina de modo de controle por chat literal
-- [ ] 02-02-PLAN.md — Nucleo de decisao: arbitragem por prioridade (D-05), escada de Gathering (D-07) e anti-repeticao/backoff (COG-04)
+- [x] 02-02-PLAN.md — Nucleo de decisao: arbitragem por prioridade (D-05), escada de Gathering (D-07) e anti-repeticao/backoff (COG-04)
 - [ ] 02-03-PLAN.md — StateGraph + driver externo single-flight + wiring em onBotReady (COG-01)
 - [ ] 02-04-PLAN.md — Verificacao: smoke test multi-tick headless + checkpoint humano ao vivo
 
