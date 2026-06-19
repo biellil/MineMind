@@ -1,0 +1,6 @@
+[install]
+# Garante que o Bun usa o lockfile e não resolve versões diferentes
+exact = true
+
+[run]
+# Bun carrega .env automaticamente; bunfig documenta isso explicitamente

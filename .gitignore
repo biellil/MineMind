@@ -1,3 +1,7 @@
+# MineMind project specific
+NAPI_ERROR.txt
+bun.lockb
+
 # Logs
 logs
 *.log
