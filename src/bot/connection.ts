@@ -36,6 +36,31 @@ export function createBot(onReady?: BotReadyCallback): void {
     movements.allowSprinting = true   // sprinting é comportamento humano normal
     bot.pathfinder.setMovements(movements)
 
+    // 999.1 D-02/D-03: bounds do A* — raiz do fix de OOM.
+    // searchRadius = -1 (default) desativa o gate maxCost do A* → heap cresce sem teto em alvos
+    // distantes. Setar searchRadius reativa o gate. thinkTimeout é a rede temporal secundária.
+    // Aplicar em DOIS lugares: (1) os globais bot.pathfinder.* usados por todo pathfinding;
+    // (2) bot.collectBlock.movements — instância que o collectBlock RECRIA internamente e que
+    //     IGNORA o Movements passado a setMovements acima.
+    // Os tipos do mineflayer-pathfinder não expõem searchRadius/thinkTimeout no Pathfinder/Movements,
+    // mas as propriedades existem em runtime (são as levers reais do A*). @ts-expect-error pontual.
+    // @ts-expect-error searchRadius existe em runtime no Pathfinder (não tipado)
+    bot.pathfinder.searchRadius = config.pathfinderSearchRadius
+    bot.pathfinder.thinkTimeout = config.pathfinderThinkTimeoutMs
+    // Aplicar os mesmos bounds + flags de navegação ao Movements do collectBlock.
+    // @ts-expect-error searchRadius existe em runtime no Movements (não tipado)
+    movements.searchRadius = config.pathfinderSearchRadius
+    // @ts-expect-error thinkTimeout existe em runtime no Movements (não tipado)
+    movements.thinkTimeout = config.pathfinderThinkTimeoutMs
+    if (bot.collectBlock?.movements) {
+      // @ts-expect-error searchRadius existe em runtime no Movements (não tipado)
+      bot.collectBlock.movements.searchRadius = config.pathfinderSearchRadius
+      // @ts-expect-error thinkTimeout existe em runtime no Movements (não tipado)
+      bot.collectBlock.movements.thinkTimeout = config.pathfinderThinkTimeoutMs
+      bot.collectBlock.movements.canDig = true
+      bot.collectBlock.movements.allowSprinting = true
+    }
+
     // Em MC 1.21.x, bot.health/food chegam via pacote separado após spawn.
     // Aguardar 'health' garante que o snapshot capture valores reais.
     const onHealthReady = () => {
