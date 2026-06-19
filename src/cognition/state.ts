@@ -22,6 +22,7 @@ import type { ActionDecision } from '../llm/schemas'
 import type { Database } from 'bun:sqlite'
 import type { PersonalityState } from './personality'
 import { defaultPersonality } from './personality'
+import type { SkillOutcome } from '../grounding/types'
 
 /**
  * A "mente" durável do agente, viva no processo e compartilhada entre sessões de bot.
@@ -50,6 +51,16 @@ export interface CognitiveStateHolder {
   db: Database | null
   /** Estado de personalidade evolutivo (SOC-02/D-14), reinjetado no prompt sobre a baseline. */
   personality: PersonalityState
+  /** Último delta observado de uma skill (D-09 A/C): fato autoritativo p/ prompt e post-filter (Plan 04). */
+  lastObservedDelta: {
+    skill: string
+    target: string
+    outcome: SkillOutcome
+    observed: number
+    expected: number
+    delta: Record<string, number>
+    at: number
+  } | null
 }
 
 /**
@@ -69,5 +80,6 @@ export function createCognitiveStateHolder(now: number = Date.now()): CognitiveS
     llmDecision: null,
     db: null,
     personality: defaultPersonality(now),
+    lastObservedDelta: null,
   }
 }

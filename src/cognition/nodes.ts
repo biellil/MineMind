@@ -217,6 +217,9 @@ export function createNodes(deps: NodeDeps) {
         type: 'action',
         skill,
         target,
+        outcome: 'no_effect',
+        observed: 0,
+        expected: 0,
         result: 'failure',
         reason: 'anti-repeat',
         timestamp: now(),
@@ -230,15 +233,50 @@ export function createNodes(deps: NodeDeps) {
     // usava defaults genéricos e duplicava o watchdog interno.
     try {
       const params = skill === 'dig' ? { target } : { target: JSON.parse(target) }
-      await skillRegistry[skill!]!(bot, params)
-      recordSuccess(safety)
-      holder.memory = push(holder.memory, { type: 'action', skill, target, result: 'success', timestamp: now() })
-      log(`OK ${skill} ${target}`)
+      // D-09 B: a memória deriva do SkillResult OBSERVADO (result.outcome), NUNCA do não-throw.
+      // Mata o bug histórico "peguei 10 tábuas" (success por Promise resolvida com observed:0).
+      const result = await skillRegistry[skill!]!(bot, params)
+      const success = result.outcome === 'success'
+      if (success) recordSuccess(safety)
+      else recordFailure(safety, target, now()) // GRND-04: partial/no_effect/error = não-sucesso
+      holder.lastObservedDelta = {
+        skill,
+        target,
+        outcome: result.outcome,
+        observed: result.observed,
+        expected: result.expected,
+        delta: { ...result.delta },
+        at: now(),
+      }
+      holder.memory = push(holder.memory, {
+        type: 'action',
+        skill,
+        target,
+        outcome: result.outcome,
+        observed: result.observed,
+        expected: result.expected,
+        result: success ? 'success' : 'failure', // derivado (GRND-04)
+        reason: result.reason,
+        timestamp: now(),
+      })
+      log(`${result.outcome.toUpperCase()} ${skill} ${target} (${result.observed}/${result.expected})`)
     } catch (err) {
+      // Catch agora SÓ para exceções genuínas inesperadas (D-12) — skills não lançam como fluxo.
       const reason = err instanceof Error ? err.name : String(err)
       recordFailure(safety, target, now())
-      holder.memory = push(holder.memory, { type: 'action', skill, target, result: 'failure', reason, timestamp: now() })
-      log(`FALHA ${skill} ${target}: ${reason}`)
+      holder.lastObservedDelta = { skill, target, outcome: 'error', observed: 0, expected: 0, delta: {}, at: now() }
+      holder.memory = push(holder.memory, {
+        type: 'action',
+        skill,
+        target,
+        outcome: 'error',
+        observed: 0,
+        expected: 0,
+        result: 'failure',
+        reason,
+        timestamp: now(),
+      })
+      log(`ERRO inesperado ${skill} ${target}: ${reason}`)
     }
     return { memory: holder.memory }
   }
