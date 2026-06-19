@@ -91,7 +91,7 @@ Plans:
 - [x] 04-03-PLAN.md — Memória de longo prazo (TDD): importância heurística + escrita atômica + retrieval scoring Generative Agents (MEM-02/03)
 - [x] 04-04-PLAN.md — Identidade social (TDD): perfis por jogador + trust determinístico (SOC-01) + personalidade evolutiva estruturada (SOC-02)
 - [x] 04-05-PLAN.md — Reflexão: enum reflecting + PRIORITY_ORDER + ReflectionOutputSchema + gatilho híbrido/consolidação/goalUpdates (REFL-01)
-- [ ] 04-06-PLAN.md — Mente durável em disco: holder com db+personality + persistHolder/hydrateHolder (decay-on-boot) + boot/shutdown wiring (MEM-02)
+- [x] 04-06-PLAN.md — Mente durável em disco: holder com db+personality + persistHolder/hydrateHolder (decay-on-boot) + boot/shutdown wiring (MEM-02)
 - [ ] 04-07-PLAN.md — Wiring vivo + verificação: reflexão single-flight no loop, personalidade/trust no prompt, perfis na conversa + checkpoint humano (REFL-01/SOC-01/SOC-02/MEM-02/03)
 
 ## Progress

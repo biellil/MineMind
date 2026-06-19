@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 04-05-PLAN.md
-last_updated: "2026-06-19T19:11:13.146Z"
+stopped_at: Completed 04-06-PLAN.md
+last_updated: "2026-06-19T19:20:48.772Z"
 last_activity: 2026-06-19
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 24
-  completed_plans: 22
+  completed_plans: 23
   percent: 50
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-18)
 ## Current Position
 
 Phase: 04 (persist-ncia-reflex-o-e-identidade-viva) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Next: Phase 04 — Persistência, Reflexão e Identidade Viva
 Last activity: 2026-06-19
 
@@ -63,6 +63,7 @@ Progress: [█████░░░░░] 50%
 | Phase 04 P03 | 8 | 2 tasks | 2 files |
 | Phase 04 P04 | 10 | 2 tasks | 4 files |
 | Phase 04 P05 | 6 | 2 tasks | 5 files |
+| Phase 04 P06 | 6 | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,7 @@ Recent decisions affecting current work:
 - [Phase 04]: D-14/SOC-02: PersonalityState (mood/socialEnergy/confidence) evolui por deltas fixos sobre baseline imutável + mean-reversion (revert-toward com clamp na baseline); módulo PURO, sem LLM/ML
 - [Phase 04]: REFL-01/D-13: consolidação CP→LP grava DIRETO em events (type='reflection', importância forçada 8) — MemEvent não modela reflexão, então persistEvent não serve; duplicação inline documentada do bind/schema do 04-02/04-03
 - [Phase 04]: D-11/REFL-01: estado 'reflecting' entra no PRIORITY_ORDER entre 'exploring' e 'idle' (prioridade baixa, sempre preemptível); gatilho híbrido shouldReflect = OR de event-driven/acúmulo/piso temporal
+- [Phase 04]: MEM-02/D-04/D-19: a mente sobrevive a RESTART completo — kv['holder'] guarda needs/goals/currentGoal/disposition/personality; hydrateHolder no boot aplica decay-on-boot (só curiosity por timestamp; survival/resources ficam p/ evaluateNeeds do 1º tick; goals velhos descartados; personality mean-reversion); SIGINT/SIGTERM = persistHolder+db.close (WAL checkpoint)
 
 ### Pending Todos
 
@@ -103,6 +105,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-19T19:10:55.291Z
-Stopped at: Completed 04-05-PLAN.md
+Last session: 2026-06-19T19:20:48.765Z
+Stopped at: Completed 04-06-PLAN.md
 Resume file: None
