@@ -8,6 +8,10 @@ import { config } from '../config'
 
 export type BotReadyCallback = (bot: Bot) => void
 
+// Falhas de reconexão CONSECUTIVAS (sem spawn). Zera a cada spawn bem-sucedido.
+// Limita o loop de reconexão que vaza memória quando o servidor está fora do ar.
+let consecutiveFailures = 0
+
 /**
  * Cria uma instância de bot Mineflayer com reconexão automática.
  * CONN-01: conecta e permanece online.
@@ -64,6 +68,7 @@ export function createBot(onReady?: BotReadyCallback): void {
     // Em MC 1.21.x, bot.health/food chegam via pacote separado após spawn.
     // Aguardar 'health' garante que o snapshot capture valores reais.
     const onHealthReady = () => {
+      consecutiveFailures = 0 // conexão estabelecida — zera o contador de falhas
       console.log(
         `[MineMind] Online — ${config.host}:${config.port} | ` +
         `HP: ${bot.health} | Pos: ${Math.round(bot.entity.position.x)},` +
@@ -91,9 +96,22 @@ export function createBot(onReady?: BotReadyCallback): void {
   // CONN-02: reconexão automática — listener registrado DENTRO do escopo de createBot()
   // para garantir que seja GC'd junto com a instância morta (evita memory leak, PITFALL 3)
   bot.on('end', (reason: string) => {
+    consecutiveFailures++
+    // Cap de reconexão: para após N falhas CONSECUTIVAS (servidor provavelmente fora do ar).
+    // Sem isso, o loop reconecta a cada 5s pra sempre e cada createBot recarrega o minecraft-data
+    // → vazamento de memória ilimitado (chegou a ~24 GB com o servidor fechado).
+    if (consecutiveFailures > config.maxReconnectAttempts) {
+      console.error(
+        `[MineMind] Falha ao conectar após ${config.maxReconnectAttempts} tentativas consecutivas. ` +
+        `O servidor em ${config.host}:${config.port} parece estar fora do ar. Reconexão encerrada — ` +
+        `rode 'bun start' de novo quando o servidor estiver no ar.`
+      )
+      return
+    }
     console.log(
       `[MineMind] Desconectado: "${reason}". ` +
-      `Reconectando em ${config.reconnectDelayMs / 1000}s...`
+      `Reconectando em ${config.reconnectDelayMs / 1000}s ` +
+      `(tentativa ${consecutiveFailures}/${config.maxReconnectAttempts})...`
     )
     // Cria instância NOVA — não reutiliza 'bot' (referência sai de escopo após 'end')
     setTimeout(() => createBot(onReady), config.reconnectDelayMs)

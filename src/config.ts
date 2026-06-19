@@ -28,6 +28,10 @@ export const config = {
 
   // Reconexão
   reconnectDelayMs: 5_000,  // 5s fixo — não configurável via .env (low-risk)
+  // Máximo de tentativas de reconexão CONSECUTIVAS (sem spawn bem-sucedido) antes de desistir.
+  // Evita o loop infinito de reconexão que vaza memória quando o servidor está fora do ar.
+  // O contador zera a cada spawn bem-sucedido (uma sessão saudável ganha tentativas novas).
+  maxReconnectAttempts: parseInt(process.env.MAX_RECONNECT_ATTEMPTS || '5', 10),
 
   // === Fase 2: Loop cognitivo ===
   // D-02: intervalo mínimo entre ticks do driver externo
