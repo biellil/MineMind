@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import type { Bot } from 'mineflayer'
 import 'mineflayer-collectblock'  // side-effect import for Bot type augmentation (adds bot.collectBlock)
+import { goals } from 'mineflayer-pathfinder'
 import { executeWithSafety } from './executor'
 import { config } from '../config'
 
@@ -34,16 +35,33 @@ export async function dig(bot: Bot, rawParams: unknown): Promise<void> {
     // CollectOptions não tem `count` — passamos array de blocos para coletar múltiplos
     const blocks = bot.findBlocks({
       matching: (b) => b.name === target,
-      maxDistance: config.perceptionRadius,
+      maxDistance: config.gatherSearchRadius,  // 999.1 D-01: raio de coleta independente de perceptionRadius
       count,
     }).map((pos) => bot.blockAt(pos)).filter((b): b is NonNullable<typeof b> => b !== null && b.type !== 0)
 
     if (blocks.length === 0) {
-      throw new Error(`Bloco do tipo '${target}' não encontrado no raio de ${config.perceptionRadius} blocos`)
+      throw new Error(`Bloco do tipo '${target}' não encontrado no raio de ${config.gatherSearchRadius} blocos`)
+    }
+
+    // 999.1 D-04/D-05: pré-check de alcançabilidade SÍNCRONO antes de collect().
+    // getPathTo NÃO move o bot e evita o hang #222 do collectBlock em alvos inalcançáveis.
+    // Granularidade de INSTÂNCIA: filtra os blocos alcançáveis; o cooldown por-TIPO (safety.ts)
+    // só dispara quando NENHUMA instância é alcançável (este throw alimenta o catch do nó execute).
+    const movements = bot.collectBlock?.movements ?? bot.pathfinder.movements
+    const precheckTimeoutMs = 200  // Claude's discretion: barato (poucas iterações), só para descartar inalcançáveis
+    const reachable = blocks.filter((b) => {
+      const goal = new goals.GoalGetToBlock(b.position.x, b.position.y, b.position.z)
+      const result = (bot.pathfinder as any).getPathTo(movements, goal, precheckTimeoutMs)
+      // 'success'/'partial' = alcançável o suficiente para tentar; 'noPath'/'timeout' = descartar
+      return result?.status === 'success' || result?.status === 'partial'
+    })
+
+    if (reachable.length === 0) {
+      throw new Error(`Nenhuma instância alcançável de '${target}' (todas inalcançáveis no raio de ${config.gatherSearchRadius})`)
     }
 
     await executeWithSafety(
-      () => bot.collectBlock.collect(blocks),
+      () => bot.collectBlock.collect(reachable),
       {
         timeoutMs: config.digTimeoutMs * count,  // timeout proporcional à quantidade
         // Watchdog: inventário que cresce indica progresso
