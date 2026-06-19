@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
 stopped_at: Completed 999.1-04-PLAN.md
-last_updated: "2026-06-19T17:03:28.011Z"
+last_updated: "2026-06-19T17:03:43.533Z"
 last_activity: 2026-06-19
 progress:
   total_phases: 5
@@ -68,6 +68,7 @@ Recent decisions affecting current work:
 - [Roadmap]: CONN-03 (estado sobrevive a reconexão) alocado à Fase 3, onde o estado cognitivo durável fora-do-bot é criado.
 - [Fase 2]: Loop cognitivo validado ao vivo sem LLM — `!pausar`/`!livre`/`!vem` e autonomia confirmados em servidor Minecraft real.
 - [Phase 999.1]: D-01: GATHER_SEARCH_RADIUS (16) independente de PERCEPTION_RADIUS; D-02: bounds do A* via PATHFINDER_SEARCH_RADIUS (48)/THINK_TIMEOUT (2000) com validação de range
+- [Phase 999.1]: D-06: double-wrap de executeWithSafety removido — nó execute chama skill diretamente; cada skill se auto-embrulha com seu watchdog próprio. Stubs (follow/attack) não-embrulhados por design.
 
 ### Pending Todos
 
