@@ -1,287 +1,401 @@
 # Architecture Research
 
-**Domain:** Autonomous persistent Minecraft agent (TypeScript, Mineflayer + LangGraph.js, local LLM)
-**Researched:** 2026-06-18
-**Confidence:** MEDIUM-HIGH (LangGraph.js API verified against official reference + DeepWiki; agent-design patterns drawn from Voyager and Mindcraft, the two dominant precedents)
+**Domain:** Integração das capacidades do milestone v2.0 ("Autonomia de Verdade") na arquitetura cognitiva EXISTENTE do MineMind (Mineflayer + LangGraph 1.x + LM Studio/GPT, processo único Bun)
+**Researched:** 2026-06-19
+**Confidence:** HIGH (lido o código real — `loop.ts`, `nodes.ts`, `graph.ts`, `deliberation.ts`, `arbiter.ts`, `state.ts`, `goals.ts`, `motivation/types.ts`, `skills/*`, `config.ts`, `llm/provider.ts`; padrões System 1/2/DAG ancorados na FEATURES.md e prior art Voyager/GITM/mc-agents)
 
-> Note: `README.md` is currently a 2-line stub — the detailed PRD referenced in the milestone context is not present in the repo. This research is grounded in `.planning/PROJECT.md` plus external precedents. The 7-state machine and needs/goals/memory systems are treated as the design target from PROJECT.md.
+> **Tese desta pesquisa:** quase nada em v2.0 é componente novo de topo. As cinco perguntas se resolvem **estendendo costuras que já existem** — o `arbiter` reativo vira System 1, `dependsOn` (hoje sempre `[]`) vira o DAG, `playerRequestPending`+`source:'player_request'` viram o modo assistente, o padrão `progressChecker` do `executor` vira o grounding, e a `factory` `createLmStudioProvider` ganha um irmão `createOpenAiProvider` atrás da `LlmProvider` que já abstrai tudo. **Não criar máquina de modos paralela, não criar nó de reflexão, não criar segundo loop.**
+
+> **Correção factual importante (drift de doc):** o comentário em `state.ts` diz "persistência EM-PROCESSO apenas, sem disco". O código real **já persiste em SQLite** (`holder.db`, `persistHolder`, `consolidate`, `retrieve`). A v2.0 deve tratar o SQLite como existente. O ARCHITECTURE do v1.0 (`v1.0-research/`) também está desatualizado (descreve 8-9 nós e `better-sqlite3`; o real são 5 nós finitos + `bun:sqlite` + `MemorySaver`). **Esta pesquisa reflete o código, não os docs antigos.**
+
+---
 
 ## Standard Architecture
 
-The field has converged on a **layered embodied-agent** shape. Voyager and Mindcraft (the two reference implementations for LLM + Mineflayer) both separate a low-level game-control layer, a high-level "skills/actions" layer, an LLM reasoning layer, and a memory/skill store. MineMind's intended `Minecraft → Mineflayer → Action Layer → LangGraph → LLM → Memory` is exactly this shape; the contribution this project adds is making the cognitive loop an explicit **cyclic LangGraph** rather than an ad-hoc `while` loop.
-
-### System Overview
+### System Overview — onde cada feature v2.0 encaixa
 
 ```
-┌───────────────────────────────────────────────────────────────────┐
-│                       PROCESS (single Bun/Node process)             │
-│                                                                     │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │              COGNITIVE GRAPH  (@langchain/langgraph)          │   │
-│  │   observe → analyze → updateMemory → evaluateNeeds →          │   │
-│  │   generateGoals → plan → execute → reflect ─┐                 │   │
-│  │      ▲                                       │ (loop edge)    │   │
-│  │      └───────────────────────────────────────┘                │   │
-│  │   state: AgentState (status, needs, goals, plan, memory refs) │   │
-│  └───┬─────────────────┬──────────────────┬─────────────────────┘   │
-│      │ reads world      │ calls skills      │ reads/writes           │
-│      │ (perception)     │ (tools)           │ (memory tiers)         │
-│  ┌───▼──────────┐  ┌────▼─────────┐  ┌──────▼───────────────────┐    │
-│  │  PERCEPTION  │  │ ACTION LAYER │  │       MEMORY              │    │
-│  │  (snapshot   │  │ (skills as   │  │  short-term (in-state)    │    │
-│  │   of bot)    │  │  typed tools)│  │  long-term  (SQLite)      │    │
-│  └───┬──────────┘  └────┬─────────┘  │  semantic   (vector/embed)│    │
-│      │                  │            └──────────────────────────┘     │
-│  ┌───▼──────────────────▼─────────────────────────────────────┐      │
-│  │           MINEFLAYER ADAPTER (anti-corruption layer)         │      │
-│  │  wraps `bot`, pathfinder, collectblock, tool, pvp plugins    │      │
-│  └───┬─────────────────────────────────────────────────────────┘      │
-│      │ protocol                                                        │
-│  ┌───▼──────────┐                  ┌──────────────────────────────┐    │
-│  │  mineflayer  │                  │  LLM CLIENT (LM Studio,       │    │
-│  │  (prismarine)│                  │  OpenAI-compatible /v1)       │    │
-│  └───┬──────────┘                  └──────────────────────────────┘    │
-└──────┼─────────────────────────────────────────────────────────────┘
-       │ TCP (Minecraft protocol)
-┌──────▼───────────────────┐
-│  Minecraft Java Server   │  (local, dev)
-└──────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                    PROCESSO ÚNICO (Bun) — startCognitiveLoop(bot, holder)  │
+│                                                                            │
+│  ┌──────────────────────────────────────────────────────────────────┐    │
+│  │  DRIVER EXTERNO (loop.ts)  — "aresta de retorno" = re-invoke/tick  │    │
+│  │  while(alive): graph.invoke()  +  maybeDeliberate(void, async)     │    │
+│  │                                                                    │    │
+│  │  ┌── System 1 REFLEXO (NOVO: promove arbiter) ──────────────────┐  │    │
+│  │  │  reflexes(snapshot) → ação imediata SEM LLM:                 │  │    │
+│  │  │  comer · fugir/defender mob · abrigo-emergência              │◀─┼──┐ │
+│  │  │  roda DENTRO do tick rápido (antes/no observe), sub-segundo  │  │  │ │
+│  │  └─────────────────────────────────────────────────────────────┘  │  │ │
+│  │                                                                    │  │ │
+│  │  ┌── StateGraph FINITO por tick (graph.ts) — System 2 RÁPIDO ───┐  │  │ │
+│  │  │  observe → analyze → updateMemory → decide → execute → END    │  │  │ │
+│  │  │   │grounding↑                                  │grounding↑    │  │  │ │
+│  │  │  needs/goals(DAG)   lê llmDecision fresca   UMA skill aguardada│  │  │ │
+│  │  └───────────────────────────────────────────────────────────────┘  │ │
+│  │                                                                    │  │ │
+│  │  ┌── Deliberação LLM LENTA single-flight (deliberation.ts) ──────┐  │  │ │
+│  │  │  maybeDeliberate(): UMA inferência por vez (inFlight lock)     │  │  │ │
+│  │  │  trigger ∈ {chat,goal_changed,need_threshold,periodic,reflect}│──┘  │ │
+│  │  │  escreve holder.llmDecision  ·  reflect REUSA este caminho     │     │ │
+│  │  └───────────────────────────────────────────────────────────────┘    │ │
+│  └────────────┬───────────────────────┬───────────────────┬──────────────┘ │
+│               │ snapshot (read-only)   │ skills (1/tick)    │ holder (mente) │
+│  ┌────────────▼─────┐   ┌──────────────▼────────┐   ┌───────▼─────────────┐  │
+│  │  PERCEPTION      │   │  SKILLS (Action Layer) │   │ CognitiveStateHolder│  │
+│  │ buildWorldSnap   │   │ navigate·dig·follow·   │   │ control·safety·     │  │
+│  │ (+inventory já   │   │ attack +NOVOS: craft·  │   │ memory·needs·goals· │  │
+│  │  no snapshot →   │   │ place·smelt·eat·flee·  │   │ currentGoal·        │  │
+│  │  GROUNDING)      │   │ shelter   (grounded)   │   │ disposition·        │  │
+│  └────────┬─────────┘   └──────────┬─────────────┘   │ playerRequestPending│  │
+│           │                        │                 │ llmDecision·db·     │  │
+│  ┌────────▼────────────────────────▼──────────────┐  │ personality         │  │
+│  │  MINEFLAYER ADAPTER (bot/connection.ts)          │  └───────┬─────────────┘  │
+│  │  cria bot, plugins, reconexão (MESMO holder)     │          │ persist        │
+│  └────────┬─────────────────────────────────────────┘  ┌───────▼─────────────┐  │
+│           │ protocolo TCP            ┌──────────────┐   │  MEMORY (bun:sqlite │  │
+│  ┌────────▼─────────┐                │ LLM PROVIDER │   │  + sqlite-vec)      │  │
+│  │ Minecraft Java   │                │ FACTORY(NOVO)│   │ shortTerm·longTerm· │  │
+│  │ 1.21.4 (local)   │                │ LM Studio │   │ holder·profiles·    │  │
+│  └──────────────────┘                │ GPT-4.1-mini│   │ vec·personality     │  │
+│                                       └──────────────┘   └─────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Component Responsibilities
+### Component Responsibilities — NOVO vs MODIFICADO vs INTACTO
 
-| Component | Responsibility | Typical Implementation |
-|-----------|----------------|------------------------|
-| **Mineflayer Adapter** | Own the `bot` instance, plugin loading, connection lifecycle, reconnect. Translate raw mineflayer events/state into clean domain types. Nothing above it imports `mineflayer` directly. | A `MinecraftClient` class wrapping `createBot()` + `bot.loadPlugin(pathfinder/collectblock/tool/pvp)`; exposes typed methods + an event emitter. |
-| **Perception** | Produce an immutable `WorldSnapshot` (health, food, position, time, nearby entities/blocks, inventory, recent chat) on demand. Read-only over the adapter. | A `perceive(adapter): WorldSnapshot` function. Pure, cheap, called by the `observe` node. |
-| **Action Layer (Skills)** | High-level, parameterized, self-contained skills (`goTo`, `collectBlock`, `craft`, `placeBlock`, `attack`, `say`). Each returns a structured `SkillResult {ok, error?, observation}`. This is where mineflayer boilerplate is hidden. | Async functions/classes; also exported as LangChain `tool()` definitions (Zod schema) so the LLM can call them. |
-| **Cognitive Graph** | The 9-step loop as a `StateGraph`. Owns ordering, branching (state machine), and the loop-back edge. Holds no game logic — it orchestrates the other layers. | `@langchain/langgraph` `StateGraph` over an `Annotation.Root` state. One node per cognitive step. |
-| **LLM Client** | Provider-abstracted chat/completion + (optionally) embeddings. v1 target = LM Studio. | `@langchain/openai` `ChatOpenAI` pointed at `http://localhost:1234/v1` (LM Studio is OpenAI-compatible). Abstraction interface so cloud can drop in later. |
-| **Memory** | Three tiers. Short-term = recent events held in graph state. Long-term = durable episodic facts (SQLite). Semantic = embeddings for similarity recall (skills, places, people). | SQLite (`better-sqlite3` / `bun:sqlite`) for long-term; a vector store (sqlite-vec, or LanceDB/Chroma) for semantic. Short-term lives in `AgentState`. |
-| **Social profiles** | Per-player relationship/reputation records. | A typed table in the long-term store, keyed by username. (Phase 4 in PROJECT.md.) |
+| Component | Status v2.0 | Responsibility | Onde |
+|-----------|-------------|----------------|------|
+| **System 1 reflexo** (`cognition/reflexes.ts`) | **NOVO** | Sobrevivência sub-segundo SEM LLM: comer, fugir/defender de mob hostil, abrigo de emergência. Função pura `decideReflex(snapshot, holder)` → `ReflexAction \| null`, executada no tick rápido ANTES da deliberação. Promove a intenção do `arbiter` reativo a ação imediata. | `loop.ts` chama no topo do tick; reusa `skills` |
+| `arbiter.ts` | **MODIFICADO** | Continua sendo o piso determinístico (D-17), mas ganha `'fighting'`/`'building'` reais na `arbitrate()` e expõe a detecção de mob hostil que o System 1 consome. | `cognition/arbiter.ts` |
+| **Tech tree DAG** (`motivation/techtree.ts`) | **NOVO** | Catálogo data-driven (via `minecraft-data`) de pré-requisitos item→(materiais+ferramenta) e resolução recursiva de qual sub-objetivo destravar dado o inventário. Preenche o campo `Goal.dependsOn` que hoje é sempre `[]`. | `motivation/techtree.ts` + estende `goals.ts` |
+| `goals.ts` (`generateGoals`/`selectGoal`) | **MODIFICADO** | `generateGoals` passa a emitir, além dos goals-por-need, os goals-por-tech-tree (a próxima tarefa destravável). `selectGoal` ganha resolução de `dependsOn` (escolhe o ancestral pronto, não o folha bloqueado). | `motivation/goals.ts` |
+| `motivation/types.ts` | **MODIFICADO** | `NeedKind` ganha `shelter`/`social` ATIVOS (hoje stub); novo `GoalSource: 'tech'`; `Goal` ganha campo opcional de meta-item. Mudanças aditivas, retrocompatíveis. | `motivation/types.ts` |
+| **Grounding** (`skills/grounding.ts`) | **NOVO** | Wrapper/helper que captura estado real (inventário, posição, bloco-alvo) antes/depois de cada skill e retorna um `SkillResult` verificado. Generaliza o `progressChecker` do `dig` para um resultado factual ("craftou 4 tábuas? confirmado pelo inventário"). | `skills/grounding.ts` + altera contrato das skills |
+| skills `craft`/`smelt`/`place`/`eat`/`flee`/`shelter` | **NOVO** | Comportamentos sobre API NATIVA do mineflayer (`recipesFor`/`craft`, `openFurnace`, `placeBlock`, `consume`, pathfinder-away). Sem plugins de combate/auto-eat (ver STACK.md). Cada um grounded. | `skills/` |
+| skills `navigate`/`dig`/`follow`/`attack` | **MODIFICADO** | Passam a retornar `SkillResult` grounded (hoje retornam `void`/lançam). `dig` já tem o padrão de verificação — generalizar. | `skills/*` |
+| `nodes.ts` (`execute`) | **MODIFICADO** | Mapeia os estados `fighting`/`building` (hoje no-op stub) para as skills novas; consome `SkillResult` em vez de só `success/failure`; grava o resultado grounded na memória. | `cognition/nodes.ts` |
+| **Modo Assistente** | **MODIFICADO (reuso)** | NÃO é máquina de modos nova. É `holder.playerRequestPending=true` + um `Goal{source:'player_request'}` de alta prioridade com condição-de-saída (progresso=1 ou TTL). A preempção já existe em `selectGoal`. | `chat/conversation.ts` seta o sinal; `goals.ts` resolve |
+| **LLM Provider Factory** (`llm/provider.ts`) | **MODIFICADO** | Adiciona `createOpenAiProvider()` (GPT-4.1-mini) irmão de `createLmStudioProvider()`, ambos retornando a MESMA interface `LlmProvider`. `createProvider()` despacha por `config.llmProvider`. | `llm/provider.ts` |
+| `loop.ts` (driver) | **MODIFICADO** | Insere a chamada do System 1 no topo do tick; chama `createProvider()` em vez do `createLmStudioProvider()` fixo. Resto intacto (single-flight, reflexão, flush). | `cognition/loop.ts` |
+| `CognitiveStateHolder` / StateGraph / `deliberation` (single-flight) / memória | **INTACTO** | Estrutura preservada. v2.0 escreve nos campos existentes, não muda a topologia do grafo nem o lock `inFlight`. | — |
+
+---
 
 ## Recommended Project Structure
 
 ```
 src/
-├── index.ts                  # bootstrap: build adapter, compile graph, start loop
-├── minecraft/                # Mineflayer adapter — ONLY place that imports mineflayer
-│   ├── client.ts             # MinecraftClient: createBot, plugins, reconnect
-│   ├── events.ts             # raw mineflayer events → typed domain events
-│   └── types.ts              # WorldSnapshot, Entity, BlockInfo, ChatEvent
-├── perception/
-│   └── perceive.ts           # adapter → WorldSnapshot (read-only)
-├── skills/                   # Action Layer
-│   ├── movement.ts           # goTo, follow, wander (pathfinder)
-│   ├── gather.ts             # collectBlock, mine (collectblock + tool)
-│   ├── build.ts              # placeBlock, craft
-│   ├── combat.ts             # attack, flee (pvp)
-│   ├── social.ts             # say, whisper
-│   ├── registry.ts           # name → skill; exports LangChain tools (Zod schemas)
-│   └── result.ts             # SkillResult type
-├── cognition/                # The LangGraph
-│   ├── state.ts              # AgentState Annotation.Root (status, needs, goals, plan…)
-│   ├── graph.ts              # StateGraph wiring (nodes, edges, loop, compile)
-│   ├── nodes/
-│   │   ├── observe.ts
-│   │   ├── analyze.ts
-│   │   ├── updateMemory.ts
-│   │   ├── evaluateNeeds.ts
-│   │   ├── generateGoals.ts
-│   │   ├── plan.ts
-│   │   ├── execute.ts
-│   │   └── reflect.ts
-│   ├── states.ts             # CognitiveState enum + transition rules
-│   ├── needs.ts              # needs model + decay/satisfaction logic
-│   └── goals.ts              # Goal type, priority/progress/dependency logic
-├── memory/
-│   ├── shortTerm.ts          # ring buffer helpers (operates on AgentState)
-│   ├── longTerm.ts           # SQLite episodic store
-│   ├── semantic.ts           # vector store + embeddings
-│   └── social.ts             # per-player profiles
+├── cognition/
+│   ├── loop.ts            # MOD: + chamada System 1 no tick; + createProvider()
+│   ├── reflexes.ts        # NOVO: System 1 — decideReflex(snapshot,holder) puro
+│   ├── arbiter.ts         # MOD: + fighting/building na arbitrate; detecção de mob hostil
+│   ├── graph.ts           # INTACTO (topologia 5-nós finita preservada)
+│   ├── nodes.ts           # MOD: execute mapeia fighting/building; consome SkillResult
+│   ├── deliberation.ts    # INTACTO (single-flight é a costura a preservar)
+│   ├── state.ts           # INTACTO (holder já tem os campos necessários)
+│   ├── reflection.ts      # INTACTO (aprendizado por reflexão já existe; só alimentar)
+│   └── types.ts           # MOD: nada novo no enum (fighting/building já existem)
+├── motivation/
+│   ├── types.ts           # MOD: NeedKind shelter/social ativos; GoalSource 'tech'
+│   ├── needs.ts           # MOD: decaimento real de shelter (noite) e fome → survival
+│   ├── goals.ts           # MOD: generateGoals emite goals-tech; selectGoal resolve dependsOn
+│   └── techtree.ts        # NOVO: DAG de pré-requisitos data-driven (minecraft-data)
+├── skills/
+│   ├── grounding.ts       # NOVO: captura estado antes/depois → SkillResult verificado
+│   ├── result.ts          # NOVO: tipo SkillResult { ok, observation, delta? }
+│   ├── craft.ts           # NOVO: recipesFor/craft recursivo (API nativa)
+│   ├── smelt.ts           # NOVO: openFurnace + put/take (API nativa)
+│   ├── place.ts           # NOVO: placeBlock (compartilhado por shelter e building)
+│   ├── eat.ts             # NOVO: bot.consume (System 1)
+│   ├── flee.ts            # NOVO: pathfinder goal "longe do mob" (System 1)
+│   ├── shelter.ts         # NOVO: cavar/tampar via place (System 1, último recurso)
+│   ├── navigate|dig|follow|attack.ts  # MOD: retornam SkillResult grounded
+│   └── index.ts           # MOD: registra as skills novas no skillRegistry/toolRegistry
 ├── llm/
-│   ├── client.ts             # provider-abstracted ChatModel factory
-│   └── prompts.ts            # system prompts per node (analyze, plan, reflect…)
-└── config.ts                 # server host/port, LM Studio URL, loop tick, model name
+│   ├── provider.ts        # MOD: + createOpenAiProvider + createProvider(dispatch)
+│   ├── structured.ts      # INTACTO (decideAction já genérico)
+│   └── schemas.ts         # MOD: ActionDecision.action ganha craft/build/fight/eat/flee
+└── config.ts              # MOD: + llmProvider, openaiModel, techtree thresholds, shelter
 ```
 
 ### Structure Rationale
 
-- **`minecraft/` as an anti-corruption layer:** mineflayer's API surface is large, event-driven, and version-sensitive. Isolating it behind typed methods means a mineflayer breaking change (or a Bun incompatibility forcing a workaround) touches one folder. Everything above depends on *your* types, not prismarine's.
-- **`skills/` separate from `cognition/`:** skills must be testable and runnable without the LLM or graph (you can call `goTo(...)` from a script). The graph only *orchestrates* skills. This is the single most important boundary — it's what lets you get a non-LLM closed loop running first.
-- **`cognition/nodes/` one file per step:** the 9 loop steps map 1:1 to graph nodes. Keeping them as small pure-ish functions `(state) => Partial<state>` makes the graph readable and each step independently testable.
-- **`memory/` by tier:** the persistence decision (the open question in PROJECT.md) is contained here behind interfaces, so you can start with short-term only and add SQLite/vector later without touching the graph.
+- **`cognition/reflexes.ts` separado do `arbiter.ts`:** o arbiter retorna um `CognitiveState` (intenção) consumido pelo grafo; o System 1 retorna uma **ação imediata executada fora do grafo**, no driver, antes da deliberação. São responsabilidades distintas (decidir o modo vs reagir já) — mantê-los separados evita poluir a função pura do arbiter com efeito colateral.
+- **`motivation/techtree.ts` separado de `goals.ts`:** o DAG é dado (catálogo de receitas/pré-requisitos), `goals.ts` é política (priorização/histerese). O `dependsOn` já está no `Goal` esperando exatamente isto — o gap é "resolução comportamental de dependências", documentado como futuro no próprio `goals.ts`.
+- **`skills/grounding.ts` + `result.ts` como camada fina:** o `dig` já prova o padrão (verifica inventário via `progressChecker`). Generalizar para um `SkillResult` factual é o conserto direto do Known Gap "peguei 10 tábuas" — o relato passa a ser o que o estado confirma, não o que a skill alega.
+- **Skills novas na API nativa, sem plugins:** STACK.md é taxativo — `mineflayer-pvp`/`auto-eat` estão 4 anos parados; `bot.attack`/`consume`/`craft`/`placeBlock` cobrem tudo. Adicionar só `mineflayer-tool` (peer obrigatória do collectblock 1.6.0 já instalado).
+
+---
 
 ## Architectural Patterns
 
-### Pattern 1: Cognitive loop as a cyclic StateGraph
+### Pattern 1: System 1 reflexo no tick, System 2 deliberativo fora dele — preservando single-flight
 
-**What:** Model the 9-step loop as graph nodes with a conditional edge from `reflect` back to `observe`. LangGraph natively supports cycles — a conditional edge can return the name of an earlier node, and the runtime re-enters it.
-**When to use:** Always, for this project — it's the core value ("if all else fails, the loop must work").
-**Trade-offs:** (+) explicit, inspectable, checkpointable, easy to insert/skip steps via conditional edges. (−) more ceremony than a `while(true)` loop; you must guard against runaway recursion (set `recursionLimit` high or use an external tick).
+**What:** O System 1 é uma função **pura e síncrona** que roda no topo de cada tick do driver, ANTES da deliberação LLM. Decide reflexos de sobrevivência (comer/fugir/abrigar) lendo só o `WorldSnapshot` + `holder`, e dispara UMA skill reflexa imediata quando dispara. O System 2 (LLM lento) continua intocado em `maybeDeliberate` com o lock `inFlight`.
 
-**Example (verified API — `Annotation.Root`, `StateGraph`, `addConditionalEdges`):**
-```typescript
-import { Annotation, StateGraph, START, END } from "@langchain/langgraph";
+**When to use:** Sempre que a latência do LLM (segundos no modelo local) seria fatal — fome esgotando, mob batendo, noite caindo. É o aprendizado central do mc-agents (FEATURES.md).
 
-const AgentState = Annotation.Root({
-  status: Annotation<CognitiveState>({ default: () => "Idle", value: (_, y) => y }),
-  snapshot: Annotation<WorldSnapshot | null>({ default: () => null, value: (_, y) => y }),
-  needs: Annotation<Needs>({ default: () => defaultNeeds(), value: (x, y) => ({ ...x, ...y }) }),
-  goals: Annotation<Goal[]>({ default: () => [], value: (_, y) => y }),       // replace
-  plan: Annotation<PlanStep[]>({ default: () => [], value: (_, y) => y }),
-  shortTerm: Annotation<Event[]>({                                            // append + cap
-    default: () => [],
-    value: (x, y) => [...x, ...y].slice(-50),
-  }),
-  ticks: Annotation<number>({ default: () => 0, value: (x, y) => (y ?? x) }),
-});
+**Como NÃO quebra o single-flight:** o System 1 **não usa o LLM** — logo não toca o lock `inFlight` de `DeliberationState`. Ele compete pela skill física (uma ação por vez), então a regra é: se o System 1 decide agir neste tick, o `execute` do grafo é pulado (curto-circuito), e a deliberação em voo (se houver) tem sua `llmDecision` ignorada por um tick. O lock LLM segue sendo de UMA inferência; o que o System 1 adiciona é **prioridade de execução física**, não uma segunda inferência.
 
-const graph = new StateGraph(AgentState)
-  .addNode("observe", observe)
-  .addNode("analyze", analyze)
-  .addNode("updateMemory", updateMemory)
-  .addNode("evaluateNeeds", evaluateNeeds)
-  .addNode("generateGoals", generateGoals)
-  .addNode("plan", planNode)
-  .addNode("execute", execute)
-  .addNode("reflect", reflect)
-  .addEdge(START, "observe")
-  .addEdge("observe", "analyze")
-  .addEdge("analyze", "updateMemory")
-  .addEdge("updateMemory", "evaluateNeeds")
-  .addEdge("evaluateNeeds", "generateGoals")
-  .addEdge("generateGoals", "plan")
-  .addEdge("plan", "execute")
-  .addEdge("execute", "reflect")
-  .addConditionalEdges("reflect", (s) => (s.shouldStop ? END : "observe"));
-
-const app = graph.compile({ checkpointer });
-```
-
-### Pattern 2: State machine + needs + goals modeled as graph *state*, not graph *topology*
-
-**What:** Do **not** create one graph node per cognitive state (Idle/Exploring/Gathering/…). Instead keep `status: CognitiveState` as a *field* in `AgentState`. The `plan`/`execute` nodes branch on `status` internally (or via conditional edges) to choose which skills to run. State transitions are computed in `evaluateNeeds`/`generateGoals` and written back into `status`.
-**When to use:** When the same loop steps apply regardless of mode — which is true here (you always observe→analyze→…→reflect; what changes is *which* skills execute).
-**Trade-offs:** (+) keeps the graph small (8-9 nodes, not 8×7); state machine becomes data you can log and test in isolation. (−) the state→skill mapping lives in code, so it's less visually obvious from the graph diagram alone.
-
-**Example (transition + needs-driven goal):**
-```typescript
-// states.ts — transitions are pure data
-function nextState(needs: Needs, goals: Goal[]): CognitiveState {
-  if (needs.survival < 0.3) return "Fighting";   // or fleeing
-  if (needs.resources < 0.4) return "Gathering";
-  if (topGoal(goals)?.kind === "build") return "Building";
-  if (needs.socialization < 0.5 && playersNearby) return "Socializing";
-  if (needs.curiosity > 0.7) return "Exploring";
-  return "Idle";
-}
-
-// needs.ts — needs decay each tick, skills satisfy them
-const defaultNeeds = (): Needs => ({ survival: 1, resources: 1, shelter: 1, curiosity: .5, socialization: .5 });
-function decay(n: Needs): Needs { /* lower curiosity/social over time, survival from health */ }
-```
-
-### Pattern 3: Skills as typed tools (dual interface)
-
-**What:** Each skill is (a) a plain async function `goTo(adapter, args): Promise<SkillResult>` and (b) wrapped as a LangChain `tool()` with a Zod schema. The `execute` node runs skills directly when following a deterministic plan; the `plan`/`analyze` nodes can hand the tool list to the LLM for tool-calling when reasoning is needed.
-**When to use:** Always. The dual interface is what lets the loop run deterministically (no LLM) *and* be LLM-driven later.
-**Trade-offs:** (+) LLM never touches raw mineflayer; failures are structured (`SkillResult.error`) and can be fed back into `reflect` (Voyager's "environment feedback" loop). (−) requires discipline keeping the Zod schema and function signature in sync.
+**Trade-offs:** (+) sobrevivência abaixo da latência do LLM, sem segundo loop, sem segundo lock. (+) reusa skills e snapshot existentes. (−) o System 1 e o `execute` do grafo disputam "a skill do tick" — precisa de uma regra de precedência explícita (reflexo > plano deliberado) no driver. (−) o System 1 lê o snapshot ANTES do `observe` do grafo o reconstruir; aceitar uma leitura barata extra ou compartilhar o `lastSnapshot`.
 
 **Example:**
 ```typescript
-import { tool } from "@langchain/core/tools";
-import { z } from "zod";
+// cognition/reflexes.ts — PURO, sem LLM, sem efeito colateral
+export type ReflexAction =
+  | { kind: 'eat' }
+  | { kind: 'flee'; from: Position3D }
+  | { kind: 'defend'; entityId: number }
+  | { kind: 'shelter' }
+  | null
 
-export async function goTo(adapter: MinecraftClient, x: number, y: number, z: number): Promise<SkillResult> {
-  try { await adapter.pathfindTo(x, y, z); return { ok: true, observation: `arrived at ${x},${y},${z}` }; }
-  catch (e) { return { ok: false, error: String(e), observation: "pathfinding failed" }; }
+export function decideReflex(s: WorldSnapshot, h: CognitiveStateHolder): ReflexAction {
+  // 1) fome crítica com comida no inventário → comer
+  if (s.status.food <= config.eatHungerThreshold && hasFood(s.inventory)) return { kind: 'eat' }
+  // 2) mob hostil próximo → defender (se equipado/forte) ou fugir
+  const mob = nearestHostile(s.entities, config.hostileReactRadius)
+  if (mob) return canFight(s) ? { kind: 'defend', entityId: mob.id } : { kind: 'flee', from: mob.position }
+  // 3) noite + exposto + sem abrigo → cavar abrigo (último recurso)
+  if (!s.status.isDay && exposedAtNight(s)) return { kind: 'shelter' }
+  return null
 }
 
-export const goToTool = tool(
-  async ({ x, y, z }) => JSON.stringify(await goTo(adapter, x, y, z)),
-  { name: "go_to", description: "Walk to a coordinate", schema: z.object({ x: z.number(), y: z.number(), z: z.number() }) }
-);
+// loop.ts (MOD) — topo do tick, antes da deliberação
+const reflex = lastSnapshot ? decideReflex(lastSnapshot, holder) : null
+if (reflex) {
+  await runReflex(bot, reflex, holder)   // dispara UMA skill reflexa, grounded; grava na memória
+  // pula o execute deliberado deste tick (precedência reflexo > plano)
+} else {
+  await graph.invoke({}, cfg)            // System 2 rápido (estado/skill do plano)
+}
+// deliberação LLM lenta segue idêntica (void, single-flight) — nunca tocada pelo reflexo
 ```
+
+### Pattern 2: Tech tree como DAG que preenche `Goal.dependsOn`, priorizado por needs
+
+**What:** O catálogo de pré-requisitos (item → {materiais, ferramenta, estação}) é dado estático derivado de `minecraft-data`. `generateGoals` emite, além dos goals-por-need, o **próximo objetivo destravável**: dado um objetivo-meta (ex. `iron_pickaxe`), resolve recursivamente o que falta no inventário e emite o sub-goal pronto (folha cujas dependências já estão satisfeitas). O `dependsOn` — hoje sempre `[]` — passa a carregar os IDs dos pré-requisitos. `selectGoal` escolhe o ancestral executável, não o folha bloqueado.
+
+**When to use:** Para a progressão madeira→pedra→ferro→diamante. É a fusão GITM (estrutura do DAG) + MineMind needs (prioridade dinâmica) que a FEATURES.md identifica como o diferencial.
+
+**Como reusa o existente:** `priority` continua vindo da urgência da need (`resources` em escassez prioriza minerar); a tech tree só **estrutura** o que o `gathering` deve buscar (a `gatheringLadder` de `config.ts` é a versão flat/v1 disto — vira derivada do DAG). A histerese/preempção de `selectGoal` não muda.
+
+**Trade-offs:** (+) reaproveita `dependsOn`, `progress`, `priority` que já existem; o gap "resolução comportamental de dependências" documentado em `goals.ts` é exatamente este trabalho. (+) data-driven via `minecraft-data` (já transitivo) — não hardcodar receitas. (−) precisa de um goal-meta atual (qual item perseguir); deriva-se do estado (sem picareta de pedra → meta = picareta de pedra) ou do modo assistente. (−) ciclos no DAG são impossíveis em Minecraft, mas a resolução recursiva precisa de guarda de profundidade.
+
+**Example:**
+```typescript
+// motivation/techtree.ts (NOVO)
+interface Recipe { item: string; needs: { item: string; count: number }[]; station?: string; tool?: string }
+
+/** Resolve o próximo sub-objetivo PRONTO para destravar `goalItem`, dado o inventário. */
+export function nextUnlockable(goalItem: string, inv: InventorySummary, depth = 0): TechGoal | null {
+  if (depth > 16) return null                          // guarda anti-recursão
+  const r = recipeFor(goalItem)                         // de minecraft-data
+  if (!r) return null
+  const missing = r.needs.filter((n) => countIn(inv, n.item) < n.count)
+  if (missing.length === 0 && hasTool(inv, r.tool)) return { item: goalItem, dependsOn: [] } // pronto
+  // recursão: o primeiro material/ferramenta faltante vira o próximo objetivo
+  const blocker = missing[0] ?? { item: r.tool!, count: 1 }
+  return nextUnlockable(blocker.item, inv, depth + 1)
+}
+
+// goals.ts (MOD) — generateGoals passa a também emitir o goal-tech destravável
+const techGoal = goalItem ? nextUnlockable(goalItem, invSummary(snapshot)) : null
+if (techGoal) goals.push(toGoal(techGoal, urgency(resourcesNeed), 'tech', now))
+```
+
+### Pattern 3: Modo Assistente = objetivo de alta prioridade com condição-de-saída (NÃO máquina de modos)
+
+**What:** Um pedido de jogador ("traz madeira") vira um `Goal{ source:'player_request' }` injetado e o flag `holder.playerRequestPending=true`. A preempção já existe: `selectGoal` preempta o objetivo atual quando `disposition==='ASSISTANT' && playerRequestPending` (código atual em `goals.ts`). Ao concluir (`progress>=1`) ou expirar (TTL), o goal é descartado e o agente **volta sozinho** ao curriculum autônomo — sem nenhum estado de "modo assistente" separado.
+
+**When to use:** Sempre — é como a FEATURES.md e o PROJECT.md exigem ("atende e volta sozinho"). Evita a máquina de modos paralela que duplicaria a seleção de objetivos.
+
+**Como reusa o existente:** `playerRequestPending`, `source:'player_request'`, e o ramo de preempção em `selectGoal` **já existem** no código. O que falta: (1) `chat/conversation.ts` (ou um parser de pedido) setar o flag + injetar o goal com a meta extraída; (2) uma **condição de saída** explícita (TTL via `committedAt` + `config.assistGoalTtlMs`, ou `progress>=1`); (3) o `disposition` alternar para `ASSISTANT` temporariamente e reverter. O eixo `disposition` (AUTONOMOUS/ASSISTANT) e os comandos literais `!ajudante`/`!sozinho` já existem em `control/disposition.ts`.
+
+**Trade-offs:** (+) zero estrutura nova — preempção, prioridade e histerese reusadas. (+) "volta sozinho" é emergente (sem goal de pedido, `selectGoal` cai no melhor candidato need/tech). (−) precisa parsear o pedido em chat para uma meta acionável (item/bloco) — usar o LLM (gate `chat` da deliberação) ou matching literal simples. (−) decidir reversão de disposição: por TTL ou ao concluir o pedido.
+
+**Example:**
+```typescript
+// quando um pedido vira objetivo (caminho de chat / deliberação trigger:'chat')
+holder.disposition = 'ASSISTANT'                    // temporário
+holder.playerRequestPending = true
+holder.goals.push({
+  id: 'req:bring_wood', kind: 'fetch', source: 'player_request',
+  priority: 1.0, progress: 0, dependsOn: [], committedAt: now,
+})
+// selectGoal (JÁ no código) preempta porque ASSISTANT + playerRequestPending.
+// observe (JÁ no código) reseta playerRequestPending ao consumir.
+// condição de saída (MOD em selectGoal/observe):
+//   progress>=1  OU  now-committedAt > config.assistGoalTtlMs
+//   → descarta o goal e reverte disposition='AUTONOMOUS' → volta ao curriculum sozinho
+```
+
+### Pattern 4: Grounding via captura de estado antes/depois no Execute
+
+**What:** Toda skill retorna um `SkillResult` cujo `observation` é derivado do **estado real verificado** (delta de inventário, bloco virou ar, posição mudou) — não de uma alegação. O `execute` grava esse resultado factual na memória; o LLM, no próximo `serializeContext`, só vê o que aconteceu de verdade. Generaliza o `progressChecker` do `dig` (que já checa inventário) para um resultado factual de retorno.
+
+**When to use:** Em TODA skill, mas crítico em craft/smelt/dig (onde nasce o "peguei 10 tábuas"). FEATURES.md classifica grounding como pré-requisito de TODA a progressão.
+
+**Onde no fluxo Observe/Execute:**
+- **Captura ANTES:** no início de `execute`, snapshot do inventário/posição relevante (ou usar o `snapshot` que `observe` já produziu no mesmo tick — é imutável e fresco).
+- **Verifica DEPOIS:** após `await skill(...)`, reler o estado e computar o delta. O `SkillResult.observation` = "craftou 4 oak_planks (inventário 0→4 confirmado)" ou "craft falhou (inventário inalterado)".
+- **Grava o factual:** `holder.memory = push(... result: deltaOk ? 'success':'failure', observation ...)`. O `execute` já grava success/failure — só passa a gravar o **delta verificado**, não o retorno otimista da skill.
+
+**Trade-offs:** (+) conserta o Known Gap diretamente; alimenta a reflexão com fatos (aprendizado próprio confiável). (+) reusa o snapshot imutável do `observe`. (−) cada skill precisa declarar "o que conta como progresso" (dig=inventário, place=bloco apareceu, navigate=posição). (−) custo de uma releitura de estado por skill (barato — é leitura do `bot`, não rede).
+
+**Example:**
+```typescript
+// skills/grounding.ts (NOVO)
+export async function grounded<T>(
+  bot: Bot, before: () => T, run: () => Promise<void>, verify: (b: T, a: T) => SkillResult,
+): Promise<SkillResult> {
+  const b = before()
+  try { await run() } catch (e) { return { ok: false, observation: `erro: ${String(e)}` } }
+  return verify(b, before())     // before() relido = "depois"; delta = verdade
+}
+
+// craft.ts — relato = inventário confirmado, nunca alegação
+return grounded(bot,
+  () => countItem(bot, 'oak_planks'),
+  () => bot.craft(recipe, 1, table),
+  (b, a) => a > b
+    ? { ok: true,  observation: `craftou ${a - b} oak_planks (confirmado ${b}→${a})` }
+    : { ok: false, observation: `craft não produziu oak_planks (inventário ${b}, inalterado)` })
+```
+
+### Pattern 5: LLM Provider Factory — GPT-4.1-mini e LM Studio atrás de `LlmProvider`
+
+**What:** `createOpenAiProvider()` é irmão de `createLmStudioProvider()`, retornando a MESMA interface `LlmProvider` (decide/chat/available/embed). Ambos usam `ChatOpenAI`; divergem só em `model`/`apiKey`/`baseURL`. Um `createProvider()` despacha por `config.llmProvider`.
+
+**Decisão do usuário:** o modelo cloud é **GPT-4.1-mini** (não gpt-5.x). É barato (~$0.40/$1.60 por 1M tok aprox.), suporta tool-calling/structured output e é adequado a um loop com gate de invocação. A tabela de gpt-5.x na STACK.md é referência de mecânica (reasoning.effort, caching), mas o provider deve usar `gpt-4.1-mini` como default cloud.
+
+**When to use:** LM Studio permanece o default custo-zero do loop sempre-ativo; GPT-4.1-mini é opt-in por env (`LLM_PROVIDER=openai`) para reasoning mais forte em planejamento de tech tree. Roteamento por dificuldade (local na rotina, cloud na decisão importante) é evolução futura.
+
+**Trade-offs:** (+) zero biblioteca nova; `LlmProvider` já isola tudo (LLM-03). (+) `available()`/`embed()` se adaptam (OpenAI tem endpoints reais). (−) `embed()` no provider OpenAI precisa apontar para embeddings da OpenAI OU manter embeddings sempre locais (recomendado: embeddings sempre LM Studio para custo-zero, mesmo com chat na cloud — desacoplar os dois). (−) custo no loop: manter o gate de invocação single-flight + `replanMinIntervalMs` é o que segura a fatura.
+
+**Example:**
+```typescript
+// llm/provider.ts (MOD) — irmão da factory existente
+export function createOpenAiProvider(): LlmProvider {
+  const model = new ChatOpenAI({
+    model: process.env.OPENAI_MODEL || 'gpt-4.1-mini',   // decisão do usuário
+    apiKey: process.env.OPENAI_API_KEY,                  // real
+    temperature: Number(process.env.LLM_TEMPERATURE ?? 0.4),
+    timeout: 20000, maxRetries: 1,
+    // sem baseURL → endpoint padrão OpenAI
+  })
+  // decide/chat/available idênticos em forma; embed → manter LOCAL (custo-zero) ou OpenAI embeddings
+  return adaptChatOpenAI(model, /* embedVia */ 'local')
+}
+
+export function createProvider(): LlmProvider {
+  return config.llmProvider === 'openai' ? createOpenAiProvider() : createLmStudioProvider()
+}
+// loop.ts (MOD): const provider = createProvider()   // era createLmStudioProvider()
+```
+
+---
 
 ## Data Flow
 
-### Cognitive loop flow (one tick)
+### Tick com System 1 (sobrevivência) tomando precedência
 
 ```
-observe       : adapter → perceive() → WorldSnapshot          → state.snapshot
-analyze       : snapshot (+ LLM) → salient events/intent       → state (intent, parsed chat)
-updateMemory  : events → shortTerm (cap N) + longTerm (SQLite) + semantic (embed)
-evaluateNeeds : snapshot + decay → updated Needs               → state.needs, state.status
-generateGoals : needs + memory + LLM → ranked Goal[]           → state.goals
-plan          : top goal + status → PlanStep[] (skills+args)   → state.plan
-execute       : run plan steps via skills → SkillResult[]      → state.shortTerm (results)
-reflect       : results + LLM → lessons, goal progress, stop?  → state.goals, memory, status
-                └── conditional edge → observe (loop) or END
+[driver tick]
+   ↓ lê lastSnapshot
+decideReflex(snapshot, holder)  ── reflexo? ──► runReflex(skill grounded) ─► memory  ─┐ (pula grafo)
+   │ null                                                                              │
+   ▼                                                                                   │
+graph.invoke():                                                                        │
+  observe   : buildWorldSnapshot → needs(evaluateNeeds) → goals(generateGoals +DAG)    │
+              → selectGoal(preempção: survivalCritical | ASSISTANT+request)            │
+  analyze   : holder.llmDecision fresca? → cogState ; senão arbitrate() (+fighting/    │
+              building) ; backoff → idle                                               │
+  updateMemory : no-op (transição gravada no execute)                                  │
+  decide    : (hint do goal/llmDecision)                                               │
+  execute   : estado → skill (gather/explore/social + NOVO craft/build/fight) ;        │
+              GROUNDED: captura antes/depois → SkillResult → memory (delta real) ──────┘
+   ▼ (paralelo, não bloqueia)
+maybeDeliberate(void): single-flight LLM → holder.llmDecision  ·  reflect REUSA o lock
+   ▼
+flush periódico (persistHolder) · reflexão (shouldReflect → maybeDeliberate trigger:'reflect')
 ```
 
-### State management
+### Fluxo do modo assistente (sem máquina de modos)
 
 ```
-AgentState (Annotation.Root channels)
-   ▲ writes (Partial<State> returned by each node, merged via channel reducers)
-   │
-[nodes] read full state, return only the channels they change
-   │
-[checkpointer] persists state per thread_id after every super-step
+chat "traz madeira"
+   ↓ conversation/parse
+holder.disposition='ASSISTANT' ; playerRequestPending=true ; push Goal{source:'player_request',prio=1}
+   ↓ próximo observe
+selectGoal: preempta (ASSISTANT+pending) → currentGoal = pedido
+   ↓ execute cumpre (gather/navigate grounded)
+progress>=1  OU  committedAt+TTL expirou
+   ↓ observe/selectGoal
+descarta goal ; disposition='AUTONOMOUS' → volta ao curriculum need/tech SOZINHO
 ```
 
-Each node is `(state) => Partial<state>`. Reducers decide merge semantics per channel: `shortTerm` appends-and-caps, `goals`/`plan`/`snapshot` replace, `needs` shallow-merges. This is the idiomatic LangGraph.js pattern (verified).
+### Key Data Flows
 
-### Key data flows
+1. **Reflexo → memória → reflexão:** uma morte/fuga reflexa vira evento grounded em `shortTerm`; a reflexão (Fase 4, já existe) consolida em LP e pode ajustar goals (`applyGoalUpdates`) — fecha o "aprendizado por experiência própria" sem componente novo.
+2. **DAG → gathering:** `nextUnlockable` decide QUE bloco buscar; o `execute` do estado `gathering` (com `highestPriorityGatherTarget`/`dig`) o coleta grounded. A `gatheringLadder` flat de `config.ts` vira derivada do DAG.
+3. **Grounding → serializeContext → LLM:** o `serializeContext` (deliberação) passa a ler eventos com `observation` factual; o LLM planeja sobre o que aconteceu de verdade, não sobre alucinação.
+4. **Provider → embed desacoplado:** chat/decide podem ir para GPT-4.1-mini; embeddings permanecem locais (LM Studio) para manter custo-zero do KNN semântico sempre-ativo.
 
-1. **Perception → cognition:** read-only snapshot each tick; the graph never mutates the world during `observe`. Keeps reasoning deterministic w.r.t. a frozen view.
-2. **Skill feedback → reflection:** `SkillResult.error` from `execute` flows into `reflect`, which can demote a goal or store a "this didn't work" lesson — the core self-improvement loop from Voyager.
-3. **Memory recall → goal/plan:** `generateGoals` and `plan` query semantic memory (similar past situations / known skills) to inform the LLM prompt — embodied RAG, as in Mindcraft.
-4. **Persistence across restarts:** LangGraph checkpointer + SQLite long-term store let the agent resume identity/goals after a process restart (matches "persistent entity" goal).
+---
 
 ## Suggested Build Order
 
-Dependency-driven; each step yields something runnable.
+Dependência-dirigida. Respeita: **grounding + System 1 ANTES de progressão; building/combate DEPOIS.**
 
-1. **Adapter + connection (no AI).** `minecraft/client.ts`: connect to local Java server, load pathfinder/collectblock/tool, stay online, auto-reconnect. *Milestone: bot appears in-world and survives.*
-2. **A few raw skills, tested by hand.** `goTo`, `say`, `collectBlock`. Call them from a throwaway script. *Milestone: bot walks to coords and mines a block on command.* (Validates the hardest external dependency — mineflayer behavior — before any graph exists.)
-3. **Perception snapshot.** `perceive()` returning health/pos/inventory/nearby/chat. *Milestone: print a clean WorldSnapshot each second.*
-4. **Minimal closed loop, no LLM.** Build the `StateGraph` with stub nodes; `evaluateNeeds`/`plan` use hardcoded rules (e.g. "if curiosity high → wander"). Loop-back edge. *Milestone: the agent autonomously wanders/idles forever — the core value de-risked without LLM uncertainty.*
-5. **LLM client (LM Studio) + chat.** Wire `ChatOpenAI` to `localhost:1234/v1`; make `analyze` read chat and `execute` reply via `say`. *Milestone: agent answers players coherently.*
-6. **Short-term memory in state + needs/goals real logic.** Replace stubs with decay model and LLM-generated goals. *Milestone: agent's behavior shifts with its needs.*
-7. **Persistence: LangGraph checkpointer + SQLite long-term.** Survive restarts. *Milestone: agent remembers across reconnects.*
-8. **Semantic memory + reflection.** Embeddings store; `reflect` writes lessons and retrieves them. (Phase 4 territory.)
-9. **Social profiles, richer skills (build/combat).**
+1. **LLM Provider Factory (GPT-4.1-mini + LM Studio).** Isolado, baixo risco, destrava reasoning melhor para validar o resto. `createProvider()` + `createOpenAiProvider()` + config `llmProvider`. *Marco: trocar provider por env sem tocar o loop.*
+2. **Grounding + `SkillResult`.** Generaliza o padrão do `dig`; converte skills existentes (navigate/dig/follow/attack) para retorno grounded; `execute` grava delta real. **Pré-requisito de TUDO em progressão** (FEATURES.md). *Marco: relato = mundo (acaba o "peguei 10 tábuas").*
+3. **System 1 reflexo — comer + fugir/defender.** `reflexes.ts` + skills `eat`/`flee` (API nativa) + precedência no driver. Detecção de mob hostil no arbiter. **Sem isto o bot morre antes de qualquer plano.** *Marco: bot não morre de fome nem de mob trivial.*
+4. **Placement + abrigo de emergência.** Skill `place` (compartilhada com Building) + `shelter` reflexo (System 1). *Marco: bot se abriga à noite.*
+5. **Crafting + smelting grounded.** `craft`/`smelt` na API nativa, sobre o grounding do passo 2. *Marco: craft/smelt verídicos (tábuas→bancada→ferramenta→fornalha→ferro).*
+6. **Tech tree DAG + needs.** `techtree.ts` + `generateGoals`/`selectGoal` resolvendo `dependsOn`; ativar needs `shelter`. *Marco: progride madeira→pedra→ferro SOZINHO por dependências priorizadas por need.*
+7. **Modo Assistente (condição de saída).** Parse de pedido → goal `player_request` + TTL + reversão de disposition. Reusa preempção existente. *Marco: atende pedido e volta sozinho.*
+8. **Building deliberado** (estado `building` real, além do abrigo) — trigger: place estável. (P2)
+9. **Fighting completo** (estado `fighting` real: atacar mobs, `mineflayer-tool`/armor) — trigger: sobrevivência reflexa provada. (P2)
+10. **Fechar o loop de aprendizado** — reflexão (já existe) ajustando seleção de goals com mortes/falhas; resolver o live-verify pendente da Fase 4. (P2)
 
-> The critical insight: **steps 1-4 give a working autonomous loop with zero LLM dependency.** That isolates the two riskiest unknowns (mineflayer behavior, and weak local-LLM reasoning) so neither blocks proving the core architecture.
+> **Insight crítico:** passos 1-2 não dependem de gameplay novo (provider + grounding são infra) — destravam tudo. Passos 3-4 (System 1 + abrigo) garantem que o bot **sobrevive o suficiente para que a progressão (5-6) tenha tempo de rodar.** Building/Fighting "de verdade" (8-9) são os últimos porque dependem de place (4) e de sobrevivência reflexa (3) já provados.
+
+---
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: One graph node per cognitive state
-**What people do:** Create `Idle`, `Exploring`, `Gathering`… nodes and route between them as the whole graph.
-**Why it's wrong:** Conflates *what the agent is doing* (mode) with *the reasoning loop* (always observe→…→reflect). You get a combinatorial mess and lose the clean tick loop.
-**Do this instead:** Keep `status` as a state field; one loop, branch on status inside `plan`/`execute`.
+### Anti-Pattern 1: Criar um nó "reflect"/"survive" novo no StateGraph
+**What people do:** Adicionar nós ao grafo para sobrevivência ou reflexão.
+**Why it's wrong:** A reflexão JÁ reusa a deliberação single-flight (decisão D-12 do projeto), e o System 1 precisa rodar ABAIXO da latência do grafo. Um nó novo no grafo está sujeito ao tick e ao lock — perde o propósito reflexo e quebra o "uma inferência por vez".
+**Do this instead:** System 1 = função pura no driver (fora do grafo). Reflexão = `trigger:'reflect'` no `maybeDeliberate` existente.
 
-### Anti-Pattern 2: Letting the LLM call mineflayer directly
-**What people do:** Expose `bot` or raw prismarine calls to the model.
-**Why it's wrong:** Local LLMs produce buggy low-level code; mineflayer errors are cryptic; you lose structured failure feedback. (Mindcraft explicitly built a high-level skill library to avoid exactly this.)
-**Do this instead:** LLM only sees typed skill tools with Zod schemas; skills return `SkillResult` with structured errors.
+### Anti-Pattern 2: Máquina de modos paralela para autônomo/assistente
+**What people do:** Um `Mode` enum separado com sua própria lógica de transição ao lado dos goals.
+**Why it's wrong:** Duplica a seleção de objetivos; o "volta sozinho" vira código de transição explícito frágil. O projeto já tem `disposition` + `playerRequestPending` + preempção em `selectGoal`.
+**Do this instead:** Pedido = `Goal{source:'player_request'}` de alta prioridade com condição-de-saída. Sem goal de pedido, o agente volta ao curriculum por construção.
 
-### Anti-Pattern 3: Unbounded short-term memory in state
-**What people do:** Append every event to a state array forever.
-**Why it's wrong:** State grows unbounded; checkpoint size and LLM context explode in an always-on loop.
-**Do this instead:** Cap short-term via the channel reducer (`slice(-N)`); flush important events to long-term SQLite.
+### Anti-Pattern 3: Confiar no retorno otimista da skill (sem grounding)
+**What people do:** `await craft()` resolveu → grava "craftou". O LLM relata "peguei 10 tábuas".
+**Why it's wrong:** É o Known Gap atual; corrompe a memória e a tech tree (o bot "acha" que tem bancada e tenta a folha bloqueada).
+**Do this instead:** Verificar delta de inventário/mundo DEPOIS; gravar só o factual (Pattern 4).
 
-### Anti-Pattern 4: Synchronous tight loop with no tick/yield
-**What people do:** `reflect → observe` with no delay; the graph spins as fast as the CPU allows.
-**Why it's wrong:** Hammers the LLM and the server, and a low `recursionLimit` will abort the run.
-**Do this instead:** Insert a small delay/await in `observe` (or drive each tick externally and call `app.invoke` per tick with a checkpointer for continuity). Set a generous `recursionLimit` for in-graph looping.
+### Anti-Pattern 4: Plugins de combate/auto-eat abandonados
+**What people do:** Adicionar `mineflayer-pvp`/`mineflayer-auto-eat`.
+**Why it's wrong:** 4 anos sem release contra MC 1.21.4; puxam deps abandonadas; escondem a lógica que é o objeto de estudo (STACK.md).
+**Do this instead:** API nativa `bot.attack`/`consume`/`craft`/`placeBlock`. Único plugin novo: `mineflayer-tool` (peer obrigatória do collectblock 1.6.0).
 
-### Anti-Pattern 5: Importing mineflayer types above the adapter
-**What people do:** Use prismarine `Entity`/`Block` types throughout cognition.
-**Why it's wrong:** Couples the whole codebase to a fast-moving, version-sensitive API and complicates a possible Bun-driven rewrite of the adapter.
-**Do this instead:** Define your own `Entity`/`BlockInfo`/`WorldSnapshot` in `minecraft/types.ts`; map at the boundary.
+### Anti-Pattern 5: LLM cloud em todo tick
+**What people do:** `LLM_PROVIDER=openai` e deixar o loop chamar GPT a cada tick.
+**Why it's wrong:** Loop sempre-ativo × prompt grande × 24/7 estoura custo.
+**Do this instead:** Manter o gate single-flight + `replanMinIntervalMs`; LM Studio default; GPT-4.1-mini só na decisão relevante; embeddings sempre locais.
+
+### Anti-Pattern 6: Hardcodar a tech tree
+**What people do:** Tabela manual de receitas no código.
+**Why it's wrong:** Frágil entre versões de MC; a `gatheringLadder` flat já mostra o limite.
+**Do this instead:** Derivar de `minecraft-data` (transitivo via mineflayer); resolução recursiva com guarda de profundidade.
+
+---
 
 ## Integration Points
 
@@ -289,32 +403,32 @@ Dependency-driven; each step yields something runnable.
 
 | Service | Integration Pattern | Notes |
 |---------|---------------------|-------|
-| Minecraft Java server | mineflayer `createBot({ host, port, auth: 'offline' })` over TCP | Local dev server; pin a Minecraft version mineflayer supports (mineflayer is actively updated, e.g. 26.x line tracking 1.21.x). Offline-mode auth for local. |
-| LM Studio | OpenAI-compatible HTTP at `http://localhost:1234/v1` via `@langchain/openai` `ChatOpenAI` | Set `configuration.baseURL`, dummy `apiKey`. Confirm the loaded model supports tool/function calling if you want LLM tool calls; otherwise parse JSON from text. Embeddings may need a separate embedding model loaded. |
-| Vector store (semantic memory) | Library call (sqlite-vec extension, LanceDB, or Chroma) | Decision deferred (PROJECT.md open question). sqlite-vec keeps it single-store with long-term SQLite; LanceDB/Chroma are richer but add a dependency. |
+| Minecraft Java 1.21.4 (local) | `bot/connection.ts` (createBot, plugins, reconexão com MESMO holder) | INTACTO. v2.0 só adiciona `loadPlugin(tool)`. API nativa craft/place/attack/furnace estável em 1.21.4. |
+| LM Studio (`/v1`, local) | `createLmStudioProvider` (existe) | Default custo-zero do loop + embeddings. |
+| OpenAI GPT-4.1-mini (`/v1`, cloud) | `createOpenAiProvider` (NOVO) — mesma `ChatOpenAI`, `apiKey` real, sem baseURL | Opt-in por env. Gate de invocação obrigatório (custo). |
+| sqlite-vec (em `bun:sqlite`) | `holder.db` (existe) | INTACTO. Eventos grounded + embeddings (locais). |
 
 ### Internal Boundaries
 
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| cognition ↔ skills | direct async calls + LangChain tool wrappers | Graph orchestrates; never embeds mineflayer logic. |
-| skills ↔ adapter | direct method calls on `MinecraftClient` | Only skills (and perception) touch the adapter. |
-| adapter ↔ mineflayer | the only `import mineflayer` site | Anti-corruption layer; reconnect/lifecycle owned here. |
-| cognition ↔ memory | interface calls (`longTerm.save`, `semantic.recall`) | Tiers behind interfaces so persistence backend can change. |
-| nodes ↔ state | `(state) => Partial<state>` + channel reducers | Idiomatic LangGraph; no shared mutable globals. |
-
-### Runtime note (Bun vs Node)
-
-PROJECT.md targets Bun with Node fallback. Evidence (June 2025) shows mineflayer 4.29.0 running on Bun 1.2.x, so it is viable, but mineflayer is officially tested on Node and the prismarine stack has native/NBT edge cases. **Recommendation:** keep the adapter the *only* mineflayer-touching code so that if a Bun↔prismarine incompatibility surfaces, the fix is localized — and validate the Bun+mineflayer connection in **build step 1** before committing to it. (This is the right place to spend a small early spike.)
+| driver ↔ System 1 | chamada síncrona pura `decideReflex` + `runReflex` | NOVO. Precedência reflexo > plano deliberado no mesmo tick. |
+| System 1 ↔ deliberação LLM | NENHUMA (System 1 não usa LLM) | Preserva o lock `inFlight` (single-flight). |
+| goals ↔ techtree | `generateGoals` chama `nextUnlockable`; `Goal.dependsOn` carrega pré-reqs | MOD. `dependsOn` deixa de ser sempre `[]`. |
+| skills ↔ grounding | toda skill retorna `SkillResult` via `grounded()` | MOD/NOVO. Contrato muda de `void`→`SkillResult`. |
+| chat ↔ goals (assistente) | `conversation` seta `playerRequestPending` + injeta goal | MOD. Reusa preempção de `selectGoal`. |
+| cognição ↔ provider | só `LlmProvider` (nunca `@langchain/openai`) | INTACTO (LLM-03). Factory despacha local/cloud. |
+| nós ↔ holder | `holder` é fonte única; nós escrevem de volta | INTACTO. v2.0 escreve em campos existentes. |
 
 ## Sources
 
-- LangGraph.js StateGraph / Annotation.Root / addConditionalEdges / checkpointers — [DeepWiki: StateGraph and Graph Building](https://deepwiki.com/langchain-ai/langgraphjs/2.1-stategraph-and-graph-building) (HIGH), cross-checked with [LangGraph.js API reference](https://langchain-ai.github.io/langgraphjs/) (HIGH)
-- Voyager architecture (skill library, iterative prompting, env-feedback loop) — [Voyager site](https://voyager.minedojo.org/) and [arXiv:2305.16291](https://arxiv.org/abs/2305.16291) (HIGH)
-- Mindcraft architecture (server, agent loop, high-level action/observation library, model layer, embedding-based skill RAG) — [github.com/mindcraft-bots/mindcraft](https://github.com/mindcraft-bots/mindcraft) and [arXiv:2504.17950](https://arxiv.org/pdf/2504.17950) (MEDIUM-HIGH)
-- Mineflayer plugins (pathfinder, collectblock, tool) — [mineflayer-pathfinder](https://github.com/PrismarineJS/mineflayer-pathfinder), [mineflayer-collectblock](https://github.com/PrismarineJS/mineflayer-collectblock) (HIGH)
-- Bun + mineflayer compatibility (4.29.0 on Bun 1.2.15, June 2025) — [PrismarineJS/mineflayer issues](https://github.com/PrismarineJS/mineflayer/issues) (MEDIUM — single anecdotal report; validate via early spike)
+- Código real do projeto (lido 2026-06-19): `src/cognition/{loop,nodes,graph,deliberation,arbiter,state,types}.ts`, `src/motivation/{goals,types,needs}.ts`, `src/skills/{index,executor,dig}.ts`, `src/llm/provider.ts`, `src/perception/types.ts`, `src/config.ts`, `package.json` — HIGH (ground truth da arquitetura existente)
+- `.planning/research/FEATURES.md` (2026-06-19) — System 1/2 (mc-agents), DAG (GITM), assistente=objetivo, grounding como pré-requisito, anti-features — HIGH
+- `.planning/research/STACK.md` (2026-06-19) — API nativa cobre craft/place/attack/consume/furnace; só `mineflayer-tool` novo; provider via `ChatOpenAI`; cuidados de custo no loop — HIGH
+- `.planning/PROJECT.md` — milestone v2.0, decisão provider configurável, modo autônomo default + assistente temporário — HIGH
+- Decisão do usuário (milestone_context): provider cloud = GPT-4.1-mini (não gpt-5.x) — HIGH
+- mc-agents (System 1/2, grounding por estado real) / GITM (DAG de pré-requisitos) — via FEATURES.md — HIGH
 
 ---
-*Architecture research for: autonomous persistent Minecraft agent (TypeScript)*
-*Researched: 2026-06-18*
+*Architecture research for: integração das capacidades v2.0 na arquitetura cognitiva existente do MineMind*
+*Researched: 2026-06-19*

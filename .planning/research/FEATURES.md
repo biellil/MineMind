@@ -1,173 +1,194 @@
 # Feature Research
 
-**Domain:** Autonomous persistent Minecraft agent ("living NPC" / embodied LLM agent)
-**Researched:** 2026-06-18
-**Confidence:** HIGH (prior art well-documented: Voyager, Mindcraft, Project Sid/PIANO, Stanford Generative Agents; mineflayer plugin ecosystem verified)
+**Domain:** Autonomous "self-playing" Minecraft agent — milestone v2.0 "Autonomia de Verdade" (bot joga como um player real: sobrevive, progride na tech tree, constrói, combate, alterna autônomo↔assistente)
+**Researched:** 2026-06-19
+**Confidence:** HIGH (prior art well-documented: Voyager/MineDojo, GITM, Odyssey, mc-agents System 1/2, Mindcraft; mineflayer plugin ecosystem verified live in v1.0)
 
-> **Note on "users":** MineMind is a research/learning project, not a commercial product. "Table stakes" here means *"without this, it is not an autonomous agent — just a scripted bot."* "Differentiators" means *"what makes MineMind a living agent vs. a Voyager clone."* Categories are framed against the prior art, not a paying market.
+> **Note on "users":** MineMind é projeto de PESQUISA, não produto comercial. "Table stakes" aqui = *"sem isto o bot não é um player autônomo — é um boneco que vaga e morre."* "Differentiators" = *"o que faz o MineMind um agente que aprende com a própria experiência, não um clone de Voyager."* As categorias são medidas contra a prior art e contra **o que o v1.0 já entregou** (loop cognitivo, chat, navegação, coleta, memória/reflexão/persistência, estados Idle/Exploring/Gathering/Socializing/Reflecting).
 
-## Prior Art Map (what each project actually has)
+## What v1.0 Already Provides (do NOT re-specify)
 
-| Project | What it is | Core features | Relevance to MineMind |
-|---------|-----------|---------------|----------------------|
-| **Voyager** (MineDojo, 2023) | First LLM lifelong-learning Minecraft agent | Automatic curriculum (self-generated tasks), ever-growing skill library (executable JS code), iterative prompting w/ self-verification + error feedback. GPT-4, no fine-tuning. | Skill library + self-verification loop = gold standard for *learning*. v1 should NOT copy this (cloud GPT-4 dependent, code-gen heavy). |
-| **Mindcraft** (mindcraft-bots) | Production-grade mineflayer + LLM framework | 15+ LLM providers incl. **Ollama (local)**, per-bot JSON memory (structures/deaths/ores/skill success), profiles (personality prompts), multi-agent coordination + team bulletin, ~500ms decision loop, optional sandboxed code execution. | Closest architectural sibling. Validates the all-JS mineflayer+LLM stack and local-LLM path. Reference for memory-as-JSON and profiles. |
-| **Project Sid / PIANO** (Altera, 2024) | 10–1000+ agent civilization sim | PIANO: concurrent modules + Cognitive Controller (CC) through an **information bottleneck**, social modules, emergent roles/culture/economy, long-horizon autonomy. | The cognitive-loop + needs/social vision. The "say one thing but do another" coherence problem is the key warning for concurrent designs. |
-| **Stanford Generative Agents** (Park, 2023) | The Sims-like town of LLM agents | **Memory stream** (NL events) + **retrieval scored by recency × relevance × importance** + **reflection** (synthesize higher-level inferences) + planning. | Directly defines MineMind's multi-tier memory + Reflecting state. The retrieval scoring formula is the canonical pattern to adopt. |
-| **mineflayer + plugins** (PrismarineJS) | Node Minecraft bot library | `pathfinder` (A* nav, static/dynamic goals), `collectblock` (mine + tool-select + collect + auto-deposit), `pvp`/`tool`/`armor-manager`. Java Edition only. | The "hands and eyes." Provides the entire Action Layer for free — table stakes are mostly *integration*, not invention. |
+| Capability | Status | v2.0 builds on it by… |
+|------------|--------|------------------------|
+| Loop cognitivo (Observe→Analyze→UpdateMemory→Plan→Execute→Reflect) via LangGraph | ✅ | Adicionar nós/estados de sobrevivência, progressão, building, combate; alimentar o Plan com a hierarquia de objetivos |
+| Arbiter reativo (segue/vaga como fallback) | ✅ (imaturo) | Promover a uma camada reflexa real (System 1) que cuida de sobrevivência sem esperar o LLM |
+| Chat pt-BR (lê e responde) | ✅ | Canal de entrada do **modo assistente** (pedido direto) |
+| Navegação (pathfinder) + coleta (collectblock) | ✅ | Primitivas para gathering dentro da cadeia de tech tree |
+| Memória curto/longo/semântica + perfis + personalidade + reflexão | ✅ (live-verify pendente) | Reflexão passa a ajustar decisões futuras (aprendizado por experiência própria) |
+| Estados Idle/Exploring/Gathering/Socializing/Reflecting | ✅ | Implementar de fato Building e Fighting (hoje stub); adicionar Surviving/Crafting |
+| Provider LLM (LM Studio local) | ✅ | Abstração GPT/OpenAI + local (já em REQUIREMENTS) |
+
+## Prior Art Map — focado nas features do v2.0
+
+| Project | What it solves for v2.0 | Padrão a adotar / evitar |
+|---------|--------------------------|---------------------------|
+| **Voyager** (MineDojo, 2023) | Tech tree wood→stone→iron→diamond via **automatic curriculum** + skill library + **self-verification critic** + error-feedback retry | ADOTAR: curriculum que propõe a próxima tarefa pelo estado do mundo/inventário; self-verify pelo estado real. EVITAR: skill library de código JS gerado pelo LLM (anti-feature já fixada no v1.0) |
+| **GITM** (Ghost in the Minecraft, 2023) | Decompõe metas em **DAG de pré-requisitos** ("Material" e "Tool" como nós-pai); destrava os 262 itens do Overworld | ADOTAR: tech tree como grafo de dependências resolvido recursivamente (objetivos hierárquicos do PROJECT.md) |
+| **mc-agents** (Claude + Mineflayer) | **System 1 / System 2**: processo Node persistente cuida de sobrevivência (come, foge/luta, cava abrigo) SEM esperar o LLM; LLM faz planejamento/craft/mine; estado real flui por `status.json`/`events.json` | ADOTAR como arquitetura-mãe do v2.0: reflexo rápido (sobrevivência) + deliberação lenta (LLM) + grounding por estado real. É o sibling mais próximo do problema do MineMind |
+| **Odyssey / HERAKLES** (2024-25) | Skill compilation hierárquica, biblioteca de skills aberta sobre mineflayer | Referência para skills compostas; manter primitivas hand-authored (não code-gen) |
+| **Mindcraft** | **Self-prompting** (define metas sozinho e continua) + modo comando (player injeta tarefa); profiles de personalidade; memória JSON | ADOTAR: self-prompting = modo autônomo; injeção de tarefa = modo assistente. Validador do stack all-JS local |
+
+---
 
 ## Feature Landscape
 
-### Table Stakes (without these it is not an autonomous agent)
+### Table Stakes (sem isto o bot não é um "player autônomo")
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Connect & stay online (persistence) | Core Value: agent must *live* continuously, survive disconnects/reconnects | LOW | mineflayer `createBot` + auto-reconnect. Maps to **Fase 1**. |
-| Perceive world state | No perception → no agency; LLM needs grounded context (position, nearby entities/blocks, inventory, health/hunger, time) | MEDIUM | mineflayer exposes all of this. Bottleneck: condensing into a token-budget-friendly prompt. Maps to **Fase 1/3**. |
-| Cognitive loop (Observe → Analyze → Update Memory → Plan → Execute → Reflect) | This *is* the product per Core Value. Every prior art has a loop (Voyager iterative prompt, Mindcraft 500ms, PIANO CC, Generative Agents plan cycle) | HIGH | LangGraph state machine. The single most load-bearing component. Maps to **Fase 1/2**. |
-| Autonomous navigation/movement | "Autonomous movement" is a stated v1 requirement; a stationary agent reads as broken | LOW–MEDIUM | `mineflayer-pathfinder` (A*). Integration, not invention. Maps to **Fase 1**. |
-| Read chat & respond coherently | Stated v1 requirement; the primary human-facing signal of intelligence | MEDIUM | mineflayer chat events + LLM. Coherence depends on context assembly (memory + state). Maps to **Fase 1/2**. |
-| Short-term memory (recent events/conversations/actions) | Without it, the agent has amnesia each tick → incoherent. Stated v1 requirement | LOW–MEDIUM | In-memory ring buffer / sliding window of NL events. Maps to **Fase 1/2**. |
-| Local LLM integration (LM Studio) | Stated v1 constraint; enables always-on loop at zero cost | MEDIUM | LM Studio OpenAI-compatible endpoint via LangChain. Mindcraft proves local (Ollama) is viable. Maps to **Fase 1**. |
-| Behavioral state representation | A "cognitive state machine" (Idle/Exploring/…/Reflecting) is the project's named architecture | MEDIUM | The states are the loop's output. Fewer states implemented = fine for v1 (Idle, Exploring, Socializing). Maps to **Fase 2**. |
+| **Sobrevivência reflexa — comer** | Sem comida a fome esgota → dano → morte; um "player" que morre de fome em 20 min não joga | LOW | `mineflayer-auto-eat` (plugin pronto). Deve rodar na camada reflexa (System 1), não esperar tick do LLM. Depende de: percepção de hunger (já existe) |
+| **Sobrevivência reflexa — gerenciar vida / fugir-defender de mob** | Mob hostil mata em segundos; reação tem que ser sub-segundo, abaixo da latência do LLM | MEDIUM | Reflexo: detecta mob hostil próximo → foge (pathfinder away) ou ataca (pvp) por regra; só escala pro LLM o que é estratégico. mc-agents valida exatamente este split |
+| **Abrigo noturno (shelter básico)** | À noite spawnam hostis; um player real se abriga ou ilumina. "Cavar buraco e tampar" é o mínimo viável | MEDIUM | mc-agents trata como "dig a shelter as a last resort" reflexo. Placement de blocos = pré-requisito de Building. Depende de: ter blocos no inventário |
+| **Crafting + smelting** | Sem crafting não há tech tree; tábuas→bancada→ferramentas→fornalha→fundir minério | MEDIUM | Mineflayer expõe `craft`, `placeBlock`, furnace API nativamente. Grounding crítico aqui (o bug "peguei 10 tábuas" é exatamente craft não-verificado) |
+| **Cadeia de tech tree (wood→stone→iron→diamond)** | É o objetivo central declarado do milestone ("progride sozinho") | HIGH | Cadeia de objetivos com pré-requisitos (Material/Tool DAG, à la GITM). Depende de: gathering (✅), crafting, building (mesa/fornalha), navegação (✅) |
+| **Grounding de ações (relato = mundo real)** | Known Gap explícito do v1.0; sem isso a memória/reflexão registra ações que nunca aconteceram → corrompe o aprendizado | MEDIUM–HIGH | Toda primitiva retorna resultado verificado (inventário antes/depois, posição, eventos). LLM só relata o que o estado confirma. Padrão mc-agents `status.json`/`events.json`; padrão Voyager error-feedback |
+| **Modo Autônomo como default (self-prompting)** | Core Value: "permanece ativo sem intervenção humana". Hoje o bot tende a grudar/vagar — contradiz o estudo | MEDIUM | Loop seleciona objetivo da hierarquia quando não há pedido; Mindcraft self-prompting é o padrão. Depende de: hierarquia de objetivos + needs |
+| **Modo Assistente temporário (sob pedido, volta sozinho)** | Declarado no milestone; player pede "traz madeira" e o bot atende e RETORNA ao autônomo | MEDIUM | Pedido vira objetivo de alta prioridade com TTL/condição-de-saída; ao concluir, descarta e volta ao curriculum. Entrada via chat (✅). Cuidado: NÃO virar bot-de-comando permanente |
+| **Estados Building e Fighting implementados de fato** | Listados como cognitive states do projeto, hoje stub; sem eles a máquina de estados está incompleta | MEDIUM | Building = placeBlock estruturado; Fighting = `mineflayer-pvp` + `mineflayer-tool`. Integração de plugins, não invenção |
 
-### Differentiators (what makes MineMind a *living agent*, not a Voyager clone)
+### Differentiators (o que faz o MineMind um agente que *vive e aprende*, não um Voyager/GITM clone)
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Internal needs system (survival, resources, shelter, curiosity, socialization) | Drives *intrinsic* motivation — agent acts without prompts. This is the "living NPC" hook; Voyager uses external curriculum, not internal needs | MEDIUM | Decaying scalar drives that bias goal selection. Distinct from Voyager. Maps to **Fase 3**. |
-| Dynamic goals (priority / progress / dependencies / internal reward) | Self-directed agenda; Project Sid's "frustratingly independent" agents came from this | MEDIUM–HIGH | Goal queue scored by needs + state. The bridge between needs and the loop. Maps to **Fase 3**. |
-| Multi-tier memory (short-term + long-term + semantic) | Continuity of identity across sessions — the difference between a chatbot and a *persona* | HIGH | Long-term/semantic persistence strategy is an OPEN research question (SQLite vs JSON vs vector store). Adopt Generative Agents retrieval (recency×relevance×importance). Maps to **Fase 4** (short-term in Fase 1). |
-| Reflection (Reflecting state) | Synthesizes raw memories into higher-level beliefs/lessons — the mechanism behind perceived growth | MEDIUM–HIGH | Periodic LLM pass over recent memory → writes summaries back to long-term store. Straight from Generative Agents. Maps to **Fase 4**. |
-| Per-player social profiles | Relationships that evolve (trust, sentiment, history per player) — the emotional payoff of a "living" agent | MEDIUM | Keyed memory records per player. Differentiator vs. stateless chat bots. Maps to **Fase 4**. |
-| Evolving personality | Identity that drifts based on experience; combined w/ profiles + reflection = the headline feature | HIGH | Highest-risk, lowest-defined. Correctly deferred to **Fase 4**. Start with a *static* personality prompt (Mindcraft profile style) in v1. |
-| Skill acquisition / learning (Voyager-style) | Genuine capability growth over time | VERY HIGH | Voyager's domain. Deliberately a v2+ stretch, not a differentiator MineMind needs to compete on now. |
+| **Objetivos hierárquicos guiados por needs internos** | Voyager/GITM usam curriculum/DAG puramente orientado a *tarefa*; MineMind escolhe a próxima meta por **pressão de necessidade interna** (fome→comida, perigo→abrigo, escassez→minerar) + dependências. É o "ser vivo" vs "task-runner" | MEDIUM–HIGH | Funde o needs system (Fase 3 do v1.0) com o DAG de tech tree. Needs reordenam o grafo de objetivos em runtime |
+| **Aprendizado por reflexão sobre experiência PRÓPRIA** | O bot ajusta decisões futuras a partir do que aconteceu com *ele* (morri à noite sem abrigo → priorizar abrigo). Diferencia de Voyager (skill code) e de imitação | HIGH | Reusa reflexão da Fase 4: morte/falha/sucesso viram lições recuperadas no Plan. **Restrição dura: NÃO observar/imitar outros players** |
+| **Transição autônomo↔assistente coerente com a persona** | Atender um pedido e voltar a "viver" sozinho, mantendo personalidade/relacionamento — payoff emocional que bot-de-comando não tem | MEDIUM | Liga modos + perfis sociais (✅) + personalidade (✅). Diferencial sobre Mindcraft (que é mais task/comando) |
+| **Memória de mortes/falhas como sinal de progressão** | "Onde morri", "o que faltou para o pickaxe de ferro" persistido e recuperado — continuidade de identidade aplicada ao gameplay | MEDIUM | Mindcraft guarda deaths/ores em JSON; MineMind já tem memória multi-tier — usar para *informar o curriculum* |
 
-### Anti-Features (deliberately do NOT build for research/learning v1)
+### Anti-Features (NÃO construir — pesquisa/aprendizado, não bot de produção)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| LLM-generated executable code (Voyager/Mindcraft `allow_insecure_coding`) | "Let the agent write its own skills" feels powerful | Security (code injection on host), debugging nightmare, non-deterministic; fights the "clean, instructive design" goal | Hand-authored action primitives the LLM *selects* from (tool-calling), not code it writes. |
-| Concurrent/parallel cognitive modules (full PIANO) | Real-time coherence, looks state-of-the-art | The "say one thing, do another" coherence problem; needs a Cognitive Controller + bottleneck to tame. Massive complexity for one agent | Single sequential LangGraph loop. Revisit concurrency only if real-time responsiveness becomes a measured problem. |
-| Multi-agent society / coordination (Project Sid, Mindcraft teams) | Emergent civilization is the flashy demo | Multiplies state, comms, and failure modes; v1 explicitly targets one bot on a local server | One agent first. Social system is *per-player* (humans), not multi-bot. |
-| Vector store + embeddings for memory in v1 | "Proper" semantic memory | Adds infra (embedding model, DB) before short-term memory is even proven; premature optimization | Start with in-memory + flat JSON/SQLite. Add embeddings in Fase 4 *after* retrieval need is demonstrated. |
-| Cloud LLM providers (Claude/GPT/Gemini) in v1 | Stronger reasoning, easier coherence | Cost + rate limits kill an always-on loop; explicitly Out of Scope per PROJECT.md | LM Studio local now; design a provider abstraction so cloud is a swap later. |
-| Combat / PvP as a v1 focus | "Fighting" is a listed cognitive state | Survival pressure complicates the loop and memory before basics work; high failure surface | Keep `Fighting` state stubbed/minimal (flee or basic survival). `mineflayer-pvp` available when prioritized. |
-| Complex building (blueprints, megastructures) | "Building" is a listed state; impressive demos | Planning + spatial reasoning is hard for local LLMs; not core to the cognitive-loop thesis | `Building` state stubbed in v1; basic block placement only if needed. |
-| Bedrock Edition support | Broader reach | mineflayer is Java-only — technically impossible | Java Edition only (already Out of Scope in PROJECT.md). |
-| Public/multiplayer server in v1 | Real-world validation | Uncontrolled environment, grief/latency, harder debugging | Local Java server (already Out of Scope in PROJECT.md). |
+| **Skill library de código JS gerado pelo LLM** (Voyager/Mindcraft `allow_insecure_coding`) | "Deixe o agente escrever as próprias skills" parece poderoso e auto-evolutivo | Code injection no host, debugging não-determinístico, briga com "design limpo e instrutivo". Já é Out of Scope no v1.0 | Primitivas hand-authored que o LLM **seleciona** (tool-calling); skills compostas são código revisado por humano |
+| **Observar/imitar outros jogadores como aprendizado** | "Aprender vendo o player jogar" | Restrição EXPLÍCITA do milestone — o aprendizado é por experiência própria/reflexão | Reflexão sobre o próprio histórico (mortes, falhas, sucessos) |
+| **Meta de "zerar o jogo" (Nether→End→Ender Dragon)** | Demo impressionante | Out of Scope do v2.0; escopo é sobreviver + tech tree até diamante | Parar em diamante; end-game em milestone futuro |
+| **Self-verification só-LLM sem feedback do mundo** | "O LLM se auto-corrige" | Pesquisa recente: auto-correção *intrínseca* sem feedback externo **degrada** a performance (LLM troca respostas certas por erradas) | Verificação ancorada no **estado real** (inventário/posição/eventos), não na opinião do LLM sobre si mesmo |
+| **Combate avançado (PvP contra players, hawkeye/bow micro)** | "Combate de verdade" | Superfície de falha alta; servidor é single-player local de pesquisa; foco é sobreviver a mobs | `Fighting` cobre defesa contra mobs hostis (pvp + tool); PvP humano fora de escopo |
+| **Building com blueprints/megaestruturas** | Demos de castelos | Planejamento espacial é difícil pra LLM local fraco; não é o cerne do thesis cognitivo | `Building` = abrigo funcional + estruturas simples (parede, torre de bloco, mesa/fornalha posicionadas) |
+| **Concurrent/parallel cognitive modules (PIANO completo)** | Responsividade real-time, estado-da-arte | Problema de coerência "diz X faz Y"; o System 1/System 2 do mc-agents já dá responsividade sem multiplicar módulos | Camada reflexa (System 1) + loop sequencial único (System 2). Só revisitar se medir gargalo |
+| **Farming/agricultura, comércio com villagers, redstone** | "Player completo faz tudo" | Escopo creep; não serve o thesis (sobreviver + tech tree) | Comida via caça/coleta simples; deixar farming pra depois |
+
+---
 
 ## Feature Dependencies
 
 ```
-Connect & stay online (Fase 1)
-    └──enables──> Perceive world state (Fase 1)
-                      └──feeds──> Cognitive loop (Fase 1/2)
-                                      ├──drives──> Navigation (Fase 1)
-                                      ├──drives──> Chat response (Fase 1/2)
-                                      └──requires──> Short-term memory (Fase 1/2)
+Camada reflexa System 1 (NOVA — promove o arbiter atual)
+    ├──provê──> Comer (auto-eat)            ─┐
+    ├──provê──> Fugir/defender de mob        ├── SOBREVIVÊNCIA ("não morrer")
+    └──provê──> Abrigo de emergência        ─┘
+                     └──requer──> Placement de blocos ──compartilha-com──> BUILDING
 
-Short-term memory ──grows into──> Multi-tier memory (Fase 4)
-                                       └──required-by──> Reflection (Fase 4)
-                                       └──required-by──> Per-player social profiles (Fase 4)
+Grounding de ações (primitivas retornam estado verificado)
+    └──habilita──> Crafting/Smelting confiável
+                       └──requer──> CADEIA TECH TREE (wood→stone→iron→diamond)
+                                        ├──requer──> Gathering/coleta (✅ v1.0)
+                                        ├──requer──> Navegação (✅ v1.0)
+                                        ├──requer──> Building (mesa, fornalha)
+                                        └──estruturada-como──> Objetivos hierárquicos (DAG de pré-requisitos)
 
-Needs system (Fase 3) ──feeds──> Dynamic goals (Fase 3) ──feeds──> Cognitive loop (selects state)
+Needs internos (Fase 3 v1.0) ──reordenam──> Objetivos hierárquicos ──alimentam──> Plan do loop (seleciona estado)
 
-Reflection (Fase 4) ──enables──> Evolving personality (Fase 4)
-Per-player profiles (Fase 4) ──enhances──> Chat coherence + Socializing state
+Modo Autônomo (self-prompting) ──consome──> Objetivos hierárquicos
+Modo Assistente ──injeta──> Objetivo de alta-prioridade com saída ──ao-concluir──> volta ao Autônomo
 
-LLM-generated code ──conflicts──> "clean instructive design" goal (anti-feature)
-Concurrent modules ──conflicts──> single sequential loop (anti-feature)
+Reflexão (✅ Fase 4) ──lê──> mortes/falhas/sucessos ──ajusta──> seleção de objetivos (APRENDIZADO próprio)
+Combate (Fighting) ──usa──> mineflayer-pvp + mineflayer-tool + armor-manager
 ```
 
 ### Dependency Notes
 
-- **Cognitive loop requires short-term memory:** each tick needs recent context or the agent is amnesiac and incoherent. This is why short-term memory is Fase 1, not deferred.
-- **Reflection requires multi-tier memory:** you cannot synthesize higher-level beliefs without a persisted memory stream to read from. Both land in Fase 4 together.
-- **Dynamic goals require the needs system:** goals are scored/prioritized by need pressure; building goals before needs leaves nothing to prioritize against. Both in Fase 3.
-- **Evolving personality enhanced by reflection + profiles:** personality drift is the *output* of reflecting over accumulated social/experiential memory — hence it correctly sits last (Fase 4).
-- **Needs/goals enhance the loop but don't block it:** Fase 1/2 loop can run on simple heuristics (idle → wander → respond); needs make it *purposeful*. This ordering lets the loop be validated before motivation is layered on.
+- **Sobrevivência exige a camada reflexa (System 1):** comer/fugir não podem esperar o tick do LLM (latência do modelo local). É o aprendizado central do mc-agents. O arbiter reativo imaturo do v1.0 evolui para essa camada — não é peça nova, é promoção da existente.
+- **Tech tree exige grounding ANTES de progredir:** se o craft reporta sucesso sem verificar inventário (bug atual "peguei 10 tábuas"), a cadeia de pré-requisitos corrompe (o bot "acha" que tem bancada e tenta fazer ferramenta que falha). Grounding é pré-requisito da progressão, não paralelo.
+- **Building e Abrigo compartilham o primitivo placeBlock:** implementar placement uma vez serve abrigo de emergência (reflexo) e Building deliberado (estado). Building deve vir junto/logo após abrigo.
+- **Objetivos hierárquicos = ponte entre needs e tech tree:** o DAG de pré-requisitos (GITM) dá a *estrutura* (o que precede o quê); os needs internos (v1.0 Fase 3) dão a *prioridade dinâmica* (o que fazer agora). Um sem o outro = ou task-runner cego ou agente sem rumo.
+- **Modo Assistente é um objetivo, não um modo paralelo:** modelar o pedido como objetivo de alta prioridade com condição-de-saída evita uma máquina de modos separada e garante o "volta sozinho". Reusa a hierarquia de objetivos.
+- **Aprendizado próprio reusa a reflexão da Fase 4:** não é sistema novo — é fechar o loop reflexão→memória→seleção-de-objetivo. Live-verify da Fase 4 (Known Gap) deve ser resolvido aqui, pois o aprendizado depende dela.
+
+---
 
 ## MVP Definition
 
-### Launch With (v1 — Fase 1, validating Core Value)
+### Launch With (v2.0 core — valida "joga como player real, não morre")
 
-The single non-negotiable: the **Observe → Decide → Act** loop must work.
+A linha intransponível: **o bot sobrevive sustentadamente E progride na tech tree sozinho, com relatos verídicos.**
 
-- [ ] Connect to local Java server + stay online (auto-reconnect) — agent must *live*
-- [ ] Perceive core world state (position, nearby entities/blocks, inventory, health/time) — input to every decision
-- [ ] LM Studio local LLM integration via LangChain — the reasoning engine
-- [ ] Basic cognitive loop in LangGraph (Observe → Analyze → Plan → Execute) — *this is the thesis*
-- [ ] Autonomous navigation via `mineflayer-pathfinder` — visible autonomy
-- [ ] Read chat + respond coherently — primary intelligence signal
-- [ ] Short-term memory (sliding window of NL events) — prevents amnesia
-- [ ] Static personality prompt (Mindcraft-profile style) — coherent voice without the Fase 4 complexity
+- [ ] **Camera reflexa (System 1):** comer (auto-eat) + fugir/defender de mob + abrigo de emergência — sem isso o bot morre antes de qualquer plano
+- [ ] **Grounding de ações:** toda primitiva (mine/craft/smelt/place) retorna estado verificado; LLM relata só o confirmado — destrava o resto da progressão
+- [ ] **Crafting + smelting confiável** sobre o grounding
+- [ ] **Cadeia tech tree wood→stone→iron** como objetivos hierárquicos com pré-requisitos (diamond pode ser o "esticar" se iron estabilizar)
+- [ ] **Modo Autônomo default (self-prompting):** seleciona próxima meta da hierarquia + needs, sem player
+- [ ] **Modo Assistente temporário:** atende pedido via chat e volta ao autônomo
 
-### Add After Validation (v1.x — Fase 2 & 3)
+### Add After Validation (v2.x)
 
-- [ ] Full cognitive state machine (Idle, Exploring, Gathering, Socializing; Fighting/Building stubbed) — trigger: loop is stable and observable
-- [ ] Needs system (survival, resources, shelter, curiosity, socialization) — trigger: agent wanders aimlessly and needs intrinsic motivation
-- [ ] Dynamic goals (priority/progress/dependencies/reward) — trigger: needs exist and must be turned into actionable agendas
+- [ ] **Building deliberado** (estruturas além do abrigo de emergência) — trigger: placement reflexo estável
+- [ ] **Fighting completo** (pvp + tool + armor-manager, mobs hostis) — trigger: sobrevivência reflexa provada, hora de atacar e não só fugir
+- [ ] **Aprendizado por reflexão fechando o loop** (mortes/falhas ajustam objetivos) — trigger: reflexão Fase 4 verificada ao vivo + tech tree gerando falhas para refletir sobre
+- [ ] **Curriculum adaptativo ao bioma** (à la Voyager: deserto → cacto antes de ferro) — trigger: tech tree base funcionando
 
-### Future Consideration (v2+ — Fase 4 and beyond)
+### Future Consideration (pós-v2.0)
 
-- [ ] Multi-tier memory persistence (long-term + semantic) — defer until short-term memory's limits are felt; resolve SQLite vs JSON vs vector store *then*
-- [ ] Reflection state (synthesize beliefs) — defer until there is a persisted memory stream to reflect over
-- [ ] Per-player social profiles — defer until long-term memory exists to anchor relationships
-- [ ] Evolving personality — defer until reflection + profiles exist (it is their emergent product)
-- [ ] Cloud LLM provider abstraction — defer until local reasoning limits are measured
-- [ ] Voyager-style skill acquisition — stretch; only if learning becomes a research goal
+- [ ] End-game (Nether/End/Ender Dragon) — fora de escopo declarado do v2.0
+- [ ] Skills compostas/biblioteca (hand-authored, NÃO code-gen) — só se a progressão exigir reuso
+- [ ] Farming/villagers/redstone — escopo creep; só se virar objetivo de pesquisa
+
+---
 
 ## Feature Prioritization Matrix
 
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| Cognitive loop (LangGraph) | HIGH | HIGH | P1 |
-| Connect + stay online | HIGH | LOW | P1 |
-| Perceive world state | HIGH | MEDIUM | P1 |
-| LM Studio LLM integration | HIGH | MEDIUM | P1 |
-| Autonomous navigation | HIGH | LOW | P1 |
-| Chat read + respond | HIGH | MEDIUM | P1 |
-| Short-term memory | HIGH | LOW | P1 |
-| Static personality prompt | MEDIUM | LOW | P1 |
-| Cognitive state machine (full) | HIGH | MEDIUM | P2 |
-| Needs system | HIGH | MEDIUM | P2 |
-| Dynamic goals | HIGH | HIGH | P2 |
-| Multi-tier memory persistence | HIGH | HIGH | P3 |
-| Reflection | MEDIUM | HIGH | P3 |
-| Per-player social profiles | MEDIUM | MEDIUM | P3 |
-| Evolving personality | MEDIUM | HIGH | P3 |
-| LLM-generated code | LOW | HIGH | (anti) |
-| Multi-agent society | LOW | VERY HIGH | (anti) |
-| Combat/Building focus | LOW | MEDIUM | (anti) |
+| Feature | Research Value | Implementation Cost | Priority |
+|---------|----------------|---------------------|----------|
+| Camada reflexa System 1 (comer/fugir/abrigo) | HIGH | MEDIUM | P1 |
+| Grounding de ações | HIGH | MEDIUM–HIGH | P1 |
+| Crafting + smelting | HIGH | MEDIUM | P1 |
+| Cadeia tech tree (objetivos hierárquicos / DAG) | HIGH | HIGH | P1 |
+| Modo Autônomo (self-prompting) | HIGH | MEDIUM | P1 |
+| Modo Assistente temporário | HIGH | MEDIUM | P1 |
+| Building deliberado | MEDIUM | MEDIUM | P2 |
+| Fighting completo (pvp/tool/armor) | MEDIUM | MEDIUM | P2 |
+| Aprendizado por reflexão (loop fechado) | HIGH | HIGH | P2 |
+| Needs reordenando objetivos | HIGH | MEDIUM | P2 |
+| Curriculum adaptativo ao bioma | MEDIUM | MEDIUM | P3 |
+| LLM code-gen / skill library | LOW | HIGH | (anti) |
+| Observar/imitar players | LOW | — | (anti) |
+| End-game / PvP humano / blueprints | LOW | HIGH | (anti) |
 
-## Competitor Feature Analysis
+**Priority key:** P1 = núcleo do v2.0; P2 = adicionar após validação; P3 = futuro.
 
-| Feature | Voyager | Mindcraft | Project Sid (PIANO) | Our Approach (MineMind v1) |
-|---------|---------|-----------|---------------------|----------------------------|
-| Cognitive loop | Iterative prompt + self-verify | ~500ms LLM decision loop | Concurrent modules + Cognitive Controller | Single sequential LangGraph loop |
-| Memory | Skill library (code) | Per-bot JSON (structures/ores/deaths) | Per-agent + social memory | Short-term (v1) → multi-tier (Fase 4), Generative-Agents retrieval |
-| LLM | GPT-4 (cloud) | 15+ providers incl. Ollama local | GPT-4 class | LM Studio local first, abstraction for cloud later |
-| Personality | None (task-driven) | Static profile prompts | Emergent via social modules | Static prompt (v1) → evolving (Fase 4) |
-| Motivation | External auto-curriculum | User tasks/commands | Internal + emergent goals | Internal **needs system** → dynamic goals (Fase 3) |
-| Social | None | Multi-bot team bulletin | Emergent society (1000 agents) | **Per-player** profiles w/ humans (Fase 4), single agent |
-| Action layer | Self-written JS code | Mineflayer + sandboxed code | Custom Minecraft env | Mineflayer + curated primitives (no code-gen) |
-| Stack | Python | Node/JS | Custom | All-TypeScript (Bun + mineflayer + LangGraph.js) |
+---
 
-**Key takeaways for roadmap:**
-1. MineMind's defensible identity is **internal needs + multi-tier memory + per-player social + evolving personality** — the "living being" axis Voyager/Mindcraft don't pursue.
-2. The **action layer is mostly free** via mineflayer plugins — v1 effort belongs in the cognitive loop and memory, not in re-inventing navigation/mining.
-3. Avoid the two biggest complexity traps prior art fell into: **LLM code-gen** (Voyager/Mindcraft security + debugging) and **concurrent modules** (PIANO coherence problem). A single sequential loop is the right v1 simplification given the "clean, instructive" goal.
+## Competitor Feature Analysis (foco nas features v2.0)
+
+| Feature | Voyager | GITM | mc-agents | Mindcraft | MineMind v2.0 |
+|---------|---------|------|-----------|-----------|----------------|
+| Sobrevivência | Implícita no curriculum | Implícita | **Reflexo System 1** (come/foge/abriga sem LLM) | Reflexo + LLM | **Camada reflexa System 1** promovendo o arbiter atual |
+| Tech tree | Auto-curriculum + skill code | **DAG de pré-requisitos** (262 itens) | tools.mine/craft/smelt via LLM-code | Self-prompting de goal-item | **DAG hierárquico + needs internos** reordenando |
+| Grounding | Error-feedback + self-verify critic | Estado textual | **status.json/events.json estado real** | Memória sumarizada | **Primitivas retornam estado verificado** (mata o "peguei 10 tábuas") |
+| Building | Code-gen | DAG inclui estruturas | shelter reflexo | Blueprint goal | placeBlock estruturado (abrigo→estruturas simples) |
+| Combate | — | — | luta/foge reflexo | pvp via comando | pvp+tool+armor (defesa de mob, P2) |
+| Autônomo↔Assistente | Só autônomo (curriculum) | Só tarefa | Autônomo | **Self-prompt (auto) + comando (assist)** | **Autônomo default + assistente temporário com volta** |
+| Aprendizado | Skill library (código) | Memória textual | MEMORY.md por ciclo | Memória JSON sumarizada | **Reflexão sobre experiência PRÓPRIA** (sem imitar) |
+| Stack | Python/GPT-4 | Python | Node + Claude | Node/JS + 15 providers | All-TS (Bun+mineflayer+LangGraph), LM Studio + GPT |
+
+**Key takeaways para o roadmap:**
+1. **A arquitetura System 1 / System 2 do mc-agents é o padrão a adotar para sobrevivência** — separa reflexo rápido (não morrer) de deliberação lenta (LLM planeja). Resolve diretamente o Known Gap "o bot fica no arbiter reativo e o LLM alucina ações": o arbiter VIRA o System 1 (legítimo), e o grounding conserta o System 2.
+2. **Tech tree = DAG de pré-requisitos (GITM) priorizado por needs (MineMind Fase 3)** — não inventar; combinar estrutura (GITM) com motivação interna (já é o diferencial do MineMind).
+3. **Grounding é pré-requisito de TUDO em progressão**, não um item paralelo — sem ele a cadeia de objetivos corrompe.
+4. **Não copiar a code-gen do Voyager/Mindcraft** (anti-feature confirmada) nem confiar em self-verification só-LLM (degrada sem feedback do mundo) — ancorar no estado real.
+5. **Modo assistente = objetivo de alta prioridade com saída**, não uma máquina de modos paralela — reusa a hierarquia e garante o "volta sozinho".
 
 ## Sources
 
-- [Voyager — arXiv 2305.16291](https://arxiv.org/abs/2305.16291) / [GitHub MineDojo/Voyager](https://github.com/MineDojo/Voyager) / [project site](https://voyager.minedojo.org/) — HIGH
-- [Mindcraft — GitHub mindcraft-bots/mindcraft](https://github.com/mindcraft-bots/mindcraft) — HIGH
-- [Minecraft AI: Bridging LLMs with Mineflayer (typevar.dev)](https://typevar.dev/articles/mindcraft-bots/mindcraft) — MEDIUM
-- [Project Sid — arXiv 2411.00114](https://arxiv.org/pdf/2411.00114) / [Altera blog (Fundamental Research Labs)](https://fundamentalresearchlabs.com/blog/project-sid) — HIGH
-- [Stanford Generative Agents — arXiv 2304.03442](https://arxiv.org/pdf/2304.03442) / [ACM full text](https://dl.acm.org/doi/fullHtml/10.1145/3586183.3606763) — HIGH
-- [mineflayer-pathfinder](https://github.com/PrismarineJS/mineflayer-pathfinder) / [mineflayer-collectblock](https://github.com/PrismarineJS/mineflayer-collectblock) / [mineflayer.com](https://mineflayer.com/) — HIGH
+- [Voyager — arXiv 2305.16291](https://arxiv.org/abs/2305.16291) / [project site](https://voyager.minedojo.org/) — tech tree wood→stone→iron→diamond, auto-curriculum, self-verification critic, error-feedback retry — HIGH
+- [GITM — Ghost in the Minecraft, arXiv 2305.17144](https://arxiv.org/pdf/2305.17144) / [OpenReview](https://openreview.net/pdf?id=cTOL99p5HL) — decomposição em DAG de pré-requisitos (Material/Tool), 262 itens do Overworld — HIGH
+- [mc-agents (Claude + Mineflayer)](https://github.com/jblemee/mc-agents) — System 1 (reflexo: come/foge/abriga) vs System 2 (LLM planeja/crafta/minera), grounding via status.json/events.json, tools.mine/craft/smelt/shelter — HIGH
+- [Mindcraft — GitHub mindcraft-bots/mindcraft](https://github.com/mindcraft-bots/mindcraft) — self-prompting (autônomo) + modo comando (assistente), memória JSON, profiles — HIGH
+- [Odyssey — arXiv 2407.15325](https://arxiv.org/pdf/2407.15325) / [HERAKLES — arXiv 2508.14751](https://arxiv.org/pdf/2508.14751) — skill hierárquica sobre mineflayer — MEDIUM
+- [mineflayer plugins](https://github.com/PrismarineJS/mineflayer) — auto-eat, pvp, tool, armor-manager, hawkeye, collectblock, pathfinder (Java only) — HIGH
+- [Minecraft AI: Bridging LLMs with Mineflayer (typevar.dev)](https://typevar.dev/articles/mindcraft-bots/mindcraft) — validação do stack all-JS + local LLM — MEDIUM
+- Limitação de self-correction intrínseca ([discussão em torno de Voyager / pesquisa de auto-correção LLM](https://arxiv.org/html/2305.16291)) — auto-verificação sem feedback externo degrada — MEDIUM
 
 ---
-*Feature research for: autonomous persistent Minecraft agent*
-*Researched: 2026-06-18*
+*Feature research for: autonomous self-playing Minecraft agent — milestone v2.0*
+*Researched: 2026-06-19*

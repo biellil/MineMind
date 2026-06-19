@@ -1,202 +1,267 @@
 # Pitfalls Research
 
-**Domain:** Autonomous persistent Minecraft agent — LLM-driven Mineflayer bot with a perpetual cognitive loop, local model via LM Studio, Bun runtime
-**Researched:** 2026-06-18
-**Confidence:** MEDIUM-HIGH (Mineflayer/LangGraph/local-LLM pitfalls verified against project issue trackers + multiple agent post-mortems; Bun↔Mineflayer status is fast-moving, MEDIUM)
+**Domain:** Adicionar autonomia real (sobrevivência, combate, building, tech-tree, grounding, provider cloud) a um agente Mineflayer + LangGraph existente — milestone v2.0 "Autonomia de Verdade". Foco em armadilhas de **integração com o que o v1.0 já entregou**.
+**Researched:** 2026-06-19
+**Confidence:** HIGH (failure modes verificados nos issue trackers do Mineflayer/pathfinder + post-mortems de agentes Voyager/mc-agents; integração com débitos conhecidos do v1.0 confirmada via PROJECT.md/SUMMARYs)
 
-> Phases referenced map to the project's 4-phase MVP described in `PROJECT.md`:
-> - **Fase 1** — Conexão + chat + presença online
-> - **Fase 2** — Navegação/movimento autônomo + memória de curto prazo
-> - **Fase 3** — Loop cognitivo completo (Observe → Analyze → Update Memory → Plan → Execute → Reflect) + integração LM Studio
-> - **Fase 4** — Personalidade adaptativa, memória de longo prazo/semântica, reflexão complexa
+> **Escopo deliberado.** Este arquivo NÃO repete os 9 pitfalls genéricos do v1.0 (think-every-tick, JSON inválido, pathfinder-hang, oscilação de objetivos, crescimento de memória, reconexão, anti-cheat, Bun↔Mineflayer, races de física) — eles continuam válidos e estão em `.planning/milestones/v1.0-research/PITFALLS.md`. Aqui o foco é o que **quebra ao plugar as features novas no sistema existente**. Onde uma armadilha nova se conecta a um débito v1.0, ela é marcada **[INTEGRAÇÃO]**.
+>
+> **Fases referenciadas** são as do roadmap v2.0 a ser criado. Como o roadmap ainda não existe, o mapeamento usa os agrupamentos lógicos das features (P1/P2 do FEATURES.md): **Grounding**, **System 1 reflexo**, **Crafting/Smelting**, **Tech-tree DAG**, **Modos autônomo/assistente**, **Building**, **Combate**, **Provider LLM**, **Aprendizado/reflexão**. O orquestrador alinha esses nomes às fases reais.
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: The cognitive loop ticks at LLM speed (think-every-tick)
+### Pitfall 1: Grounding superficial — verificar "sucesso da chamada" em vez de "mudança no mundo" [INTEGRAÇÃO]
 
 **What goes wrong:**
-The perpetual loop calls the LLM on every iteration (or every game tick / every second). With a local model on LM Studio doing 5–40 tokens/sec, a single "decide what to do" prompt can take 3–30+ seconds. The agent either freezes between decisions (world moves on, plans become stale) or, worse, the loop fires faster than inference completes and queues overlapping LLM calls that thrash the GPU.
+A correção do bug confirmado do v1.0 ("peguei 10 tábuas" alucinado) é feita de forma incompleta: a primitiva passa a retornar `{ok: true}` quando `bot.craft()` **resolve sem lançar**, mas não confere o inventário antes/depois. `bot.craft`, `bot.placeBlock` e `bot.collectBlock` podem resolver a Promise enquanto o efeito real falhou ou foi parcial (servidor com lag, item consumido mas resultado não recebido, bloco colocado e imediatamente quebrado por física). O LLM continua recebendo "sucesso", a memória/reflexão registra um fato falso, e a **cadeia de objetivos da tech-tree corrompe** — o bot "acha" que tem bancada e tenta craftar picareta, que falha em cascata.
 
 **Why it happens:**
-Developers model the loop after game loops (fixed tick rate) or after cloud-LLM agents where latency is ~1s. Local inference is 1–2 orders of magnitude slower and the cognitive layer must run at a *different cadence* than the reactive/physics layer.
+"Promise resolveu = ação aconteceu" é a suposição natural. Em Mineflayer várias primitivas resolvem no envio do pacote ou num evento que pode ser disparado por outra causa (ver `placeBlock` ignorando blockUpdates sem mudança de tipo, issue de melhoria do check de sucesso). Grounding é confundido com tratamento de exceção.
 
 **How to avoid:**
-- **Two-rate architecture.** A fast reactive layer (Mineflayer events, physics, "am I taking damage / falling / stuck") runs continuously and cheaply *without* the LLM. A slow deliberative layer (LLM planning) fires only on triggers: goal completed, plan failed, significant world event, idle timeout, or need crossing a threshold.
-- **Single-flight the LLM.** Never start a new cognitive call while one is in flight. Use a mutex/`isThinking` flag; queue at most one pending "re-think" request and coalesce.
-- **Event-driven, not poll-driven, thinking.** Re-plan on *change*, not on a timer. Idle agent with a satisfied goal should think rarely (e.g., every 30–60s), not every second.
+- **Verificação por delta de estado, não por retorno da chamada.** Snapshot do inventário (contagem por item) **antes**, executar, snapshot **depois**; o resultado reportado é `depois - antes`, não o que o LLM ou a Promise disseram. Mesmo padrão para posição (movimento) e existência de bloco (placement/mine).
+- **Toda primitiva retorna um `ActionResult` tipado** (`{intent, expected, observed, ok}`) onde `ok = observed satisfaz expected`. O LLM só pode relatar `observed`.
+- **O relato em chat e o registro em memória consomem `observed`, nunca o plano.** Fechar o caminho pelo qual o texto do LLM vira "fato" na memória.
+- **Padrão mc-agents `status.json`/`events.json`:** o estado real flui por um canal separado do raciocínio do LLM.
 
 **Warning signs:**
-GPU pinned at 100% with the bot standing still; chat replies arriving 10s+ late; CPU/GPU temps climbing during "idle"; overlapping log entries showing a new plan request before the previous one returned.
+Inventário no jogo diverge do que o bot diz no chat; reflexão registra "craftei X" mas o item não existe; cadeia de tech-tree avança no log mas trava na prática; objetivos dependentes (precisam de bancada/ferramenta) falham logo após um "sucesso".
 
-**Phase to address:** Fase 3 (loop architecture) — but the two-rate split must be a *design decision before writing the loop*, not retrofitted.
+**Phase to address:** **Grounding (primeira fase de gameplay do v2.0)** — é pré-requisito de crafting, smelting, tech-tree e do aprendizado por reflexão. FEATURES.md já marca como "pré-requisito de TUDO em progressão". Construir antes das features que dependem dele.
 
 ---
 
-### Pitfall 2: Small local models can't be trusted to emit valid JSON / tool calls
+### Pitfall 2: Reflexo de sobrevivência (System 1) compete com a deliberação single-flight → deadlock ou comida tardia [INTEGRAÇÃO]
 
 **What goes wrong:**
-The plan/action selection asks the model for JSON (`{"action": "mineBlock", "args": {...}}`). Small local models (7B–14B class typical for LM Studio) produce malformed JSON, wrap numbers in quotes, add prose before/after the object, hallucinate action names that don't exist, or invent argument fields. Research shows even ~5% per-call failure compounds catastrophically: a 10-step chain at 95%/step finishes only ~60% of the time. Requiring strict JSON also *degrades reasoning* by 20+ points on small models.
+A camada reflexa nova (comer/fugir/abrigo) precisa agir em sub-segundo, mas o sistema v1.0 tem **uma inferência por vez (single-flight, D-12)** e já teve **starvation da reflexão (B1)** porque o lock ficava preso. Dois modos de falha ao adicionar System 1:
+1. O reflexo tenta passar pelo mesmo caminho deliberativo e fica esperando o lock do LLM → o bot leva dano/morre enquanto "pensa".
+2. O reflexo dispara `bot.consume()`/`pathfinder.goto(fugir)` **ao mesmo tempo** que a deliberação está executando uma ação física (minerando, navegando) → duas ações físicas concorrentes no mesmo `bot`, comportamento indefinido (a navegação cancela o ataque, o consume interrompe o dig).
 
 **Why it happens:**
-Local models are weaker than the GPT-4-class models that agent tutorials assume. Free-form JSON prompting has no enforcement; the model is "asked nicely" to comply.
+O arbiter reativo do v1.0 era um *fallback* quando o LLM não decidia — não um sistema concorrente real. Promovê-lo a System 1 (mc-agents) exige que ele **interrompa** o System 2, não que espere por ele. E o single-flight protege a *inferência*, não a *atuação física*.
 
 **How to avoid:**
-- **Constrained decoding, not prompting.** LM Studio supports structured output / JSON schema enforcement (grammar-based / GBNF). Define a strict JSON Schema for every LLM decision and enforce it at the inference layer so invalid tokens are impossible — this is far more reliable than parse-and-retry.
-- **Closed action vocabulary.** The action name must be an `enum` of real, registered actions. Validate against the action registry; never `eval` or trust an unknown name.
-- **Validate-and-repair loop with a hard cap.** After decoding, validate with a schema (Zod). On failure, one repair retry, then fall back to a safe default action (e.g., "wait/observe"). Never retry indefinitely (feeds Pitfall 4).
-- **Keep schemas small.** Fewer fields, shallow nesting. Split "plan a 5-step sequence" into "pick the single next action" — small models do single-step far better than multi-step plans.
+- **Separar o lock de inferência do lock de atuação.** System 1 NUNCA chama o LLM (é puro heurístico/evento) — então o single-flight do LLM não o afeta. O que precisa de mutex é o **corpo físico** (`bot`): um único "executor de ação física" por vez.
+- **Preempção, não fila.** Quando um reflexo crítico dispara (vida crítica, mob adjacente, lava), ele **cancela** a ação física em curso (`pathfinder.stop()`, abortar o craft/dig) e assume o controle. A deliberação é notificada de "fui preemptado" e re-planeja com o novo estado.
+- **Prioridades duras vs. macias (liga com Pitfall v1.0 #4):** só vida-crítica/perigo-imediato preempta; fome marginal NÃO interrompe um craft quase pronto (senão volta a oscilação). Histerese no gatilho do reflexo.
+- **Re-testar o `[reflect]` ao vivo** (Known Gap do v1.0) DEPOIS de introduzir o System 1, porque a nova camada muda quando o lock do LLM fica livre.
 
 **Warning signs:**
-`JSONDecodeError`/Zod errors in logs; the bot occasionally does nothing or does something nonsensical; actions referencing tools that don't exist; reasoning quality noticeably worse when JSON is required vs. plain chat.
+Bot morre de fome/dano "pensando"; ataque e navegação se cancelando no mesmo instante (bot anda em direção ao mob mas nunca bate); log mostra reflexo enfileirado atrás de inferência; regressão do B1 (reflexão nunca dispara) reaparece ao adicionar o System 1.
 
-**Phase to address:** Fase 3 (LM Studio integration). The schema + constrained-decoding decision gates the whole loop's reliability.
+**Phase to address:** **System 1 reflexo** — e a separação inferência-lock vs. atuação-lock deve ser decisão de design ANTES de escrever o reflexo, não retrofit (mesma lição do two-rate do v1.0).
 
 ---
 
-### Pitfall 3: Mineflayer pathfinder gets stuck and hangs the loop indefinitely
+### Pitfall 3: Regressão do "grudar no jogador" — o comportamento que o usuário ODEIA volta [INTEGRAÇÃO]
 
 **What goes wrong:**
-`mineflayer-pathfinder` is a documented source of hangs: it stalls forever when obstructed by an unbreakable block (bedrock), when it lacks the right tool to break a block (leaves without a hoe/shears), when the A* result is *partial* (goal never fires the "done" event), when stuck in water trying to pillar up, or after knockback freezes the bot mid-air. If the cognitive loop is `await`-ing pathfinder to complete, the entire agent deadlocks behind a navigation call that will never resolve.
+O arbiter reativo do v1.0 tende, ao vivo, a **seguir/vagar** (Known Gap explícito) e houve até um fix recente "para o re-navigate infinito no socializing quando já perto do jogador" (commit `0b4dc64`). Ao adicionar o **modo assistente**, três regressões prováveis:
+1. O assistente não tem **condição de saída** clara → o bot fica preso atendendo/seguindo o jogador indefinidamente e nunca volta ao autônomo (contradiz o Core Value).
+2. O System 1 ou o GoalFollow continua ativo em paralelo ao loop autônomo → o bot "gravita" para o jogador mesmo sem pedido, recriando o grude.
+3. Prioridade do objetivo-assistente nunca decai → mesmo concluído, continua sendo o objetivo de maior prioridade.
 
 **Why it happens:**
-Developers `await bot.pathfinder.goto(goal)` assuming it always resolves or rejects. Several failure modes neither resolve *nor* reject — they silently hang. The agent has no concept of "this physical action is taking too long."
+Modelar "assistente" como um **modo/estado paralelo** (uma máquina de modos separada) em vez de um objetivo com TTL/condição-de-saída. E resíduos do comportamento social do v1.0 (GoalFollow do socializing) coexistindo com a hierarquia nova.
 
 **How to avoid:**
-- **Wrap every movement/action in a timeout + watchdog.** `Promise.race([action, timeout(N seconds)])`. On timeout, cancel the goal (`bot.pathfinder.stop()` / set goal null) and report failure back to the planner.
-- **No-progress detector at the physics layer.** Sample position every ~2s; if displacement toward the target is ~0 for several samples while a movement is "active," treat as stuck → abort.
-- **Pre-flight feasibility checks.** Before pathing, confirm the bot has the tools to break expected blocks; prefer `GoalNear`/`GoalGetToBlock` with sane ranges over exact goals that may be unreachable.
-- **Treat physical failure as normal feedback,** not an exception — feed "couldn't reach X" back into the loop so the planner picks something else (and dampen, per Pitfall 4).
+- **Assistente = objetivo de alta prioridade com condição-de-saída explícita**, não um modo (decisão já no FEATURES.md). Ao satisfazer a condição (item entregue, bloco quebrado) ou estourar o TTL, o objetivo é **descartado** e o curriculum autônomo retoma. Sem objetivo-assistente ativo → modo autônomo é o default por construção.
+- **Auditar e neutralizar o GoalFollow/socializing do v1.0:** seguir o jogador só pode acontecer DENTRO de um objetivo-assistente ativo, nunca como comportamento de fundo. O fix do `0b4dc64` é um band-aid; o v2.0 deve remover a fonte (re-navigate em socializing).
+- **Teste de regressão dedicado:** "sem pedido pendente, o bot se afasta e faz suas coisas?" — deve ser um critério de aceite ao vivo, não unitário.
+- **Decaimento/expiração do objetivo-assistente** para garantir que nunca domine a hierarquia depois de concluído.
 
 **Warning signs:**
-Bot frozen in place but process alive; "sprinting in place" against a wall/bamboo; no events firing; the loop's last log line is a movement start with no completion.
+Bot fica perto do jogador sem motivo; após atender um pedido, continua seguindo; nunca seleciona um objetivo da tech-tree quando há um jogador por perto; re-navigate em loop quando já próximo (sintoma exato do `0b4dc64`).
 
-**Phase to address:** Fase 2 (navigation). The timeout/watchdog wrapper is a Fase 2 deliverable — do not ship autonomous movement without it.
+**Phase to address:** **Modos autônomo/assistente** — com o teste de regressão "não gruda" como gate ao vivo. O usuário explicitamente odeia esse comportamento; tratar como requisito de primeira classe.
 
 ---
 
-### Pitfall 4: Goal oscillation, re-planning loops, and need starvation (no global progress)
+### Pitfall 4: Tech-tree sem autocraft nativo — resolução recursiva de receitas que não termina ou pede a estação errada
 
 **What goes wrong:**
-With dynamic needs (survival, resources, shelter, curiosity, social) and dynamic goals, the agent thrashes: it starts mining, gets slightly hungry, abandons mining to find food, food task is hard so it re-plans to mine, repeat — *motion without progress*. Re-planning loops are the most token-expensive failure mode. Separately, a low-priority need (curiosity, socialization) can be *starved* forever because a never-fully-satisfied higher need always wins. Oscillation is hard to see locally — only visible at the global "nothing is advancing" level.
+Mineflayer **não tem autocraft mágico**: `bot.recipesFor(itemType, metadata, minResultCount, craftingTable)` só retorna receitas viáveis **com o inventário e a estação atuais**. Erros comuns ao montar a cadeia madeira→tábuas→bancada→picareta→pedra→ferro:
+1. Chamar `recipesFor` para um item 3x3 **sem passar o `craftingTable`** → retorna vazio → o resolvedor conclui (erroneamente) "impossível" e o objetivo morre, OU entra em recursão infinita tentando produzir o ingrediente que ele já tem.
+2. Resolver dependências sem **detectar ciclos / profundidade** → stack overflow ou loop (tábua precisa de tronco, mas o resolvedor re-expande tábua).
+3. Tentar craftar 3x3 sem uma **bancada colocada e alcançável** (a `craftingTable` precisa ser um `Block` real no mundo, não a noção de "tenho uma na mochila") — e o mesmo para fornalha no smelting.
+4. **Equipar a ferramenta errada** para minerar o próximo tier (cavar ferro com picareta de pedra OK, mas diamante com picareta de ferro obrigatória; minerar sem a ferramenta certa não dropa nada → grounding reporta "0 obtido" e o objetivo trava).
 
 **Why it happens:**
-Pure greedy "pick highest-priority need every tick" with no hysteresis, no commitment, and no progress accounting. Each need re-evaluation can flip the winner; the agent never commits long enough to finish anything.
+Tutoriais de Voyager assumem skill library gerada por LLM que esconde a resolução de receitas. Aqui ela é hand-authored (decisão correta) mas é justamente a parte difícil. `minecraft-data` é a fonte de verdade das dependências e é fácil ignorá-la em favor de regras hard-coded que quebram entre versões.
 
 **How to avoid:**
-- **Commitment / hysteresis.** Once a goal is selected, stick with it until it completes, fails, or a need crosses a *hard* threshold (e.g., health critical) — not merely becomes marginally higher priority. Add a switching cost so ties don't flip every tick.
-- **Action-repetition / loop detection.** Hash each (action + args). Same hash N times within a task = loop → force a different action or escalate. Cheap and catches most tool-loops.
-- **No-progress watchdog on goals.** Track a progress metric per goal (e.g., inventory count, distance to target). If progress is flat over a window, abandon or decompose the goal — don't re-plan the same thing.
-- **Anti-starvation aging.** Increase a need's effective priority the longer it goes unserved, so low-priority needs eventually win a turn.
-- **Re-plan budget.** Cap re-plans per goal (e.g., 3). After that, mark the goal blocked and move on.
+- **Resolvedor recursivo com `minecraft-data` + memo + limite de profundidade.** Para cada item-alvo: tem no inventário? sim→pronto; não→`recipesFor` (passando a estação se disponível); para cada ingrediente faltante, recursão. Memoizar visitados e capar profundidade para matar ciclos.
+- **Modelar estações como pré-requisitos no DAG (GITM):** "craftar picareta" depende de "bancada colocada e ao alcance", que depende de "ter bancada no inventário", que depende de "craftar bancada" (2x2, sem estação). Smelting depende de "fornalha colocada" + "combustível". A estação faz parte do grafo, não é implícita.
+- **Pré-flight de ferramenta (`mineflayer-tool` `equipForBlock`) antes de minerar** — confirma que existe ferramenta capaz; senão, o objetivo "minerar X" gera o sub-objetivo "obter ferramenta Y" em vez de cavar a seco.
+- **`recipesFor` com e sem `craftingTable`:** se vazio sem estação mas não-vazio com estação → o sub-objetivo é "posicionar bancada", não "impossível".
 
 **Warning signs:**
-Inventory/world state unchanged over minutes despite constant activity; the same two goals alternating in logs; a need's value monotonically rising and never being addressed; LLM call count climbing with no game-state change.
+Objetivo de craft "impossível" quando os materiais existem (faltou passar a estação); recursão estourando pilha; bot mina ferro/diamante e não dropa nada (ferramenta errada → grounding mostra 0); cadeia trava sempre no primeiro item 3x3.
 
-**Phase to address:** Fase 3 (goal system + loop). Loop-detection and progress-tracking are first-class loop components, not add-ons.
+**Phase to address:** **Tech-tree DAG** (depende de Grounding + Crafting). É o objetivo central declarado e o ponto mais provável de precisar pesquisa mais profunda (flag para o roadmap).
 
 ---
 
-### Pitfall 5: Unbounded memory growth → context-window stuffing → reasoning collapse
+### Pitfall 5: `placeBlock` falha silenciosa ou trava — referência/face errada, blockUpdate que nunca dispara
 
 **What goes wrong:**
-A persistent agent accumulates events, chat, and observations forever. Two linked failures: (a) memory store grows append-only with redundant/contradictory/stale entries, so retrieval surfaces noise; (b) the cognitive prompt stuffs ever-more history into the context window. Local models have *small* context windows, and KV-cache VRAM grows with context (a 7B at 32k can need ~8–10 GB vs ~5 GB at 4k) — so stuffing both slows inference *and* degrades reasoning, and eventually overflows. LM Studio handles overflow badly: it can crash, silently truncate, or emit garbage instead of warning.
+`bot.placeBlock(referenceBlock, faceVector)` é uma das primitivas mais frágeis do Mineflayer e é compartilhada por **abrigo de emergência (reflexo), Building deliberado e posicionar bancada/fornalha**. Falhas documentadas:
+1. **`Event blockUpdate did not fire within timeout` (issue #2757):** com lag de servidor, a Promise rejeita por timeout; se não tratada, vira UnhandledPromiseRejection e/ou trava a sequência de construção.
+2. **EventEmitter overflow (issue #1585):** listeners de blockUpdate acumulam e podem **derrubar o bot após uso prolongado** — risco direto num bot sempre-ativo construindo muito.
+3. **Face/referência errada:** o bloco novo nasce em `referenceBlock.position + faceVector`; passar a face errada coloca o bloco no lugar errado (ou em cima de si mesmo → bot soterra/se prende). Precisa de uma face **exposta** (adjacente a ar) e item equipado na mão.
+4. **Sem item na mão** (issue #2320): placement falha silenciosamente se o bloco não está equipado.
 
 **Why it happens:**
-"Just append everything and let RAG sort it out" works in demos and dies over hours/days. Developers don't budget the context window or curate memory.
+Construção é tratada como "calcular posição e chamar placeBlock". Na prática exige: bot posicionado a uma distância de alcance, face exposta correta, item equipado, e tratamento do blockUpdate-timeout. O timeout que não-rejeita-nem-resolve é o mesmo padrão de hang do pathfinder do v1.0.
 
 **How to avoid:**
-- **Hard token budget for the prompt.** Reserve fixed slices (system + persona, current goal, recent short-term window, K retrieved memories). Never let any slice grow unbounded. Always stay comfortably under the model's configured context (and set LM Studio overflow policy to `truncateMiddle`/`rollingWindow` as a *safety net*, not the primary control).
-- **Bounded short-term memory.** Fixed-size ring buffer of recent events; summarize-and-evict older entries into long-term memory.
-- **Curate long-term memory.** Deduplicate, consolidate, and decay/forget. Don't just retrieve top-K by similarity — filter for recency and relevance; periodically compact superseded facts.
-- **Defer the heavy stuff.** Vector store + embeddings is a Fase 4 concern. For Fase 2–3, a simple bounded buffer + lightweight summarization is enough and avoids premature complexity (the persistence strategy is explicitly open per PROJECT.md).
+- **Wrapper de placement com timeout + verificação por estado** (junta Pitfall 1 + watchdog do v1.0): após `placeBlock`, confirmar via `bot.blockAt(pos)` que o bloco do tipo certo está lá; tratar a rejeição de timeout como falha normal alimentada ao planner.
+- **Escolher referência+face de forma robusta:** procurar um bloco sólido adjacente à posição-alvo com uma face voltada para ar; nunca colocar onde o próprio bot está (checar bounding box do bot).
+- **Equipar o bloco na mão antes** (`bot.equip(item, 'hand')`) e validar que foi equipado.
+- **Limpar listeners de blockUpdate** após cada placement (mitiga #1585 no bot sempre-ativo).
+- **Posicionar com pathfinder a `GoalPlaceBlock`/`GoalNear`** antes de colocar (e respeitar o pacing anti-cheat do v1.0 — colocar blocos em rajada também é flagável).
 
 **Warning signs:**
-Prompt token count trending up over a session; inference getting slower the longer the bot runs; LM Studio crashes / "generation failed" / garbage output after long uptime; retrieved memories increasingly irrelevant or contradictory.
+`Event blockUpdate did not fire` no log; abrigo com buracos; bot se enterra/prende ao colocar bloco em si mesmo; UnhandledPromiseRejection; vazamento de listeners crescendo ao longo da sessão.
 
-**Phase to address:** Fase 2 (short-term buffer + budget) → Fase 4 (long-term/semantic with curation). The token budget must exist from the first LLM-in-the-loop integration.
+**Phase to address:** **System 1 (abrigo de emergência)** e **Building** compartilham este primitivo — implementar o wrapper de placement uma vez, na primeira feature que precisar de placement (abrigo), e reusar.
 
 ---
 
-### Pitfall 6: No reconnect/crash recovery — "always-on" isn't
+### Pitfall 6: Custo descontrolado do provider cloud num loop sempre-ativo [INTEGRAÇÃO]
 
 **What goes wrong:**
-The core value is *staying alive autonomously*, but Mineflayer bots get kicked or disconnected routinely (timeouts, server restarts, protocol hiccups, `socketClosed`). Without auto-reconnect, the agent dies on the first kick. Worse, naive reconnect bugs are common: reusing a stale `bot` object after `end`, not rebuilding plugin state, or hammering reconnects in a tight loop after a fatal/auth error.
+O usuário escolheu **GPT (cloud)** como provider. Num loop perpétuo (tick a cada poucos segundos × prompt grande de estado-do-mundo+memória × 24/7), chamar o cloud todo tick faz a fatura explodir. Pior: modelos de reasoning cobram **tokens de raciocínio invisíveis** como output — um `reasoning.effort` alto num loop drena custo silenciosamente. E o single-flight do v1.0 protege contra concorrência, mas **não contra frequência** — o bot pode chamar o cloud com frequência perfeitamente serial e ainda assim caro.
 
 **Why it happens:**
-Connection is treated as a one-time setup step, not a managed lifecycle. The `end`/`kicked`/`error` events aren't wired, or reconnect recreates the bot incorrectly.
+A abstração de provider (`ChatOpenAI` só troca baseURL/apiKey) torna trocar local→cloud trivial — e essa facilidade esconde que o local era custo-zero e o cloud não é. O gate de invocação herdado do v1.0 foi pensado para latência/GPU local, não para $.
 
 **How to avoid:**
-- **Supervisor pattern.** A connection manager owns the bot lifecycle: handle `end`, `kicked`, `error`; on disconnect, **create a fresh `bot` instance** (don't reuse the dead one), re-register plugins/listeners, and reattach the cognitive loop.
-- **Exponential backoff with cap + jitter.** Don't reconnect-spam. Distinguish recoverable disconnects from fatal ones (bad auth, version mismatch, ban) — fatal errors should *stop*, not retry forever.
-- **Persist state across reconnects.** Memory and goals live outside the bot object so a reconnect resumes the "mind" rather than resetting it.
-- **Pause the cognitive loop while disconnected** so it isn't issuing actions into the void.
+- **Local (LM Studio) continua o default; cloud é opt-in por env** (já em STACK.md). Não tornar GPT o provider de todo tick.
+- **Roteamento por dificuldade:** rotina (rotular intenção de chat, decisões triviais) no local ou em `gpt-4.1-nano`; só decisões de tech-tree/planejamento difícil escalam para o modelo forte.
+- **`reasoning.effort: "low"|"minimal"`** como default cloud — corta o maior dreno.
+- **Prompt caching:** manter system+persona+schema estáveis no início do prompt (-90% no input cacheado). Mudar a ordem do prompt entre chamadas mata o cache.
+- **Gate de invocação reforçado:** não é "single-flight" (concorrência), é "não pense se nada mudou" (frequência) — reusar/endurecer o gate event-driven do v1.0.
+- **Teto de gasto/contador de tokens por sessão** com kill-switch (equivalente cloud ao "spend cap" de loop do v1.0).
 
 **Warning signs:**
-Process alive but bot offline; reconnect log spam every few hundred ms; "bot broken upon reconnect" (movement/events dead after reconnect); cognitive loop still running with no world to act on.
+Fatura OpenAI subindo com o bot parado; contagem de chamadas cloud por minuto alta com estado de jogo estável; tokens de reasoning >> tokens de saída visível; cache hit rate baixo (prompt instável).
 
-**Phase to address:** Fase 1 (stay online) for basic auto-reconnect; harden the supervisor + state persistence in Fase 3.
+**Phase to address:** **Provider LLM** — gate de custo e roteamento por dificuldade entram junto com a abstração cloud, não depois.
 
 ---
 
-### Pitfall 7: Anti-cheat kicks from superhuman action speed
+### Pitfall 7: Divergência de structured-output / tool-calling entre local fraco e GPT
 
 **What goes wrong:**
-The agent acts as fast as code allows: breaking blocks back-to-back, instant rotations, rapid movement. Server anti-cheat/anti-bot plugins flag "breaking blocks too fast," impossible look-snaps, or no-human-delay patterns and kick/ban the bot. A documented Mineflayer failure: after a few normal block breaks the bot starts digging endlessly and gets kicked.
+O mesmo prompt e o mesmo schema produzem comportamento diferente nos dois providers. GPT-5.x honra `strict` JSON Schema nativamente; o modelo local fraco **deriva** (JSON malformado, nomes de ação alucinados, campos inventados — o Pitfall #2 do v1.0). Se o loop foi calibrado e testado contra um provider, **trocar para o outro quebra silenciosamente**: prompts afinados para o local podem ser verbosos/sub-ótimos no GPT; schemas que o GPT aceita podem falhar no parser do local. Além disso há o **caveat zod v4 ↔ `withStructuredOutput`** (issue langchainjs #8357) que pode aceitar no GPT e falhar no caminho local.
 
 **Why it happens:**
-No artificial pacing — the bot does everything at machine speed because nothing throttles it.
+A abstração unificada (`ChatOpenAI`) dá a ilusão de que os dois são intercambiáveis. Eles têm a mesma *interface* mas confiabilidade e formato de saída muito diferentes. Testar só com um provider é a armadilha.
 
 **How to avoid:**
-- **Pace actions to human-plausible rates.** `await` digging completion, add small randomized delays between repeated actions, respect realistic `digTime`, throttle chat (anti-spam) and rotations.
-- **Centralize an action-execution layer** that enforces rate limits, so the LLM/planner can't issue physically impossible bursts.
-- **Test against the actual server's plugins.** PROJECT.md targets a *local* Java server for v1 — low risk now, but the pacing layer should exist before any real/public server (currently out of scope, but cheap insurance).
+- **Validate-repair-fallback continua obrigatório nos DOIS caminhos** (não relaxar a validação porque "o GPT é confiável" — o provider é trocável por env, então o código precisa sobreviver ao pior caso).
+- **Constrained decoding no local (GBNF/JSON-schema do LM Studio)** + `strict` no GPT — cada provider usa seu mecanismo de enforcement nativo.
+- **Suite de testes que roda contra ambos os providers** (ou um mock de cada perfil de saída) — o critério de aceite do provider é "o loop funciona com local E com cloud".
+- **Validar o caveat zod 4** ao vivo nos dois; fallback `zodToJsonSchema` → JSON Schema cru se `withStructuredOutput` falhar.
+- **Schemas pequenos e ação single-step** (lição do v1.0) ajudam o local e não prejudicam o GPT.
 
 **Warning signs:**
-`kicked` with "too fast"/anti-cheat reasons; bot digging in an endless burst; chat-spam kicks.
+Loop estável no GPT, quebra ao trocar `LLM_PROVIDER=local` (ou vice-versa); taxa de parse-failure dispara só num provider; schema aceito num caminho, rejeitado no outro; ações alucinadas só com o local.
 
-**Phase to address:** Fase 2 (action execution layer) — build the throttle alongside movement/actions.
+**Phase to address:** **Provider LLM** — testar a paridade dos dois providers é critério de aceite da abstração.
 
 ---
 
-### Pitfall 8: Bun ↔ Mineflayer runtime edge cases
+### Pitfall 8: Combate — perder o alvo, morrer mesmo lutando, kiting que vira suicídio
 
 **What goes wrong:**
-Mineflayer (via `minecraft-protocol`, `node-minecraft-protocol`, `protodef`, native crypto/zlib paths) is officially tested on **Node**. On Bun there are reported edge cases — e.g., failures to join certain servers (`socketClosed`/timeout on some MC versions), and NBT/protocol parsing paths that can behave differently. Discovering these *deep into Fase 3* (after building the whole stack on Bun) is expensive.
+O estado Fighting (hoje stub) na API nativa (`bot.attack` + pathfinder, sem `mineflayer-pvp` — decisão do STACK) tem armadilhas próprias:
+1. **Sem troca/perda de alvo:** o bot fixa um mob, outro o ataca pelas costas e ele morre; ou o alvo morre/despawna e o bot continua "atacando ar" (race de física do v1.0 #9 — alvo stale).
+2. **Cooldown de ataque (~0.6s):** spammar `bot.attack` ignora o cooldown de 1.9 do Minecraft → dano reduzido, luta que não progride.
+3. **Kiting com pathfinder que trava:** recuar via pathfinder esbarra nos hangs conhecidos (parede/água/knockback freeze #3887) → o bot fica preso enquanto o mob bate.
+4. **Lutar quando deveria fugir:** sem regra de "vida crítica → desengajar", o bot morre num combate que não devia ter aceitado.
 
 **Why it happens:**
-Bun is chosen for DX/speed (per Constraints) and assumed drop-in Node-compatible. Mineflayer leans on Node internals/native modules where Bun's compatibility is improving but not guaranteed.
+"Estado de combate" é subestimado como "chamar attack". Sem `mineflayer-pvp` (que dava strafe/cooldown prontos) toda a orquestração é manual — escolha consciente do STACK, mas transfere a complexidade para o loop.
 
 **How to avoid:**
-- **Validate Bun compatibility in Fase 1, before building anything on top.** A throwaway "connect + walk + read chat + reconnect" spike on the exact target MC version is the cheapest possible de-risking.
-- **Keep Node as a tested fallback (already the stated plan).** Don't use Bun-only APIs in core code so switching runtimes stays a one-line change. Pin Mineflayer + `minecraft-data` to versions that match the server's MC version.
-- **Treat the runtime decision as reversible** until the spike proves Bun stable for this workload.
+- **Re-validar o alvo antes de cada golpe** (precondição do v1.0 #9): existe? em alcance? ainda hostil? Senão, re-selecionar (`nearestEntity` filtrado por hostil+distância) ou desengajar.
+- **Respeitar o cooldown de ataque** (~0.6s entre golpes) — também ajuda no pacing anti-cheat do v1.0.
+- **Regra dura de desengajar:** vida < limiar crítico → System 1 preempta o combate e foge/abriga (liga com Pitfall 2). Combate é System 2 deliberado; sobreviver é System 1 reflexo.
+- **Kiting com watchdog de movimento** (timeout/no-progress do v1.0) para não travar recuando.
+- **Defesa de mob, não PvP** (anti-feature do FEATURES.md) — manter o escopo fechado reduz a superfície.
 
 **Warning signs:**
-`socketClosed`/timeout only under Bun; `PartialReadError`/`TypeError` from NBT/protodef under Bun but not Node; native-module load errors; intermittent disconnects that vanish on Node.
+Bot batendo no ar; morre com comida/vida disponível por não ter desengajado; dano baixo (cooldown ignorado); preso numa parede enquanto recua; ignora um segundo mob.
 
-**Phase to address:** Fase 1 — runtime validation is an explicit early gate (PROJECT.md already flags "validar compatibilidade Bun↔Mineflayer").
+**Phase to address:** **Combate (P2)** — depois da sobrevivência reflexa provada (FEATURES.md: "hora de atacar e não só fugir").
 
 ---
 
-### Pitfall 9: Physics/timing races between the loop and the game world
+### Pitfall 9: OOM do pathfinder/collectblock reaparece nas novas features [INTEGRAÇÃO]
 
 **What goes wrong:**
-The cognitive layer reads world state, the LLM thinks for several seconds, then acts on a *stale* snapshot — the target mob moved, the block was mined by someone else, the bot fell. Or the loop reads inventory/position before Mineflayer has synced after a chunk load/teleport, acting on `undefined`/wrong data. Server tick (20 TPS) and the agent's async actions desync.
+O v1.0 teve **OOM ~78GB** com A* do collectBlock e raio alto (fix na Fase 999.1: `searchRadius`/`thinkTimeout`/pré-check `getPathTo`; workaround `PERCEPTION_RADIUS` baixo ainda ativo). As features novas **reintroduzem o mesmo risco por caminhos novos**: building procura referência num raio, combate aproxima/recua com pathfinder repetidamente, smelting/tech-tree busca fornalha/minério num raio, e o curriculum pode pedir "achar diamante" (busca profunda subterrânea). Cada uma pode passar um raio grande ou um goal inalcançável para o A* e estourar memória/bloquear o event loop síncrono — exatamente o que o 999.1 corrigiu só para o dig.
 
 **Why it happens:**
-Treating Mineflayer state as instantaneously consistent, and assuming the world is frozen during the LLM's multi-second think time.
+O fix do 999.1 foi **localizado no collectblock**. As primitivas novas (placeBlock+pathfinder, attack+pathfinder, buscar estação) chamam o pathfinder por conta própria sem herdar os bounds. E o `PERCEPTION_RADIUS` baixo (workaround) limita o que o bot *vê*, o que pode fazer a tech-tree não encontrar recursos que existem logo além do raio.
 
 **How to avoid:**
-- **Re-validate just before acting.** Right before executing an action, confirm preconditions still hold (target still exists/in range, block still there, bot not mid-fall). If not, bounce back to the loop.
-- **Wait for readiness events.** Use `spawn`, `chunkColumnLoad`, physics-tick hooks before reading state after connect/teleport; guard against `undefined` entities/blocks.
-- **Keep deliberation short** (ties into Pitfall 1) so snapshots are fresher.
+- **Aplicar os bounds do 999.1 a TODA chamada de pathfinder das features novas:** `searchRadius`/`thinkTimeout` e pré-check de viabilidade (`getPathTo`) antes de comprometer com um goal — não só no collectblock.
+- **Separar raio de percepção (memória) de raio de busca (pathfinding)** consistentemente (decisão-chave já validada no v1.0) — building/combate/tech-tree usam raio de busca acotado, independente do `PERCEPTION_RADIUS`.
+- **Goals inalcançáveis viram falha rápida**, não busca exaustiva (`GoalNear`/`GoalGetToBlock` com range, watchdog do v1.0).
+- **Soak-test de memória** com as features novas ativas (o "Always-on overnight" do checklist do v1.0 precisa rodar de novo com building/combate/tech-tree).
 
 **Warning signs:**
-Bot attacks empty air / mines where a block used to be; actions on entities that just despawned; `undefined` reads right after spawn/teleport.
+RAM subindo durante building/combate/busca de recurso; event loop travado (lag > 200ms, métrica do 999.1) ao procurar fornalha/minério; bot some/trava ao receber objetivo "minerar diamante"; tech-tree não acha recursos que existem (raio de percepção pequeno demais).
 
-**Phase to address:** Fase 2 (action execution + precondition checks); reinforced in Fase 3.
+**Phase to address:** **Toda fase que adicione uma chamada de pathfinder** (System 1 abrigo, Building, Combate, Tech-tree) — o bound é critério de aceite por feature, não um item único.
+
+---
+
+### Pitfall 10: Fase 4 nunca verificada ao vivo, e o aprendizado por reflexão depende dela [INTEGRAÇÃO]
+
+**What goes wrong:**
+A Fase 4 do v1.0 (memória longa/semântica, reflexão, perfis, personalidade) foi marcada concluída **sem verificação humana ao vivo** (Known Gap explícito; `04-07-SUMMARY.md` registra que o teste humano não passou). O v2.0 quer **fechar o loop de aprendizado por reflexão** (mortes/falhas ajustam objetivos futuros) — que **depende inteiramente da Fase 4 funcionar ao vivo**. Construir o aprendizado sobre uma base não-verificada significa que, se a reflexão não dispara ou a recuperação semântica não funciona ao vivo, o "aprendizado" é placebo: o bot parece refletir mas nada influencia decisões.
+
+**Why it happens:**
+Débito consciente do v1.0 ("marcada concluída a pedido"). É tentador assumir que "227 testes passando" = funciona ao vivo, mas os testes são unitários/smoke; o gap é justamente runtime real (reflexão disparar, KNN retornar lições relevantes, perfis influenciarem decisão).
+
+**How to avoid:**
+- **Live-verify da Fase 4 é pré-requisito do aprendizado**, não paralelo (FEATURES.md já diz isso). Resolver o Known Gap antes ou no início da fase de aprendizado: confirmar ao vivo que `[reflect]` dispara (re-teste limpo pós-B1), que a memória semântica retorna lições relevantes, que perfis persistem e são lidos.
+- **Grounding (Pitfall 1) é pré-condição da reflexão útil:** refletir sobre ações alucinadas ("morri" registrado mas não morreu) corrompe o aprendizado. Grounding antes de fechar o loop reflexivo.
+- **Provar a influência, não só o registro:** o critério de sucesso é "uma morte por falta de abrigo faz o bot priorizar abrigo na próxima noite" — observável ao vivo, não "a lição foi gravada".
+- **Restrição dura:** aprendizado por experiência PRÓPRIA, nunca observar/imitar players (anti-feature do milestone).
+
+**Warning signs:**
+`[reflect]` não aparece no log ao vivo (regressão B1); recuperação semântica retorna lições irrelevantes; lições gravadas mas nenhuma decisão muda; reflexão sobre fatos alucinados (sem grounding).
+
+**Phase to address:** **Aprendizado/reflexão (P2)** — com live-verify da Fase 4 como gate de entrada. Depende de Grounding já estar pronto.
+
+---
+
+### Pitfall 11: Sobrevivência — perigos ambientais que matam fora do radar do "mob/fome"
+
+**What goes wrong:**
+"Não morrer" é reduzido a comer + fugir de mob, ignorando os assassinos silenciosos: **queda** (pathfinder/exploração leva a um precipício), **lava** (cavar reto para baixo / minerar diamante perto de lava — clássico), **afogamento** (nadar sem rota de saída), **sufocamento** (abrigo de emergência mal feito enterra o bot), **escuridão→spawn em cima do bot**, **knockback para o vazio**. O v1.0 já tem o freeze pós-knockback (#3887). Um "player que não morre" que só pensa em comida ainda morre na primeira caverna.
+
+**Why it happens:**
+Sobrevivência é fácil de escopar como "fome + combate" porque são os mais óbvios. Os perigos ambientais são situacionais e exigem percepção espacial (detectar lava/queda à frente) que o LLM lento não dá em tempo — tem que ser reflexo.
+
+**How to avoid:**
+- **System 1 inclui guardas ambientais reflexos:** não andar em bloco adjacente a lava sem ponte; nunca cavar reto para baixo; detectar `bot.oxygenLevel` baixo → ir para a superfície; detectar queda iminente (sem bloco à frente-abaixo além de N) → parar.
+- **Abrigo de emergência seguro:** o "cavar e tampar" (mc-agents) deve deixar bolsa de ar e não auto-sufocar — validar via `blockAt` ao redor (liga com Pitfall 5).
+- **Mineração da tech-tree com regra anti-lava:** ao minerar em profundidade (ferro/diamante), checar blocos adjacentes antes de quebrar (lava/água atrás do alvo).
+- **Tratar o freeze pós-knockback (#3887)** no watchdog de movimento.
+
+**Warning signs:**
+Mortes por queda/lava/afogamento nos logs de morte; bot cava reto para baixo; abrigo de emergência sufoca o bot; morte em caverna apesar de comida cheia.
+
+**Phase to address:** **System 1 reflexo** (guardas ambientais) + reforço em **Tech-tree** (mineração profunda anti-lava).
 
 ---
 
@@ -204,117 +269,124 @@ Bot attacks empty air / mines where a block used to be; actions on entities that
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Prompt for JSON instead of constrained/grammar-enforced decoding | Fast to wire up | Compounding parse failures, random no-ops, hard-to-debug bad actions | Only a throwaway spike; **never** for the real loop |
-| `await pathfinder.goto()` with no timeout/watchdog | Less code | Whole agent deadlocks on a single stuck path | **Never** — watchdog is mandatory |
-| Append-everything memory, no curation | Simple, "RAG will fix it" | Reasoning collapse + slowdowns + overflow crashes over hours | OK for a <1h demo; never for "persistent" |
-| Reuse the `bot` object on reconnect | Slightly less code | Broken-on-reconnect bugs, dead listeners | **Never** — always fresh instance |
-| Single LLM cadence (think every tick) | One simple loop | GPU thrash, stale plans, queued calls | Never on local LLM; two-rate is required |
-| No action pacing | Bot acts instantly | Anti-cheat kicks/bans | OK on bare local server with no anti-cheat; never on real servers |
-| Multi-step plans from a small model | Feels powerful | Brittle plans, JSON failures, hard recovery | Defer; single-next-action first |
+| Grounding por "Promise resolveu" em vez de delta de inventário | Rápido | Corrompe tech-tree + memória/reflexão (o bug do v1.0 volta) | **Nunca** — é o bug central que o milestone existe para matar |
+| Assistente como modo/máquina-de-estados separada | Conceito "limpo" | "Grude no jogador" volta; bot não retorna ao autônomo | **Nunca** — usar objetivo com condição-de-saída |
+| Reflexo passando pelo lock do LLM | Reusa o caminho existente | Deadlock/comida tardia; regressão do B1 | **Nunca** — System 1 não chama LLM |
+| GPT cloud em todo tick | Reasoning forte sempre | Fatura explode em loop 24/7 | Só em debug pontual; nunca como default de loop |
+| Testar o loop só com um provider | Menos trabalho | Quebra silenciosa ao trocar por env | OK num spike; nunca antes de declarar a abstração pronta |
+| `placeBlock` sem verificar `blockAt` depois | Menos código | Abrigo com buracos; bot enterrado; #2757 não tratado | **Nunca** em building/abrigo |
+| Pathfinder das features novas sem os bounds do 999.1 | Reusa pathfinder direto | OOM ~78GB reaparece por caminho novo | **Nunca** — herdar searchRadius/thinkTimeout |
+| Construir aprendizado sobre Fase 4 não verificada ao vivo | Avança rápido | Aprendizado placebo; nada influencia decisão | Nunca sem live-verify primeiro |
+| Resolver receitas sem limite de profundidade/memo | Simples | Recursão infinita / stack overflow na tech-tree | **Nunca** |
+| `mineflayer-pvp`/`auto-eat` (4 anos parados) em vez de API nativa | Pronto | Bug silencioso vs MC 1.21.4; deps abandonadas | Só se a API nativa provar insuficiente (improvável) |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| LM Studio | Assuming it errors loudly on context overflow | It can crash / silently truncate / emit garbage — enforce a prompt token budget; set overflow policy (`truncateMiddle`/`rollingWindow`) as a safety net |
-| LM Studio | Free-form JSON prompting | Use structured-output / JSON-schema (grammar) enforcement; closed action enum |
-| Mineflayer pathfinder | Awaiting goto with no failure path | Timeout + `stop()` + no-progress detector; feed failure to planner |
-| Mineflayer connection | One-shot connect, no lifecycle handling | Supervisor handling `end`/`kicked`/`error` + backoff + fresh bot on reconnect |
-| `minecraft-data`/protocol | Letting version auto-negotiate / mismatch | Pin bot `version` to the exact server MC version |
-| LangGraph.js | Cyclic StateGraph with no termination | Set explicit `recursionLimit`; add real stop conditions; monitor `langgraph_step` to terminate gracefully before the hard ceiling |
-| Bun | Assuming full Node parity for native/protocol code | Spike-test connect/play on Bun early; keep Node fallback; avoid Bun-only APIs in core |
+| System 1 ↔ single-flight do LLM (D-12) | Reflexo espera o lock de inferência | Lock de inferência ≠ lock de atuação; reflexo nunca chama LLM; preempta o corpo físico |
+| Modo assistente ↔ socializing/GoalFollow do v1.0 | Seguir jogador como comportamento de fundo coexiste com a hierarquia | Seguir só dentro de objetivo-assistente ativo; remover re-navigate do socializing (fonte do `0b4dc64`) |
+| Provider cloud ↔ gate do loop do v1.0 | Gate protege concorrência, não frequência/custo | Roteamento por dificuldade + effort:low + caching + teto de gasto |
+| `bot.craft`/`recipesFor` ↔ estação no mundo | Assumir "tenho bancada na mochila" = posso craftar 3x3 | Estação é `Block` colocado e ao alcance; modelar como nó do DAG |
+| `bot.placeBlock` ↔ servidor com lag | Awaitar sem tratar `blockUpdate did not fire` (#2757) | Timeout + verificar `blockAt`; limpar listeners (#1585) |
+| `bot.openFurnace` ↔ smoker/blast furnace | Usar openFurnace genérico em estações erradas (#1526) | Fornalha normal para minério; tratar `windowOpen` timeout (#3360) |
+| pathfinder das features novas ↔ fix do 999.1 | Fix só no collectblock; novas chamadas sem bound | Aplicar searchRadius/thinkTimeout/pré-check a building/combate/tech-tree |
+| Aprendizado ↔ Fase 4 (Known Gap) | Assumir "testes passam = funciona ao vivo" | Live-verify (reflect dispara, KNN relevante) antes de fechar o loop |
+| zod v4 ↔ `withStructuredOutput` (#8357) | Aceita no GPT, pode falhar no caminho local | Validar nos dois; fallback zodToJsonSchema → JSON Schema cru |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Think-every-tick on local LLM | GPU pinned while idle, late chat, queued calls | Two-rate loop; single-flight LLM; event-driven thinking | Immediately once the loop is always-on |
-| Context-window growth over uptime | Inference slows the longer it runs; eventual overflow/crash | Fixed prompt token budget; bounded short-term buffer; summarize+evict | Hours of continuous operation |
-| KV-cache VRAM from large context | OOM / heavy slowdown at high context length | Cap context; smaller models; trim retrieved memories | When context approaches 16k–32k on a 7B–14B model |
-| Re-planning loops | LLM call count climbs, game state flat | Re-plan budget, progress watchdog, commitment | Within minutes of running the goal system |
-| Memory store bloat | Retrieval returns noise/stale/contradictory hits | Dedup, decay, consolidate; recency+relevance filtering | Days of accumulation (Fase 4) |
+| GPT cloud por tick em loop 24/7 | Fatura subindo com bot parado; reasoning tokens >> output | Local default; roteamento por dificuldade; effort:low; caching | Imediato ao tornar GPT default do loop |
+| Pathfinder sem bounds (features novas) | RAM subindo em building/combate/busca; lag >200ms | Bounds do 999.1 em toda chamada; goal inalcançável = falha rápida | Ao adicionar qualquer pathfinder novo com raio alto |
+| Listeners de blockUpdate acumulando | Bot derruba após construir muito (#1585) | Limpar listeners por placement | Horas construindo num bot sempre-ativo |
+| Resolução de receita sem memo | CPU/pilha estourando ao planejar tech-tree | Memo + limite de profundidade | Ao montar cadeias profundas (ferro/diamante) |
+| Mineração profunda sem checagem anti-lava | Mortes recorrentes; perda de inventário | Checar blocos adjacentes antes de quebrar | Ao chegar no tier ferro/diamante (subterrâneo) |
 
 ## Security / Safety Mistakes
 
-> Single-player local-server research project, so classic web-security risks are minimal. The real risks are *agent-control* safety.
+> Projeto single-player local de pesquisa — riscos clássicos web são mínimos; o risco real é *controle do agente* e, agora, *gasto cloud*.
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Executing/`eval`-ing LLM-proposed code or arbitrary action names | Arbitrary behavior, crashes, griefing the world | Closed action registry + schema validation; never eval model output |
-| No spend/iteration cap on the loop | Runaway loop pins hardware indefinitely (local "cost") | Hard caps: max re-plans, max iterations per goal, loop-detection kill switch |
-| Trusting chat input from players into prompts unfiltered | Prompt injection: a player tells the bot to grief/leak/spam | Treat player chat as untrusted data, not instructions; constrain what chat can trigger; sanitize before embedding in prompts |
-| LM Studio endpoint exposed beyond localhost | Other processes/machines can drive the model | Bind to localhost; it's a local-only dependency in v1 |
+| Sem teto de gasto no provider cloud | Loop runaway gera fatura real (não só "custo" de hardware) | Contador de tokens/sessão + kill-switch; local como default |
+| Chat de jogador injetando objetivo-assistente sem limite | Prompt injection: "fica me seguindo pra sempre" / griefing | Tratar chat como dado não-confiável; objetivo-assistente com TTL e escopo fechado |
+| Nome de ação alucinado do LLM executado | Comportamento arbitrário (pior no local fraco) | Registry fechado de ações + validação por enum (lição v1.0); nunca eval |
+| Endpoint cloud com apiKey em log/commit | Vazamento de credencial paga | apiKey só via env; nunca logar; `.env` no gitignore |
 
 ## UX Pitfalls
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Chat replies arrive 10–30s late (LLM latency) | Feels broken/unresponsive | Fast canned acknowledgements + async LLM reply; keep persona prompt small; consider a smaller/faster model for chat than for planning |
-| Bot "freezes" while thinking | Looks crashed | Keep reactive layer alive (look around, small idle motions) so it appears alive during deliberation |
-| Bot spams chat | Annoying, anti-spam kicks | Rate-limit chat; only speak when it adds value |
-| Visibly stuck against a wall | Looks dumb / dead | No-progress watchdog → recover and try elsewhere (Pitfall 3/4) |
-| Goal thrashing visible in-world | Bot looks indecisive/insane | Commitment + hysteresis (Pitfall 4) |
+| Bot gruda no jogador (regressão) | Quebra o Core Value; o usuário ODEIA isso | Assistente = objetivo com saída; teste de regressão "se afasta sozinho" |
+| Bot morre repetidamente (sobrevivência incompleta) | "Não joga como player real" — falha do milestone | System 1 com guardas ambientais, não só fome+mob |
+| Assistente atende mas não confirma/relata | Jogador não sabe se o pedido foi feito | Relatar `observed` (grounding) ao concluir, depois voltar ao autônomo |
+| Latência cloud em chat | Resposta lenta apesar de modelo forte | Ack rápido + resposta async; chat no modelo barato (nano), planejamento no forte |
+| Bot abandona pedido no meio para "viver" | Assistente não confiável | Prioridade dura do objetivo-assistente até concluir/TTL (mas com saída garantida) |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Connection:** Connects fine once — but does it survive a kick/server restart? Verify auto-reconnect with a fresh bot instance and resumed state.
-- [ ] **Navigation:** Reaches a nearby goal — but does it recover from bedrock/no-tool/partial-path/water hangs? Verify timeout + no-progress watchdog actually fire and report failure.
-- [ ] **LLM loop:** Picks good actions in a demo — but does it produce valid JSON across hundreds of calls? Verify schema enforcement + repair + safe fallback; log parse-failure rate.
-- [ ] **Goal system:** Works for one goal — but does it avoid oscillation/starvation over a long run? Verify loop detection, progress tracking, commitment, anti-starvation aging.
-- [ ] **Memory:** Remembers recent events — but does prompt size stay bounded over hours? Verify token budget and that inference speed/quality don't degrade with uptime.
-- [ ] **Bun:** App boots on Bun — but does Mineflayer actually play (move, dig, reconnect) for the target MC version? Verify with a real play spike, not just connect.
-- [ ] **Always-on:** Runs for 5 minutes — but does it survive overnight? Run a long-soak test and watch for memory growth, reconnect spam, and LM Studio crashes.
+- [ ] **Grounding:** craft/place/mine retornam sucesso — mas o **inventário no jogo** bate com o relatado? Verificar delta de estado, não retorno da Promise.
+- [ ] **System 1 reflexo:** come e foge no teste — mas **interrompe** uma ação física em curso (preempção) sem deadlockar o single-flight? Verificar com mob aparecendo durante um craft.
+- [ ] **Modo assistente:** atende o pedido — mas **volta sozinho** ao autônomo e se afasta do jogador? Verificar "sem pedido, ele faz suas coisas longe do player".
+- [ ] **Tech-tree:** crafta tábua e bancada — mas resolve a cadeia até **ferro** com estações no mundo e ferramenta certa, sem recursão infinita? Verificar cadeia completa ao vivo.
+- [ ] **placeBlock/Building:** coloca um bloco — mas o abrigo **fecha de verdade** (sem buracos, sem auto-sufocar) e trata `blockUpdate` timeout? Verificar com servidor sob lag.
+- [ ] **Smelting:** abre fornalha — mas **funde minério e retira output** assíncrono sem travar? Verificar ciclo completo putFuel→putInput→takeOutput.
+- [ ] **Combate:** ataca o mob — mas **re-seleciona alvo**, respeita cooldown e **desengaja** com vida crítica? Verificar com 2 mobs + vida baixa.
+- [ ] **Provider:** funciona no GPT — mas o loop sobrevive ao **trocar para local** por env (parse, schema, custo)? Verificar paridade nos dois.
+- [ ] **Sobrevivência ambiental:** não morre de fome — mas sobrevive a **lava/queda/afogamento** numa caverna? Verificar soak em mineração.
+- [ ] **Aprendizado:** lição gravada — mas **muda a decisão** futura (morri sem abrigo → priorizo abrigo)? Verificar influência ao vivo + Fase 4 live-verify.
+- [ ] **Pathfinder novo:** building/combate navegam — mas **sem OOM** num soak overnight? Re-rodar o soak do v1.0 com as features novas.
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Think-every-tick already built | MEDIUM | Refactor to two-rate loop; add single-flight mutex + event triggers. Painful if loop is entangled — design upfront |
-| JSON unreliability discovered late | LOW–MEDIUM | Switch to LM Studio structured-output/grammar; add Zod validate-repair-fallback |
-| Pathfinder hangs in production | LOW | Wrap actions in timeout/watchdog; add stuck detector — localized change |
-| Goal oscillation | MEDIUM | Add commitment/hysteresis, loop-detection, progress watchdog, re-plan budget to goal selector |
-| Memory blowup | MEDIUM | Introduce token budget + bounded buffer + summarization; backfill curation/decay |
-| No reconnect | LOW | Wrap in supervisor with backoff + fresh-bot rebuild; move state outside bot object |
-| Bun incompatibility | LOW (if early) / HIGH (if late) | Switch to Node fallback — trivial if Bun-only APIs avoided; costly if Bun-specific code is everywhere |
+| Grounding superficial descoberto tarde | MEDIUM-HIGH | Reescrever primitivas para `ActionResult` por delta; auditar memória por fatos falsos já gravados |
+| "Grude" voltou | LOW-MEDIUM | Converter modo→objetivo com saída; remover GoalFollow de fundo; adicionar teste de regressão |
+| Reflexo deadlockando o single-flight | MEDIUM | Separar lock de inferência vs. atuação; implementar preempção do corpo físico |
+| Custo cloud explodiu | LOW | Voltar default para local; effort:low; gate de frequência; teto de gasto |
+| OOM do pathfinder em feature nova | LOW | Aplicar bounds do 999.1 à chamada nova (fix conhecido, localizado) |
+| placeBlock travando/falhando | LOW | Wrapper timeout + verificação `blockAt`; limpar listeners |
+| Recursão de receita infinita | LOW | Adicionar memo + limite de profundidade ao resolvedor |
+| Aprendizado placebo (Fase 4 não funciona ao vivo) | MEDIUM-HIGH | Resolver Known Gap da Fase 4 primeiro; provar influência antes de declarar pronto |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Bun↔Mineflayer edge cases | Fase 1 | Play-spike (move/dig/chat/reconnect) on target MC version under Bun passes |
-| No reconnect / not always-on | Fase 1 (basic), Fase 3 (hardened) | Kick the bot / restart server → it rejoins with state intact; overnight soak survives |
-| Pathfinder hang / stuck | Fase 2 | Force unreachable/bedrock/water targets → watchdog aborts and reports, loop continues |
-| Anti-cheat / superhuman speed | Fase 2 | Repeated digging is paced; no "too fast" kicks; action layer enforces rate limits |
-| Physics/timing races | Fase 2 (→3) | Precondition re-checks present; no acting on stale/`undefined` state after teleport/spawn |
-| Memory growth / context stuffing | Fase 2 (budget) → Fase 4 (curation) | Prompt token count stays bounded over a multi-hour run; inference speed stable |
-| Think-every-tick cadence | Fase 3 | Two-rate loop verified; idle bot makes few LLM calls; single-flight enforced |
-| JSON / tool-call unreliability | Fase 3 | Constrained decoding + schema; logged parse-failure rate near 0; unknown actions rejected |
-| Goal oscillation / starvation / re-plan loops | Fase 3 | Loop-detection + progress watchdog + commitment + aging verified over a long run; LLM-call count tracks game-state change |
+| 1. Grounding superficial | Grounding (1ª de gameplay) | Inventário no jogo == relatado, em centenas de ações |
+| 2. Reflexo vs. single-flight | System 1 reflexo | Mob durante craft → preempção sem deadlock; reflect ainda dispara |
+| 3. Regressão "grude no jogador" | Modos autônomo/assistente | Sem pedido → bot se afasta e faz tech-tree; volta ao autônomo após atender |
+| 4. Tech-tree / receitas recursivas | Tech-tree DAG | Cadeia até ferro ao vivo, estações no mundo, ferramenta certa, sem recursão |
+| 5. placeBlock frágil | System 1 (abrigo) → Building | Abrigo fecha sem buracos/sufoco; `blockUpdate` timeout tratado sob lag |
+| 6. Custo cloud em loop | Provider LLM | Fatura estável; local default; roteamento+effort:low+caching verificados |
+| 7. Divergência local vs. GPT | Provider LLM | Loop passa com `LLM_PROVIDER=local` E `=openai`; parse-failure ~0 nos dois |
+| 8. Combate (alvo/cooldown/fuga) | Combate (P2) | 2 mobs + vida baixa → re-seleciona, respeita cooldown, desengaja |
+| 9. OOM pathfinder reaparece | Toda fase com pathfinder novo | Soak overnight com building/combate/tech-tree sem crescer RAM; lag <200ms |
+| 10. Fase 4 não verificada ao vivo | Aprendizado/reflexão (P2) | `[reflect]` dispara ao vivo; lição muda decisão futura observável |
+| 11. Perigos ambientais | System 1 reflexo | Soak em caverna sem morte por lava/queda/afogamento |
 
 ## Sources
 
-- [mineflayer-pathfinder #222 — hangs on unbreakable block](https://github.com/PrismarineJS/mineflayer-pathfinder/issues/222)
-- [mineflayer-pathfinder #273 — stuck on partial/incomplete path](https://github.com/PrismarineJS/mineflayer-pathfinder/issues/273)
-- [mineflayer-pathfinder #332 — bot constantly stuck/halts with GoalFollow](https://github.com/PrismarineJS/mineflayer-pathfinder/issues/332)
-- [mineflayer-pathfinder PR #90 — bot getting stuck in water](https://github.com/PrismarineJS/mineflayer-pathfinder/pull/90)
-- [mineflayer #3887 — freezes mid-air after knockback (1.21.x)](https://github.com/PrismarineJS/mineflayer/issues/3887)
-- [mineflayer #623 / #164 / #767 / #865 — reconnect on kick/disconnect; broken-on-reconnect](https://github.com/PrismarineJS/mineflayer/issues/623)
-- [mineflayer #2778 — endless block breaking → anti-cheat kick](https://github.com/PrismarineJS/mineflayer/issues/2778)
-- [mineflayer #1091 / #3805 — anti-bot/anti-cheat kicks, "too fast"](https://github.com/PrismarineJS/mineflayer/issues/1091)
-- [mineflayer #3669 / #3714 / #3623 — NBT crashes, version compat, login packet issues](https://github.com/PrismarineJS/mineflayer/issues/3714)
-- [Voyager: An Open-Ended Embodied Agent with LLMs (arXiv 2305.16291) — token cost, weak-model self-improvement failure](https://arxiv.org/abs/2305.16291)
-- [Odyssey: Open-World Skills (arXiv 2407.15325) — open-weight models struggle on basic tasks](https://arxiv.org/pdf/2407.15325)
-- [The Agent Loop Problem — oscillation / re-planning loops / motion≠progress (Medium)](https://medium.com/@Modexa/the-agent-loop-problem-when-smart-wont-stop-ccbf8489180f)
-- [How to Prevent Infinite Loops in AI Agents — action-hash repetition detection, time-per-step (BSWEN)](https://docs.bswen.com/blog/2026-03-11-prevent-ai-agent-infinite-loops/)
-- [browser-use #191 — endless-loop detection to avoid high LLM cost](https://github.com/browser-use/browser-use/issues/191)
-- [Reliable Structured Output from Local LLMs — grammar-constrained decoding, compounding failure (Markaicode)](https://markaicode.com/ollama-structured-output-pipeline/)
-- [Structured Outputs in Production — 95%/step → ~60% over 10 steps; need >99%/step (Tensoria)](https://tensoria.fr/en/blog/structured-outputs-llm-production)
-- [LM Studio bug #1620 — crash when context length exceeded / inoperative truncation](https://github.com/lmstudio-ai/lmstudio-bug-tracker/issues/1620)
-- [LM Studio bug #1806 — silent failure / garbage output on context overflow after large tool response](https://github.com/lmstudio-ai/lmstudio-bug-tracker/issues/1806)
-- [LM Studio prediction config — context overflow policies (stopAtLimit/truncateMiddle/rollingWindow)](https://lmstudio.ai/docs/typescript/api-reference/llm-prediction-config-input)
-- [A Practical Guide to Memory for Autonomous LLM Agents (Towards Data Science) — append-only bloat, curation is the hard part](https://towardsdatascience.com/a-practical-guide-to-memory-for-autonomous-llm-agents/)
-- [LangGraph.js #1524 — recursionLimit / GraphRecursionError (default 25), termination conditions](https://github.com/langchain-ai/langgraphjs/issues/1524)
+- [mineflayer #2757 — `Event blockUpdate did not fire within timeout` ao colocar bloco com lag](https://github.com/PrismarineJS/mineflayer/issues/2757) — HIGH
+- [mineflayer #1585 — EventEmitter overflow de listeners de blockUpdate derruba o bot após uso prolongado](https://github.com/PrismarineJS/mineflayer/issues/1585) — HIGH
+- [mineflayer #2320 — placeBlock falha sem item na mão](https://github.com/PrismarineJS/mineflayer/issues/2320) — HIGH
+- [mineflayer #1526 — openFurnace não funciona com Smokers/Blast Furnaces](https://github.com/PrismarineJS/mineflayer/issues/1526) — HIGH
+- [mineflayer #3360 — `Event windowOpen did not fire within timeout` (abrir contêiner/fornalha)](https://github.com/PrismarineJS/mineflayer/issues/3360) — HIGH
+- [mineflayer #2186 — Unhandled Promise Rejection em placeBlock](https://github.com/PrismarineJS/mineflayer/issues/2186) — MEDIUM
+- [mineflayer #3887 — freeze mid-air após knockback (1.21.x)](https://github.com/PrismarineJS/mineflayer/issues/3887) — HIGH (também citado no v1.0)
+- [mineflayer-pathfinder #222 — hang em bloco inquebrável](https://github.com/PrismarineJS/mineflayer-pathfinder/issues/222) — HIGH (base para OOM/hang das chamadas novas)
+- [mineflayer docs/api.md — `recipesFor`/`craft`/`placeBlock`/`openFurnace`/`attack`/`consume` (assinaturas e estação como `Block`)](https://github.com/PrismarineJS/mineflayer/blob/master/docs/api.md) — HIGH
+- [Voyager — arXiv 2305.16291: resolução de tech-tree, self-verification por estado real, error-feedback retry](https://arxiv.org/abs/2305.16291) — HIGH
+- [GITM — arXiv 2305.17144: DAG de pré-requisitos Material/Tool (estações como nós)](https://arxiv.org/pdf/2305.17144) — HIGH
+- [mc-agents — System 1/System 2, grounding via status.json/events.json, shelter reflexo](https://github.com/jblemee/mc-agents) — HIGH
+- [langchainjs #8357 — caveat zod v4 ↔ `withStructuredOutput`/strict](https://github.com/langchain-ai/langchainjs/issues/8357) — MEDIUM
+- [OpenAI API docs — `reasoning.effort`, Structured Outputs, prompt caching (controle de custo)](https://developers.openai.com/api/docs/guides/latest-model) — HIGH
+- Débitos internos do v1.0 (PROJECT.md Known Gaps + Key Decisions + commits `0b4dc64`/`540966d`): OOM 999.1, single-flight D-12, starvation B1, Fase 4 não-verificada-ao-vivo, re-navigate do socializing — HIGH (fonte primária do projeto)
+- `.planning/milestones/v1.0-research/PITFALLS.md` — os 9 pitfalls genéricos que continuam válidos (não repetidos aqui) — HIGH
 
 ---
-*Pitfalls research for: autonomous persistent LLM-driven Mineflayer agent (local model, perpetual loop, Bun)*
-*Researched: 2026-06-18*
+*Pitfalls research for: MineMind v2.0 "Autonomia de Verdade" — adicionar sobrevivência/combate/building/tech-tree/grounding/provider-cloud a um agente Mineflayer+LangGraph existente, com foco em integração com débitos do v1.0*
+*Researched: 2026-06-19*
