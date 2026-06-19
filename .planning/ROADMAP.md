@@ -53,8 +53,12 @@ Continuação numérica do v1.0 (que terminou na Phase 5; 999.1 foi backlog/park
   1. Definir `LLM_PROVIDER=openai` faz o loop raciocinar com GPT-4.1-mini; `=local` (default) usa LM Studio — sem nenhuma alteração no código do loop
   2. O structured output (Zod) produz saída válida e parseável nos DOIS providers (paridade verificada por teste rodando contra cada perfil); fallback `zodToJsonSchema`→JSON Schema cru cobre o caveat zod v4 ↔ `withStructuredOutput`
   3. Os embeddings permanecem locais (LM Studio) independentemente do provider de chat ativo — o KNN semântico continua custo-zero mesmo com chat na cloud
-  4. As chamadas cloud respeitam um teto de gasto/frequência configurável (contador de tokens/sessão + gate de invocação + `reasoning.effort` baixo como default cloud) — a fatura não escala com o bot parado
-**Plans**: TBD
+  4. As chamadas cloud respeitam um teto de gasto/frequência configurável (hard-cap de chamadas/janela persistido + gate de invocação + `max_tokens` baixo + prompt caching; `reasoning.effort` aplicado SÓ condicionalmente se o modelo for gpt-5.x/o-series — D-03/D-04) — a fatura não escala com o bot parado
+**Plans**: 3 plans
+Plans:
+- [ ] 06-01-PLAN.md — Factory + cloud provider (GPT-4.1-mini) + embeddings locais por composição + fallback zod v4 (PROV-01/02/03/04)
+- [ ] 06-02-PLAN.md — Teto de custo (withSpendCap hard-cap → fallback-to-local, contador SQLite) + fiação createProvider (PROV-05)
+- [ ] 06-03-PLAN.md — Paridade de structured output: teste schema-only + fallback D-16 + live gated RUN_LIVE_PARITY (PROV-04)
 
 ### Phase 7: Grounding + SkillResult
 **Goal**: Toda skill retorna um resultado verificado por delta real de inventário/mundo, e o agente só relata (chat/memória) o que o estado confirma — eliminando a alucinação "peguei 10 tábuas" que corromperia a tech-tree e o aprendizado.
@@ -153,7 +157,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 6. LLM Provider Factory | v2.0 | 0/TBD | Not started | - |
+| 6. LLM Provider Factory | v2.0 | 0/3 | Planned | - |
 | 7. Grounding + SkillResult | v2.0 | 0/TBD | Not started | - |
 | 8. System 1 — Sobrevivência Reflexa | v2.0 | 0/TBD | Not started | - |
 | 9. Placement + Crafting/Smelting Grounded | v2.0 | 0/TBD | Not started | - |
