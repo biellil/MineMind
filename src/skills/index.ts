@@ -2,6 +2,10 @@
 // Registry centralizado de skills — exposto para o loop cognitivo (Fase 2+)
 // D-11: skills acessíveis tanto como funções quanto como tool descriptors com schemas Zod
 import type { Bot } from 'mineflayer'
+import { navigate, navigateTool } from './navigate'
+import { dig, digTool } from './dig'
+import { follow, followTool } from './follow'
+import { attack, attackTool } from './attack'
 
 // Re-exportar individualmente para uso direto
 export { navigate, NavigateSchema, navigateTool } from './navigate'
@@ -24,12 +28,13 @@ export interface SkillTool {
 /**
  * Registry de skills como funções TypeScript.
  * Fase 2 usa para executar skills por nome no loop cognitivo.
+ * Uses static imports (no dynamic import() overhead per call).
  */
 export const skillRegistry: Record<string, SkillFunction> = {
-  navigate: async (bot, params) => { const { navigate } = await import('./navigate'); return navigate(bot, params) },
-  dig: async (bot, params) => { const { dig } = await import('./dig'); return dig(bot, params) },
-  follow: async (bot, params) => { const { follow } = await import('./follow'); return follow(bot, params) },
-  attack: async (bot, params) => { const { attack } = await import('./attack'); return attack(bot, params) },
+  navigate,
+  dig,
+  follow,
+  attack,
 }
 
 /**
@@ -37,11 +42,6 @@ export const skillRegistry: Record<string, SkillFunction> = {
  * Contém schemas Zod prontos para `.toJSONSchema()` (Zod v4 built-in).
  * D-11: Fase 3 consome isso sem nenhuma refatoração.
  */
-import { navigateTool } from './navigate'
-import { digTool } from './dig'
-import { followTool } from './follow'
-import { attackTool } from './attack'
-
 export const toolRegistry: SkillTool[] = [
   navigateTool,
   digTool,

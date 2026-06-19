@@ -28,7 +28,7 @@ export function buildWorldSnapshot(bot: Bot): WorldSnapshot {
     food: bot.food,
     position: { x: pos.x, y: pos.y, z: pos.z } satisfies Position3D,
     timeOfDay: bot.time.timeOfDay,
-    isDay: bot.time.timeOfDay < 0.5,
+    isDay: bot.time.timeOfDay < 13000,  // ticks 0–24000; dia = 0–13000
   }
 
   // === PERC-02: Entidades próximas (D-08: tipo, posição, distância, vida, metadata) ===

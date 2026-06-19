@@ -59,10 +59,13 @@ export async function dig(bot: Bot, rawParams: unknown): Promise<void> {
       throw new Error(`Nenhum bloco em (${target.x}, ${target.y}, ${target.z}) ou é ar`)
     }
 
+    const blockName = blockAtPos.name
     await executeWithSafety(
       () => bot.dig(blockAtPos),
       {
         timeoutMs: config.digTimeoutMs,
+        // Watchdog: bloco desaparece quando minerado — posição do bloco vira air (WR-04)
+        progressChecker: () => (bot.blockAt({ x: target.x, y: target.y, z: target.z } as Parameters<typeof bot.blockAt>[0])?.name === blockName ? 0 : 1),
         progressIntervalMs: 1_000,
         noProgressToleranceMs: config.digTimeoutMs,
       }

@@ -74,33 +74,36 @@ export async function executeWithSafety<T>(
   // ACT-04: delay humanizado ANTES da ação (média 300ms, stddev 100ms)
   await new Promise<void>((r) => setTimeout(r, gaussianDelay(300, 100)))
 
-  // ACT-03: timeout — rejeita após timeoutMs
+  // ACT-03: timeout — rejeita após timeoutMs; timer armazenado para clearTimeout no finally
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined
   const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new SkillTimeoutError(timeoutMs)), timeoutMs)
+    timeoutTimer = setTimeout(() => reject(new SkillTimeoutError(timeoutMs)), timeoutMs)
   })
 
-  // ACT-03: watchdog de progresso — rejeita se valor não muda por noProgressToleranceMs
+  // ACT-03: watchdog de progresso — só criado quando progressChecker é fornecido (WR-02)
   let watchdogTimer: ReturnType<typeof setInterval> | undefined
-  const watchdogPromise = new Promise<never>((_, reject) => {
-    if (!progressChecker) return  // sem watchdog se não fornecido
+  let watchdogPromise: Promise<never> | undefined
+  if (progressChecker) {
+    const checker = progressChecker
+    watchdogPromise = new Promise<never>((_, reject) => {
+      let lastValue = checker()
+      let lastProgressAt = Date.now()
 
-    let lastValue = progressChecker()
-    let lastProgressAt = Date.now()
-
-    watchdogTimer = setInterval(() => {
-      const current = progressChecker()
-      if (current !== lastValue) {
-        lastValue = current
-        lastProgressAt = Date.now()
-      } else if (Date.now() - lastProgressAt > noProgressToleranceMs) {
-        reject(new SkillStuckError(noProgressToleranceMs))
-      }
-    }, progressIntervalMs)
-  })
+      watchdogTimer = setInterval(() => {
+        const current = checker()
+        if (current !== lastValue) {
+          lastValue = current
+          lastProgressAt = Date.now()
+        } else if (Date.now() - lastProgressAt > noProgressToleranceMs) {
+          reject(new SkillStuckError(noProgressToleranceMs))
+        }
+      }, progressIntervalMs)
+    })
+  }
 
   try {
     const racers: Promise<T | never>[] = [action(), timeoutPromise]
-    if (progressChecker) racers.push(watchdogPromise)
+    if (watchdogPromise) racers.push(watchdogPromise)
 
     const result = await Promise.race(racers)
 
@@ -109,7 +112,7 @@ export async function executeWithSafety<T>(
 
     return result
   } finally {
-    // Limpar watchdog independentemente do resultado
+    if (timeoutTimer !== undefined) clearTimeout(timeoutTimer)
     if (watchdogTimer !== undefined) clearInterval(watchdogTimer)
   }
 }
