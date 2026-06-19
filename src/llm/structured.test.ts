@@ -88,6 +88,25 @@ test('decide retorna ação fora do enum -> repair, e se persistir -> fallback',
   expect(result).toEqual(FALLBACK)
 })
 
+test('decide lança "type:None" (caveat zod v4 #8357) na 1ª tentativa e a repair recupera -> retorna válido', async () => {
+  // Prova que o caminho de decisão sobrevive ao sintoma do caveat zod v4 SEM rede:
+  // o fallback z.toJSONSchema vive em provider.decide (D-16), e decideAction garante
+  // validate->repair->fallback nos DOIS providers (D-17). Aqui o provider simula o
+  // sintoma 'type:None' na 1ª chamada; a repair (2ª chamada) recupera.
+  let calls = 0
+  const provider = mockProvider({
+    available: true,
+    decide: async () => {
+      calls += 1
+      if (calls === 1) throw new Error("Invalid schema: type:'None' (zod v4 #8357)")
+      return VALID
+    },
+  })
+  const result = await decideAction(provider, messages, fallback)
+  expect(result.action).toBe('gather')
+  expect(calls).toBe(2) // 1ª falhou com o sintoma do caveat, repair recuperou (D-17)
+})
+
 test('decideAction NUNCA rejeita (sempre resolve)', async () => {
   const providers = [
     mockProvider({ available: false }),
