@@ -21,7 +21,7 @@ Escopo comprometido deste milestone. Cada requisito mapeia para uma fase do road
 
 - [x] **GRND-01**: Toda skill retorna um resultado verificado (SkillResult) baseado em delta real de inventário/mundo, não na resolução da Promise
 - [ ] **GRND-02**: O agente relata (chat/memória) apenas ações que o estado do mundo confirma — acaba a alucinação "peguei 10 tábuas"
-- [ ] **GRND-03**: As skills existentes (navigate/dig/follow/attack) são convertidas para retornar SkillResult
+- [x] **GRND-03**: As skills existentes (navigate/dig/follow/attack) são convertidas para retornar SkillResult
 - [ ] **GRND-04**: Uma ação cujo resultado não satisfaz o esperado é registrada como falha (não como sucesso)
 
 ### Sobrevivência — Camada Reflexa System 1 (SURV)
@@ -113,7 +113,7 @@ Quais fases cobrem quais requisitos. Preenchido durante a criação do roadmap.
 | PROV-05 | Phase 6 | Complete |
 | GRND-01 | Phase 7 | Complete |
 | GRND-02 | Phase 7 | Pending |
-| GRND-03 | Phase 7 | Pending |
+| GRND-03 | Phase 7 | Complete |
 | GRND-04 | Phase 7 | Pending |
 | SURV-01 | Phase 8 | Pending |
 | SURV-02 | Phase 8 | Pending |
