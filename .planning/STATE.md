@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 04-06-PLAN.md
-last_updated: "2026-06-19T19:20:48.772Z"
+stopped_at: Corrigido B1/B2 do 04-07; aguardando re-verificação humana ao vivo (Task 3)
+last_updated: "2026-06-19T19:59:38.276Z"
 last_activity: 2026-06-19
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 24
-  completed_plans: 23
+  completed_plans: 24
   percent: 50
 ---
 
@@ -88,6 +88,8 @@ Recent decisions affecting current work:
 - [Phase 04]: REFL-01/D-13: consolidação CP→LP grava DIRETO em events (type='reflection', importância forçada 8) — MemEvent não modela reflexão, então persistEvent não serve; duplicação inline documentada do bind/schema do 04-02/04-03
 - [Phase 04]: D-11/REFL-01: estado 'reflecting' entra no PRIORITY_ORDER entre 'exploring' e 'idle' (prioridade baixa, sempre preemptível); gatilho híbrido shouldReflect = OR de event-driven/acúmulo/piso temporal
 - [Phase 04]: MEM-02/D-04/D-19: a mente sobrevive a RESTART completo — kv['holder'] guarda needs/goals/currentGoal/disposition/personality; hydrateHolder no boot aplica decay-on-boot (só curiosity por timestamp; survival/resources ficam p/ evaluateNeeds do 1º tick; goals velhos descartados; personality mean-reversion); SIGINT/SIGTERM = persistHolder+db.close (WAL checkpoint)
+- [Phase 04]: B1/REFL-01: reflexão nunca disparava em runtime — ação e reflexão compartilhavam inFlight+budget; ação ganhava o lock e o loop rearmava o gatilho INCONDICIONALMENTE (auto-desarme). Fix: maybeDeliberate retorna boolean; reflect pula o budget de replan de AÇÃO (mantém lock inFlight, D-12); loop só rearma quando ran===true via .then
+- [Phase 04]: B2/MEM-02: flush durável só em SIGINT/SIGTERM e ao fim da reflexão (que nunca rodava por B1) — crash/OOM/desconexão perdia tudo desde o boot. Fix: flush no bot.once('end') (guardado) + flush periódico no tick (HOLDER_FLUSH_INTERVAL_MS default 30000) limitando perda em kill duro
 
 ### Pending Todos
 
@@ -102,9 +104,10 @@ Recent decisions affecting current work:
 - [RESOLVIDO] Compatibilidade Bun 1.3.2 ↔ Mineflayer 4.37.1 confirmada — `bun install` sem erros NAPI, bot conectou em MC 1.21.4.
 - [Fase 2 → Backlog 999.1]: collectBlock/pathfinder estoura memória (OOM kill) com PERCEPTION_RADIUS alto. Workaround local raio=8. Otimização adiada para o backlog.
 - [Fase 3 / Fase 4]: Sinalizadas para /gsd:research-phase — grammar/structured-output e tool-calling do modelo local (Fase 3); estratégia de persistência e scoring de recuperação semântica (Fase 4).
+- [Phase 04 / Plan 07]: Task 3 (verificação humana AO VIVO) PENDENTE — B1/B2 corrigidos no código + regressão verde, mas Phase 4 NÃO está completo até o humano confirmar ao vivo que [reflect] dispara e o estado sobrevive a um kill duro (taskkill /F). Ver 04-07-SUMMARY.md.
 
 ## Session Continuity
 
-Last session: 2026-06-19T19:20:48.765Z
-Stopped at: Completed 04-06-PLAN.md
+Last session: 2026-06-19T19:58:31.413Z
+Stopped at: Corrigido B1/B2 do 04-07; aguardando re-verificação humana ao vivo (Task 3)
 Resume file: None
