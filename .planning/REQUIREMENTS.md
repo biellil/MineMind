@@ -65,7 +65,7 @@ Requisitos da versão inicial (MVP de 4 fases do PRD). Cada um mapeia para fases
 
 ### Reflection (REFL)
 
-- [ ] **REFL-01**: No estado Reflecting, o agente revisa acontecimentos, consolida memória e atualiza objetivos
+- [x] **REFL-01**: No estado Reflecting, o agente revisa acontecimentos, consolida memória e atualiza objetivos
 
 ### Social (SOC)
 
@@ -135,7 +135,7 @@ Quais fases cobrem quais requisitos. Preenchido durante a criação do roadmap.
 | CONN-03 | Phase 3 | Pending |
 | MEM-02 | Phase 4 | Complete |
 | MEM-03 | Phase 4 | Complete |
-| REFL-01 | Phase 4 | Pending |
+| REFL-01 | Phase 4 | Complete |
 | SOC-01 | Phase 4 | Complete |
 | SOC-02 | Phase 4 | Complete |
 
