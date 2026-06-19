@@ -20,16 +20,18 @@ function makePos(x: number, y: number, z: number) {
 }
 
 // Mock mínimo de Bot. cursorBlock e belowBlock parametrizam os ramos defensivos.
+// entity (opcional): permite simular morte/void (entity undefined ou sem position) — CR#1.
 function makeMockBot(opts: {
   cursorBlock?: { name: string; position: { x: number; y: number; z: number } } | null
   belowBlock?: { name: string } | null
+  entity?: any
 } = {}): any {
   const pos = makePos(0, 64, 0)
   return {
     username: 'MineMind',
     health: 20,
     food: 20,
-    entity: { position: pos },
+    entity: 'entity' in opts ? opts.entity : { position: pos },
     time: { timeOfDay: 1000 },
     entities: {},
     players: {},
@@ -45,28 +47,32 @@ test('blockAtCursor retorna Block -> lookingAt preenchido com name/position/dist
     cursorBlock: { name: 'oak_log', position: { x: 3, y: 64, z: 0 } },
   })
   const snap = buildWorldSnapshot(bot)
-  expect(snap.lookingAt).not.toBeNull()
-  expect(snap.lookingAt?.name).toBe('oak_log')
-  expect(snap.lookingAt?.position).toEqual({ x: 3, y: 64, z: 0 })
-  expect(snap.lookingAt?.distance).toBeCloseTo(3, 5)
+  expect(snap).not.toBeNull()
+  expect(snap!.lookingAt).not.toBeNull()
+  expect(snap!.lookingAt?.name).toBe('oak_log')
+  expect(snap!.lookingAt?.position).toEqual({ x: 3, y: 64, z: 0 })
+  expect(snap!.lookingAt?.distance).toBeCloseTo(3, 5)
 })
 
 test('blockAtCursor retorna null -> lookingAt === null', () => {
   const bot = makeMockBot({ cursorBlock: null })
   const snap = buildWorldSnapshot(bot)
-  expect(snap.lookingAt).toBeNull()
+  expect(snap).not.toBeNull()
+  expect(snap!.lookingAt).toBeNull()
 })
 
 test('blockAt(offset -1) retorna Block -> underfoot === block.name', () => {
   const bot = makeMockBot({ belowBlock: { name: 'grass_block' } })
   const snap = buildWorldSnapshot(bot)
-  expect(snap.underfoot).toBe('grass_block')
+  expect(snap).not.toBeNull()
+  expect(snap!.underfoot).toBe('grass_block')
 })
 
 test('blockAt(offset -1) retorna null -> underfoot === "unknown"', () => {
   const bot = makeMockBot({ belowBlock: null })
   const snap = buildWorldSnapshot(bot)
-  expect(snap.underfoot).toBe('unknown')
+  expect(snap).not.toBeNull()
+  expect(snap!.underfoot).toBe('unknown')
 })
 
 test('snapshot continua congelado (Object.freeze) com os campos novos', () => {
@@ -75,8 +81,22 @@ test('snapshot continua congelado (Object.freeze) com os campos novos', () => {
     belowBlock: { name: 'dirt' },
   })
   const snap = buildWorldSnapshot(bot)
+  expect(snap).not.toBeNull()
   expect(Object.isFrozen(snap)).toBe(true)
   expect(() => {
     ;(snap as unknown as Record<string, unknown>).underfoot = 'lava'
   }).toThrow()
+})
+
+// CR#1: na morte/void o Mineflayer zera bot.entity — buildWorldSnapshot deve retornar null (sem throw).
+test('bot.entity === undefined (morte/void) -> retorna null sem lançar', () => {
+  const bot = makeMockBot({ entity: undefined })
+  expect(() => buildWorldSnapshot(bot)).not.toThrow()
+  expect(buildWorldSnapshot(bot)).toBeNull()
+})
+
+test('bot.entity presente mas position undefined -> retorna null sem lançar', () => {
+  const bot = makeMockBot({ entity: { position: undefined } })
+  expect(() => buildWorldSnapshot(bot)).not.toThrow()
+  expect(buildWorldSnapshot(bot)).toBeNull()
 })

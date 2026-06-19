@@ -17,10 +17,15 @@ import { config } from '../config'
  * PERC-04: retorna um objeto plain sem nenhuma referência ao objeto bot.
  *
  * @param bot - Instância de bot Mineflayer (deve ter passado pelo evento 'spawn')
- * @returns WorldSnapshot imutável (structuredClone + Object.freeze)
+ * @returns WorldSnapshot imutável (structuredClone + Object.freeze), ou null se o bot não tem corpo.
  */
-export function buildWorldSnapshot(bot: Bot): WorldSnapshot {
-  const pos = bot.entity.position
+export function buildWorldSnapshot(bot: Bot): WorldSnapshot | null {
+  // CR#1: na morte/queda no void o Mineflayer zera bot.entity. Sem corpo não há snapshot:
+  // retornar null degrada o tick para idle (analyze já trata snapshot null) em vez de lançar
+  // e derrubar o driver do loop.
+  const entity = bot.entity
+  if (!entity?.position) return null
+  const pos = entity.position
 
   // === PERC-01: Status do próprio bot ===
   const status = {
