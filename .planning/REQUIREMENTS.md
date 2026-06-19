@@ -99,8 +99,6 @@ Exclusões explícitas. Documentadas para prevenir scope creep.
 | Módulos cognitivos concorrentes (PIANO completo) | System 1/2 já dá responsividade sem o problema de coerência "diz X faz Y" |
 | Farming / comércio com villagers / redstone | Scope creep; não serve o thesis (sobreviver + tech tree) |
 | `mineflayer-pvp` / `mineflayer-auto-eat` (plugins) | Abandonados (~4 anos); escondem a lógica que é o objeto de estudo — usar API nativa |
-| Backend Python / ponte cross-process | Stack all-TypeScript já validada |
-| Minecraft Bedrock Edition | Mineflayer suporta apenas Java Edition |
 
 ## Traceability
 
@@ -108,49 +106,49 @@ Quais fases cobrem quais requisitos. Preenchido durante a criação do roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROV-01 | — | Pending |
-| PROV-02 | — | Pending |
-| PROV-03 | — | Pending |
-| PROV-04 | — | Pending |
-| PROV-05 | — | Pending |
-| GRND-01 | — | Pending |
-| GRND-02 | — | Pending |
-| GRND-03 | — | Pending |
-| GRND-04 | — | Pending |
-| SURV-01 | — | Pending |
-| SURV-02 | — | Pending |
-| SURV-03 | — | Pending |
-| SURV-04 | — | Pending |
-| SURV-05 | — | Pending |
-| CRAFT-01 | — | Pending |
-| CRAFT-02 | — | Pending |
-| CRAFT-03 | — | Pending |
-| CRAFT-04 | — | Pending |
-| TECH-01 | — | Pending |
-| TECH-02 | — | Pending |
-| TECH-03 | — | Pending |
-| TECH-04 | — | Pending |
-| TECH-05 | — | Pending |
-| MODE-01 | — | Pending |
-| MODE-02 | — | Pending |
-| MODE-03 | — | Pending |
-| MODE-04 | — | Pending |
-| MODE-05 | — | Pending |
-| BUILD-01 | — | Pending |
-| BUILD-02 | — | Pending |
-| BUILD-03 | — | Pending |
-| FIGHT-01 | — | Pending |
-| FIGHT-02 | — | Pending |
-| FIGHT-03 | — | Pending |
-| LRN-01 | — | Pending |
-| LRN-02 | — | Pending |
-| LRN-03 | — | Pending |
+| PROV-01 | Phase 6 | Pending |
+| PROV-02 | Phase 6 | Pending |
+| PROV-03 | Phase 6 | Pending |
+| PROV-04 | Phase 6 | Pending |
+| PROV-05 | Phase 6 | Pending |
+| GRND-01 | Phase 7 | Pending |
+| GRND-02 | Phase 7 | Pending |
+| GRND-03 | Phase 7 | Pending |
+| GRND-04 | Phase 7 | Pending |
+| SURV-01 | Phase 8 | Pending |
+| SURV-02 | Phase 8 | Pending |
+| SURV-03 | Phase 8 | Pending |
+| SURV-04 | Phase 8 | Pending |
+| SURV-05 | Phase 8 | Pending |
+| BUILD-01 | Phase 9 | Pending |
+| CRAFT-01 | Phase 9 | Pending |
+| CRAFT-02 | Phase 9 | Pending |
+| CRAFT-03 | Phase 9 | Pending |
+| CRAFT-04 | Phase 9 | Pending |
+| TECH-01 | Phase 10 | Pending |
+| TECH-02 | Phase 10 | Pending |
+| TECH-03 | Phase 10 | Pending |
+| TECH-04 | Phase 10 | Pending |
+| TECH-05 | Phase 10 | Pending |
+| MODE-01 | Phase 11 | Pending |
+| MODE-02 | Phase 11 | Pending |
+| MODE-03 | Phase 11 | Pending |
+| MODE-04 | Phase 11 | Pending |
+| MODE-05 | Phase 11 | Pending |
+| BUILD-02 | Phase 12 | Pending |
+| BUILD-03 | Phase 12 | Pending |
+| FIGHT-01 | Phase 13 | Pending |
+| FIGHT-02 | Phase 13 | Pending |
+| FIGHT-03 | Phase 13 | Pending |
+| LRN-01 | Phase 14 | Pending |
+| LRN-02 | Phase 14 | Pending |
+| LRN-03 | Phase 14 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 37 total
-- Mapped to phases: 0 (preenchido pelo roadmapper)
-- Unmapped: 37 ⚠️ (até o roadmap)
+- Mapped to phases: 37 ✓ (Phases 6-14)
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-19*
-*Last updated: 2026-06-19 after initial definition (milestone v2.0)*
+*Last updated: 2026-06-19 — roadmap criado (Phases 6-14); traceability 100% mapeada*
