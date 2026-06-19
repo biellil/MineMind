@@ -25,6 +25,9 @@ export const config = {
   // Timeouts de skills em ms (D-13, Claude's discretion: 30s navigate, 10s dig)
   navigateTimeoutMs: parseInt(process.env.NAVIGATE_TIMEOUT_MS || '30000', 10),
   digTimeoutMs: parseInt(process.env.DIG_TIMEOUT_MS || '10000', 10),
+  // Distância (blocos) a partir da qual o bot PARA de se reaproximar do jogador no estado socializing.
+  // Já dentro do raio => fica parado (evita o re-navigate infinito pela jitter da posição do jogador).
+  socialArriveRadius: parseInt(process.env.SOCIAL_ARRIVE_RADIUS || '3', 10),
 
   // Reconexão
   reconnectDelayMs: 5_000,  // 5s fixo — não configurável via .env (low-risk)

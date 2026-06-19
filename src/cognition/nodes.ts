@@ -169,13 +169,23 @@ export function createNodes(deps: NodeDeps) {
         z: Math.round(p.z + (Math.random() * 16 - 8)),
       })
     } else if (snap && state === 'socializing') {
-      // standby/jogador próximo: aproxima-se do jogador mais próximo e aguarda
+      // standby/jogador próximo: SÓ se aproxima se estiver LONGE. Já dentro de socialArriveRadius
+      // => fica parado neste tick. Sem isso, a posição do jogador oscila nos decimais a cada tick,
+      // a string-alvo muda, o guard anti-repetição nunca acumula e o bot re-navega pro mesmo ponto
+      // infinitamente (flood de 'OK navigate'). Distância calculada do bot, não confia em p.distance.
       const player = [...snap.players]
         .filter((p) => p.position)
         .sort((a, b) => (a.distance ?? 1e9) - (b.distance ?? 1e9))[0]
       if (player?.position) {
-        skill = 'navigate'
-        target = JSON.stringify(player.position)
+        const bp = snap.status.position
+        const dx = player.position.x - bp.x
+        const dy = player.position.y - bp.y
+        const dz = player.position.z - bp.z
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
+        if (dist > config.socialArriveRadius) {
+          skill = 'navigate'
+          target = JSON.stringify(player.position)
+        }
       }
     }
     // idle / fighting(stub) / building(stub): nenhuma skill (D-06)
