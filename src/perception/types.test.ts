@@ -101,7 +101,7 @@ describe('WorldSnapshot type contract', () => {
     }))
 
     expect(() => {
-      (snapshot as Record<string, unknown>).capturedAt = 9999
+      (snapshot as unknown as Record<string, unknown>).capturedAt = 9999
     }).toThrow()
   })
 })

@@ -26,7 +26,7 @@ const stubProvider: LlmProvider = {
 
 // Mock minimo de bot (mesma forma do smoke): mundo vazio, sem jogadores/blocos.
 function makeMockBot(): any {
-  const pos = { x: 0, y: 64, z: 0, distanceTo: (_o: any) => 0 }
+  const pos = { x: 0, y: 64, z: 0, distanceTo: (_o: any) => 0, offset: (_dx: any, _dy: any, _dz: any) => pos }
   return {
     username: 'MineMind',
     health: 20,
@@ -38,6 +38,7 @@ function makeMockBot(): any {
     inventory: { items: () => [] },
     findBlocks: () => [],
     blockAt: () => null,
+    blockAtCursor: () => null, // sem bloco na mira -> lookingAt null (enriquecimento de percepcao)
     findBlock: () => null,
     pathfinder: { goto: async () => {} },
     on: () => {},

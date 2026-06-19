@@ -77,6 +77,6 @@ test('snapshot continua congelado (Object.freeze) com os campos novos', () => {
   const snap = buildWorldSnapshot(bot)
   expect(Object.isFrozen(snap)).toBe(true)
   expect(() => {
-    ;(snap as Record<string, unknown>).underfoot = 'lava'
+    ;(snap as unknown as Record<string, unknown>).underfoot = 'lava'
   }).toThrow()
 })
