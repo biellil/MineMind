@@ -20,7 +20,7 @@ const stubProvider: LlmProvider = {
 // + o que a skill navigate exercita no caminho XYZ (bot.pathfinder.goto, bot.entity.position).
 // Mundo vazio (sem blocos, sem jogadores) -> arbitragem autonoma cai em 'exploring' -> navigate.
 function makeMockBot(): any {
-  const pos = { x: 0, y: 64, z: 0, distanceTo: (_o: any) => 0 }
+  const pos = { x: 0, y: 64, z: 0, distanceTo: (_o: any) => 0, offset: (_dx: any, _dy: any, _dz: any) => pos }
   return {
     username: 'MineMind',
     health: 20,
@@ -32,6 +32,7 @@ function makeMockBot(): any {
     inventory: { items: () => [] }, // inventario vazio
     findBlocks: () => [], // mundo sem blocos -> arbitragem cai em 'exploring'
     blockAt: () => null,
+    blockAtCursor: () => null, // sem bloco na mira -> lookingAt null (enriquecimento de percepcao)
     findBlock: () => null, // navigate por nome de bloco nao e usado (execute passa XYZ)
     // navigate (caminho XYZ) chama bot.pathfinder.goto(goal); resolve imediato no mock
     pathfinder: { goto: async () => {} },

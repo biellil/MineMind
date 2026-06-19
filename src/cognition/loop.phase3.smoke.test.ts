@@ -23,7 +23,7 @@ import type { WorldSnapshot } from '../perception/types'
 // Parametriza health/food para o Teste B (survival baixa -> need degradada -> goal).
 // Mundo vazio (sem blocos/jogadores) -> arbitragem autonoma cai em 'exploring'.
 function makeMockBot(opts: { health?: number; food?: number } = {}): any {
-  const pos = { x: 0, y: 64, z: 0, distanceTo: (_o: any) => 0 }
+  const pos = { x: 0, y: 64, z: 0, distanceTo: (_o: any) => 0, offset: (_dx: any, _dy: any, _dz: any) => pos }
   return {
     username: 'MineMind',
     health: opts.health ?? 20,
@@ -35,6 +35,7 @@ function makeMockBot(opts: { health?: number; food?: number } = {}): any {
     inventory: { items: () => [] }, // inventario vazio -> resources insatisfeita
     findBlocks: () => [],
     blockAt: () => null,
+    blockAtCursor: () => null, // sem bloco na mira -> lookingAt null (enriquecimento de percepcao)
     findBlock: () => null,
     pathfinder: { goto: async () => {} },
     on: () => {},
@@ -130,6 +131,8 @@ test('C) tick reativo nao bloqueia na deliberacao lenta; segunda chamada concorr
     players: [],
     nearbyBlockTypes: {},
     inventory: [],
+    lookingAt: null,
+    underfoot: 'unknown',
   }
 
   // provider "LLM lento": available true, decide demora ate liberarmos manualmente (gate).

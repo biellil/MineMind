@@ -56,6 +56,8 @@ const snapshot: WorldSnapshot = {
   players: [],
   nearbyBlockTypes: {},
   inventory: [],
+  lookingAt: null,
+  underfoot: 'unknown',
 }
 
 function actionEvent(target: string, ts: number): MemEvent {

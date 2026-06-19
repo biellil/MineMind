@@ -104,6 +104,20 @@ export function buildWorldSnapshot(bot: Bot): WorldSnapshot {
     nbt: (item as unknown as Record<string, unknown>).nbt ?? null,
   }))
 
+  // === Enriquecimento: bloco na mira (blockAtCursor pode retornar null) ===
+  const cursorBlock = bot.blockAtCursor(5)
+  const lookingAt = cursorBlock
+    ? {
+        name: cursorBlock.name,
+        position: { x: cursorBlock.position.x, y: cursorBlock.position.y, z: cursorBlock.position.z },
+        distance: pos.distanceTo(cursorBlock.position),
+      }
+    : null
+
+  // === Enriquecimento: bloco sob os pés (blockAt pode retornar null) ===
+  const belowBlock = bot.blockAt(pos.offset(0, -1, 0))
+  const underfoot = belowBlock?.name ?? 'unknown'
+
   // === D-10: Montar snapshot e torná-lo imutável ===
   // structuredClone: cria cópia profunda sem NENHUMA referência ao objeto bot
   // Object.freeze: torna o objeto e seus filhos diretos somente-leitura em runtime
@@ -114,6 +128,8 @@ export function buildWorldSnapshot(bot: Bot): WorldSnapshot {
     players,
     nearbyBlockTypes,
     inventory,
+    lookingAt,
+    underfoot,
   }
 
   // structuredClone garante cópia profunda (zero compartilhamento com bot)

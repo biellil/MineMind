@@ -18,6 +18,8 @@ function mockSnapshot(): WorldSnapshot {
     players: [],
     nearbyBlockTypes: {},
     inventory: [],
+    lookingAt: null,
+    underfoot: 'unknown',
   }
 }
 
