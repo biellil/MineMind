@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to plan
-stopped_at: Phase 999.1 context gathered
-last_updated: "2026-06-19T16:44:33.116Z"
+status: Ready to execute
+stopped_at: Completed 999.1-04-PLAN.md
+last_updated: "2026-06-19T17:03:28.011Z"
 last_activity: 2026-06-19
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 12
-  completed_plans: 12
+  total_plans: 17
+  completed_plans: 14
   percent: 50
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-18)
 
 **Core value:** O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com base em objetivos próprios e memória — sem intervenção humana. Se tudo falhar, o loop cognitivo (perceber → decidir → agir) precisa funcionar.
-**Current focus:** Phase 03 — cogni-o-com-llm-loop-completo-necessidades-e-objetivos
+**Current focus:** Phase 999.1 — otimizar-pathfinding-da-coleta-collectblock-para-suportar-ra
 
 ## Current Position
 
-Phase: 999.1
-Plan: Not started
+Phase: 999.1 (otimizar-pathfinding-da-coleta-collectblock-para-suportar-ra) — EXECUTING
+Plan: 3 of 5
 Next: Phase 03 — Cognição com LLM
 Last activity: 2026-06-19
 
@@ -53,6 +53,8 @@ Progress: [█████░░░░░] 50%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 999.1 P01 | 5 | 2 tasks | 2 files |
+| Phase 999.1 P04 | 2 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -65,6 +67,7 @@ Recent decisions affecting current work:
 - [Roadmap]: Persistência de longo prazo/semântica deliberadamente adiada para Fase 4 (decidir com evidência: SQLite vs JSON vs vector store).
 - [Roadmap]: CONN-03 (estado sobrevive a reconexão) alocado à Fase 3, onde o estado cognitivo durável fora-do-bot é criado.
 - [Fase 2]: Loop cognitivo validado ao vivo sem LLM — `!pausar`/`!livre`/`!vem` e autonomia confirmados em servidor Minecraft real.
+- [Phase 999.1]: D-01: GATHER_SEARCH_RADIUS (16) independente de PERCEPTION_RADIUS; D-02: bounds do A* via PATHFINDER_SEARCH_RADIUS (48)/THINK_TIMEOUT (2000) com validação de range
 
 ### Pending Todos
 
@@ -82,6 +85,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-19T16:44:33.110Z
-Stopped at: Phase 999.1 context gathered
-Resume file: .planning/phases/999.1-otimizar-pathfinding-da-coleta-collectblock-para-suportar-ra/999.1-CONTEXT.md
+Last session: 2026-06-19T17:03:28.006Z
+Stopped at: Completed 999.1-04-PLAN.md
+Resume file: None
