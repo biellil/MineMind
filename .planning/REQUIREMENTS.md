@@ -69,8 +69,8 @@ Requisitos da versão inicial (MVP de 4 fases do PRD). Cada um mapeia para fases
 
 ### Social (SOC)
 
-- [ ] **SOC-01**: O agente mantém um perfil por jogador (nome, frequência de interação, histórico, grau de confiança)
-- [ ] **SOC-02**: O agente tem uma personalidade que evolui a partir de uma linha de base (sem aprendizado adaptativo avançado)
+- [x] **SOC-01**: O agente mantém um perfil por jogador (nome, frequência de interação, histórico, grau de confiança)
+- [x] **SOC-02**: O agente tem uma personalidade que evolui a partir de uma linha de base (sem aprendizado adaptativo avançado)
 
 ## v2 Requirements
 
@@ -136,8 +136,8 @@ Quais fases cobrem quais requisitos. Preenchido durante a criação do roadmap.
 | MEM-02 | Phase 4 | Complete |
 | MEM-03 | Phase 4 | Complete |
 | REFL-01 | Phase 4 | Pending |
-| SOC-01 | Phase 4 | Pending |
-| SOC-02 | Phase 4 | Pending |
+| SOC-01 | Phase 4 | Complete |
+| SOC-02 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 32 total (contagem real dos IDs; a nota anterior de "28" estava desatualizada)
