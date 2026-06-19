@@ -56,7 +56,7 @@ Continuação numérica do v1.0 (que terminou na Phase 5; 999.1 foi backlog/park
   4. As chamadas cloud respeitam um teto de gasto/frequência configurável (hard-cap de chamadas/janela persistido + gate de invocação + `max_tokens` baixo + prompt caching; `reasoning.effort` aplicado SÓ condicionalmente se o modelo for gpt-5.x/o-series — D-03/D-04) — a fatura não escala com o bot parado
 **Plans**: 3 plans
 Plans:
-- [ ] 06-01-PLAN.md — Factory + cloud provider (GPT-4.1-mini) + embeddings locais por composição + fallback zod v4 (PROV-01/02/03/04)
+- [x] 06-01-PLAN.md — Factory + cloud provider (GPT-4.1-mini) + embeddings locais por composição + fallback zod v4 (PROV-01/02/03/04)
 - [ ] 06-02-PLAN.md — Teto de custo (withSpendCap hard-cap → fallback-to-local, contador SQLite) + fiação createProvider (PROV-05)
 - [ ] 06-03-PLAN.md — Paridade de structured output: teste schema-only + fallback D-16 + live gated RUN_LIVE_PARITY (PROV-04)
 
