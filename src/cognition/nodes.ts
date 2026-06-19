@@ -6,7 +6,7 @@
 import type { Bot } from 'mineflayer'
 import type { WorldSnapshot } from '../perception/types'
 import { buildWorldSnapshot } from '../perception/snapshot'
-import { skillRegistry, executeWithSafety } from '../skills/index'
+import { skillRegistry } from '../skills/index'
 import { config, motivationConfigFor } from '../config'
 import type { CognitiveState } from './types'
 import type { ShortTermMemory } from '../memory/shortTerm'
@@ -201,10 +201,13 @@ export function createNodes(deps: NodeDeps) {
       return { memory: holder.memory }
     }
 
-    // D-02: single-flight — UMA skill, aguardada. executeWithSafety já faz timeout/watchdog.
+    // D-02: single-flight — UMA skill, aguardada.
+    // 999.1 D-06: sem wrap externo — cada skill se auto-embrulha em executeWithSafety com seu
+    // próprio progressChecker (dig usa inventário; navigate usa navigateTimeoutMs). O wrap externo
+    // usava defaults genéricos e duplicava o watchdog interno.
     try {
       const params = skill === 'dig' ? { target } : { target: JSON.parse(target) }
-      await executeWithSafety(() => skillRegistry[skill!]!(bot, params))
+      await skillRegistry[skill!]!(bot, params)
       recordSuccess(safety)
       holder.memory = push(holder.memory, { type: 'action', skill, target, result: 'success', timestamp: now() })
       log(`OK ${skill} ${target}`)
