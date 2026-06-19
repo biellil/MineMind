@@ -200,3 +200,186 @@ test('C) maybeDeliberate("reflect") single-flight: 2ª chamada concorrente retor
 
   db.close()
 })
+
+// ===========================================================================
+// REGRESSÃO B1 — contenção ação×reflexão no loop vivo (FALHAVA antes do fix):
+// ação e reflexão compartilham o MESMO DeliberationState (um lock inFlight + um
+// orçamento lastRunAt/replanMinIntervalMs). Estes testes provam:
+//   D) maybeDeliberate retorna false no no-op e true quando roda.
+//   E) reflect NÃO é gated pelo orçamento de replan de AÇÃO (não fica faminta).
+//   F) reflect ainda respeita D-12 (não sobrepõe ação in-flight).
+// ===========================================================================
+
+// snapshot mínimo para o caminho de AÇÃO (decideAction lê via serializeContext).
+const actionSnapshot: WorldSnapshot = { ...snapshot }
+
+// provider de AÇÃO: available true; decide devolve uma ActionDecision válida (idle).
+function fakeActionProvider(): LlmProvider {
+  return {
+    available: async () => true,
+    decide: async () => ({ action: 'idle', reason: 'teste' }) as never,
+    chat: async () => '',
+    embed: async () => [],
+  }
+}
+
+// ---------------------------------------------------------------------------
+// D) contrato booleano: true quando roda; false no no-op (inFlight / budget de ação).
+// ---------------------------------------------------------------------------
+test('D) maybeDeliberate retorna true quando executa e false no no-op (inFlight / budget de ação)', async () => {
+  const db = openDb(dbPathFor('d'))
+  const holder = holderWithEvents(db)
+  const deliberator = createDeliberator()
+  const t0 = 100_000
+
+  // 1) Uma AÇÃO roda (estado fresco, dentro do trigger) -> true e consome lastRunAt.
+  const ranAction = await deliberator.maybeDeliberate(
+    deliberator.state,
+    holder,
+    fakeActionProvider(),
+    actionSnapshot,
+    'periodic',
+    t0,
+  )
+  expect(ranAction).toBe(true)
+  expect(deliberator.state.lastRunAt).toBe(t0)
+
+  // 2) Uma 2ª AÇÃO imediata (mesmo instante) cai no orçamento de replan -> no-op -> false.
+  const ranAction2 = await deliberator.maybeDeliberate(
+    deliberator.state,
+    holder,
+    fakeActionProvider(),
+    actionSnapshot,
+    'periodic',
+    t0,
+  )
+  expect(ranAction2).toBe(false)
+
+  // 3) Com inFlight forçado true, qualquer chamada faz no-op -> false (single-flight).
+  deliberator.state.inFlight = true
+  const ranWhileBusy = await deliberator.maybeDeliberate(
+    deliberator.state,
+    holder,
+    fakeActionProvider(),
+    actionSnapshot,
+    'reflect',
+    t0 + 1_000_000, // bem além do budget — prova que o false veio do inFlight, não do orçamento
+  )
+  expect(ranWhileBusy).toBe(false)
+  deliberator.state.inFlight = false
+
+  db.close()
+})
+
+// ---------------------------------------------------------------------------
+// E) ANTI-STARVATION: logo após uma AÇÃO consumir lastRunAt, um reflect com
+//    inFlight=false AINDA roda (não é gated pelo replanMinIntervalMs de ação).
+// ---------------------------------------------------------------------------
+test('E) reflect NÃO é gated pelo budget de ação: roda mesmo logo após uma ação (B1)', async () => {
+  const db = openDb(dbPathFor('e'))
+  const holder = holderWithEvents(db)
+  const deliberator = createDeliberator()
+  const t0 = 200_000
+
+  // AÇÃO roda e consome o orçamento (lastRunAt = t0).
+  const ranAction = await deliberator.maybeDeliberate(
+    deliberator.state,
+    holder,
+    fakeActionProvider(),
+    actionSnapshot,
+    'periodic',
+    t0,
+  )
+  expect(ranAction).toBe(true)
+  expect(deliberator.state.lastRunAt).toBe(t0)
+
+  // REFLECT imediato (mesmo instante, DENTRO da janela replanMinIntervalMs de ação):
+  // antes do fix retornaria por budget; agora deve RODAR.
+  const ranReflect = await deliberator.maybeDeliberate(
+    deliberator.state,
+    holder,
+    fakeOnProvider(),
+    actionSnapshot,
+    'reflect',
+    t0, // = lastRunAt: zero ms desde a ação -> dentro do budget de replan
+  )
+  expect(ranReflect).toBe(true)
+
+  // E produziu um evento consolidado type='reflection' (reflexão não está faminta).
+  const refl = db.prepare(`SELECT COUNT(*) AS n FROM events WHERE type = 'reflection'`).get() as {
+    n: number
+  }
+  expect(refl.n).toBe(1)
+
+  db.close()
+})
+
+// ---------------------------------------------------------------------------
+// F) D-12 preservado: enquanto uma AÇÃO está in-flight, reflect retorna false e
+//    NÃO inicia uma 2ª inferência (nenhuma sobreposição ação×reflexão).
+// ---------------------------------------------------------------------------
+test('F) reflect respeita D-12: não sobrepõe uma ação in-flight (retorna false, sem 2ª inferência)', async () => {
+  const db = openDb(dbPathFor('f'))
+  const holder = holderWithEvents(db)
+  const deliberator = createDeliberator()
+
+  // provider de AÇÃO preso num gate: a ação fica in-flight até liberarmos.
+  let actionDecideCalls = 0
+  let releaseAction!: () => void
+  const gate = new Promise<void>((r) => {
+    releaseAction = r
+  })
+  const slowActionProvider: LlmProvider = {
+    available: async () => true,
+    decide: async () => {
+      actionDecideCalls++
+      await gate
+      return { action: 'idle', reason: 'lenta' } as never
+    },
+    chat: async () => '',
+    embed: async () => [],
+  }
+
+  // reflect provider que conta se foi chamado (não deveria, enquanto a ação está presa).
+  let reflectDecideCalls = 0
+  const reflectProvider: LlmProvider = {
+    available: async () => true,
+    decide: async () => {
+      reflectDecideCalls++
+      return { summary: 'reflexão indevida', goalUpdates: [] } as never
+    },
+    chat: async () => '',
+    embed: async () => [],
+  }
+
+  // 1) AÇÃO (void): fica presa no gate -> inFlight true.
+  const pAction = deliberator.maybeDeliberate(
+    deliberator.state,
+    holder,
+    slowActionProvider,
+    actionSnapshot,
+    'periodic',
+    Date.now(),
+  )
+  expect(deliberator.state.inFlight).toBe(true)
+
+  // 2) REFLECT concorrente: deve fazer no-op por inFlight (D-12) -> false, sem chamar decide.
+  const ranReflect = await deliberator.maybeDeliberate(
+    deliberator.state,
+    holder,
+    reflectProvider,
+    actionSnapshot,
+    'reflect',
+    Date.now(),
+  )
+  expect(ranReflect).toBe(false)
+  expect(reflectDecideCalls).toBe(0) // nenhuma 2ª inferência iniciada
+  expect(actionDecideCalls).toBe(1)
+
+  // libera a ação e conclui.
+  releaseAction()
+  expect(await pAction).toBe(true)
+  expect(deliberator.state.inFlight).toBe(false)
+
+  db.close()
+})
