@@ -122,7 +122,13 @@ export async function maybeDeliberate(
       const messages: BaseMessage[] = [
         new SystemMessage(buildPersonaPrompt(holder.disposition, holder.personality)),
         new HumanMessage(
-          serializeContext(snapshot, holder.needs, holder.currentGoal, getEvents(holder.memory)),
+          serializeContext(
+            snapshot,
+            holder.needs,
+            holder.currentGoal,
+            getEvents(holder.memory),
+            holder.lastObservedDelta, // D-09 A: fato autoritativo no caminho de AÇÃO
+          ),
         ),
       ]
       // D-17: arbiter como fallback determinístico (decideAction nunca lança — Plan 01).

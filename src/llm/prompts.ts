@@ -91,6 +91,13 @@ export function serializeContext(
   needs: unknown,
   goals: unknown,
   recentEvents: ReadonlyArray<MemEvent>,
+  lastObservedDelta?: {
+    skill: string
+    target: string
+    outcome: string
+    observed: number
+    expected: number
+  } | null,
 ): string {
   const lines: string[] = []
 
@@ -143,6 +150,16 @@ export function serializeContext(
   if (recent.length > 0) {
     const evts = recent.map((e) => truncate(JSON.stringify(e), 120)).join('\n  ')
     lines.push(`Eventos recentes:\n  ${evts}`)
+  }
+
+  // D-09 A: o último delta observado é FATO AUTORITATIVO — o LLM narra SÓ a partir disto.
+  if (lastObservedDelta) {
+    const d = lastObservedDelta
+    lines.push(
+      `FATO VERIFICADO (autoritativo — narre SÓ a partir disto): última ação '${d.skill}' em '${d.target}' ` +
+        `resultou em ${d.outcome}, observado ${d.observed} de ${d.expected} esperado(s). ` +
+        `NÃO afirme quantidades diferentes destas.`,
+    )
   }
 
   return lines.join('\n')
