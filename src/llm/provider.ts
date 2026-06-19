@@ -46,6 +46,11 @@ export function createLmStudioProvider(): LlmProvider {
     apiKey: 'lm-studio', // dummy; LM Studio ignora a chave
     configuration: { baseURL },
     temperature: Number(process.env.LLM_TEMPERATURE ?? 0.4),
+    // Rede de segurança (D-17): sem timeout, uma geração estruturada travada no modelo local
+    // segura o lock single-flight indefinidamente — mata a fome da reflexão (REFL-01) e prende o
+    // bot no arbiter reativo. maxRetries baixo evita o backoff 6x default do LangChain segurando o lock.
+    timeout: Number(process.env.LLM_TIMEOUT_MS ?? 20000),
+    maxRetries: Number(process.env.LLM_MAX_RETRIES ?? 1),
   })
 
   return {
