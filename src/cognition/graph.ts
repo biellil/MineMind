@@ -1,0 +1,33 @@
+// src/cognition/graph.ts
+// D-01: StateGraph finito por tick (Observe->Analyze->UpdateMemory->Decide->Execute->END).
+// D-03: MemorySaver (em memoria, Bun-safe, sem better-sqlite3). A "aresta de retorno" e o driver externo (loop.ts).
+import { StateGraph, Annotation, START, END, MemorySaver } from '@langchain/langgraph'
+import type { WorldSnapshot } from '../perception/types'
+import type { CognitiveState } from './types'
+import { type ShortTermMemory, createMemory } from '../memory/shortTerm'
+import { config } from '../config'
+import { createNodes, type NodeDeps } from './nodes'
+
+const LoopAnnotation = Annotation.Root({
+  snapshot: Annotation<WorldSnapshot | null>({ reducer: (_p, u) => u, default: () => null }),
+  cogState: Annotation<CognitiveState>({ reducer: (_p, u) => u, default: () => 'idle' }),
+  memory: Annotation<ShortTermMemory>({ reducer: (_p, u) => u, default: () => createMemory(config.memoryTokenBudget) }),
+})
+
+/** Compila um grafo finito-por-tick com bot/control/safety injetados por closure. */
+export function buildGraph(deps: NodeDeps) {
+  const n = createNodes(deps)
+  return new StateGraph(LoopAnnotation)
+    .addNode('observe', n.observe)
+    .addNode('analyze', n.analyze)
+    .addNode('updateMemory', n.updateMemory)
+    .addNode('decide', n.decide)
+    .addNode('execute', n.execute)
+    .addEdge(START, 'observe')
+    .addEdge('observe', 'analyze')
+    .addEdge('analyze', 'updateMemory')
+    .addEdge('updateMemory', 'decide')
+    .addEdge('decide', 'execute')
+    .addEdge('execute', END) // FINITO: driver externo (loop.ts) fecha o ciclo (D-01)
+    .compile({ checkpointer: new MemorySaver() })
+}
