@@ -2,6 +2,7 @@
 // D-12: stub — Fase 1 não implementa follow real (alta superfície de falha)
 import { z } from 'zod'
 import type { Bot } from 'mineflayer'
+import type { SkillResult } from '../grounding/types'
 
 export const FollowSchema = z.object({
   entityName: z.string().max(64).describe('Nome do jogador ou entidade a seguir'),
@@ -13,14 +14,14 @@ export type FollowParams = z.infer<typeof FollowSchema>
 
 /**
  * Stub — implementação real na Fase 2+.
+ * Fase 7 (D-12): contrato uniforme — resolve com SkillResult{outcome:'error'} em vez de lançar.
  * 999.1 D-06: stub NÃO se auto-embrulha em executeWithSafety — não há operação async
- * longa a proteger (lança imediatamente). Quando a implementação real chegar, deve
- * envolver a operação de seguir (ex: pathfinder.goto contínuo) em executeWithSafety
- * com um timeout/progressChecker próprios.
+ * longa a proteger. Quando a implementação real chegar, deve envolver a operação de seguir
+ * (ex: pathfinder.goto contínuo) em executeWithSafety com timeout/progressChecker próprios.
  */
-export async function follow(_bot: Bot, rawParams: unknown): Promise<void> {
+export async function follow(_bot: Bot, rawParams: unknown): Promise<SkillResult> {
   FollowSchema.parse(rawParams)  // valida params mesmo como stub
-  throw new Error('Skill follow não implementada na Fase 1 (stub). Será implementada na Fase 2.')
+  return { outcome: 'error', observed: 0, expected: 0, delta: {}, reason: 'skill follow não implementada (stub)' }
 }
 
 export const followTool = {

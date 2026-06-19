@@ -2,6 +2,7 @@
 // Registry centralizado de skills — exposto para o loop cognitivo (Fase 2+)
 // D-11: skills acessíveis tanto como funções quanto como tool descriptors com schemas Zod
 import type { Bot } from 'mineflayer'
+import type { SkillResult } from '../grounding/types'
 import { navigate, navigateTool } from './navigate'
 import { dig, digTool } from './dig'
 import { follow, followTool } from './follow'
@@ -13,9 +14,11 @@ export { dig, DigSchema, digTool } from './dig'
 export { follow, FollowSchema, followTool } from './follow'
 export { attack, AttackSchema, attackTool } from './attack'
 export { executeWithSafety, gaussianDelay, SkillTimeoutError, SkillStuckError } from './executor'
+// Fase 7: contrato de retorno das skills, re-exportado para conveniência dos consumidores.
+export type { SkillResult } from '../grounding/types'
 
-/** Função de skill genérica */
-export type SkillFunction = (bot: Bot, params: unknown) => Promise<void>
+/** Função de skill genérica — Fase 7: SEMPRE resolve com SkillResult (nunca lança como fluxo). */
+export type SkillFunction = (bot: Bot, params: unknown) => Promise<SkillResult>
 
 /** Descriptor de uma skill com schema Zod e função de execução */
 export interface SkillTool {
