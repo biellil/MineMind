@@ -7,6 +7,7 @@ export type CognitiveState =
   | 'exploring'
   | 'gathering'
   | 'socializing'
+  | 'reflecting' // D-11: trabalho de "tempo livre", prioridade baixa, sempre preemptível (REFL-01)
   | 'fighting'   // stub (D-06)
   | 'building'   // stub (D-06)
 

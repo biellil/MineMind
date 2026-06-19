@@ -28,3 +28,20 @@ export const ActionDecisionSchema = z.object({
 
 /** Decisão de ação validada — o tipo consumido pela cognição. */
 export type ActionDecision = z.infer<typeof ActionDecisionSchema>
+
+/**
+ * Saída restrita da reflexão (REFL-01/D-13): consolidação + deltas de objetivo.
+ * O modelo local NUNCA calcula trust/personalidade aqui — apenas resume e propõe
+ * reordenar/dropar objetivos existentes (a aplicação é validada/clamada em reflection.ts).
+ */
+export const ReflectionOutputSchema = z.object({
+  summary: z.string().max(500),
+  goalUpdates: z.array(z.object({
+    id: z.string(),
+    action: z.enum(['keep', 'drop', 'reprioritize']),
+    priority: z.number().min(0).max(1).optional(),
+  })).max(8).default([]),
+})
+
+/** Produto validado de uma reflexão (REFL-01) — consumido por reflection.ts. */
+export type ReflectionOutput = z.infer<typeof ReflectionOutputSchema>

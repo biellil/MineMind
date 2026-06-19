@@ -4,7 +4,7 @@ import type { CognitiveState } from './types'
 export type { CognitiveState } from './types'
 
 /** Ordem de prioridade fixa de arbitragem (D-05), do mais ao menos prioritário. */
-export const PRIORITY_ORDER: ReadonlyArray<CognitiveState> = ['socializing', 'gathering', 'exploring', 'idle']
+export const PRIORITY_ORDER: ReadonlyArray<CognitiveState> = ['socializing', 'gathering', 'exploring', 'reflecting', 'idle']
 
 /** Estados stub (D-06): entram no enum mas não têm lógica real. */
 export const STUB_STATES: ReadonlyArray<CognitiveState> = ['fighting', 'building']
