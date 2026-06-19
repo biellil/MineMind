@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
-status: verifying
-stopped_at: Phase 7 context gathered
-last_updated: "2026-06-19T22:55:01.796Z"
-last_activity: "2026-06-19 - Completed quick task 260619-rv8: Morte/void do bot + poda do checkpointer (CR#1/CR#2/CR#3)"
+status: executing
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-06-19T23:26:33.298Z"
+last_activity: 2026-06-19
 progress:
-  total_phases: 9
+  total_phases: 10
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 7
+  completed_plans: 4
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-19)
 
 **Core value:** O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com base em objetivos próprios e memória — sem intervenção humana. Se tudo falhar, o loop cognitivo (perceber → decidir → agir) precisa funcionar.
-**Current focus:** Phase 06 — llm-provider-factory
+**Current focus:** Phase 07 — grounding-skillresult
 
 ## Current Position
 
-Phase: 7
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-06-19 - Completed quick task 260619-rv8: Morte/void do bot + poda do checkpointer (CR#1/CR#2/CR#3)
+Phase: 07 (grounding-skillresult) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-06-19
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 06 P01 | 3 | 2 tasks | 2 files |
 | Phase 06 P02 | 4 | 3 tasks | 7 files |
 | Phase 06 P03 | 8 | 2 tasks | 2 files |
+| Phase 07 P01 | 4 | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,11 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-01: createProvider() seleciona local/openai por LLM_PROVIDER; embed cloud delega a createLocalEmbedder (embeddings sempre locais); fallback z.toJSONSchema (D-16) blinda decide() nos dois providers
 - [Phase 06]: 06-02: teto de custo = decorator withSpendCap (hard-cap de chamadas/janela diária em SQLite); estourou -> fallback-to-local (D-08); local = no-op de cap; embed sempre local
 - [Phase 06]: 06-03: paridade PROV-04 por 3 camadas — schema-only (D-14, pega caveat zod v4 #8357 no CI), live gated RUN_LIVE_PARITY (D-15), e teste de fallback type:None (D-16/D-17); validate->repair->fallback preservado nos dois providers
+- [Phase 07]: 07-01: módulo grounding/ é o contrato da Fase 7 — SkillResult tagueado por outcome (deriva de observed/expected, nunca da Promise); captureGroundState imutável independente do executor (D-05); evaluateDig/evaluateNavigate puros classificam por delta numérico sem mock de bot; observed não tipado por skill (D-02)
+
+### Roadmap Evolution
+
+- Phase 07.1 inserida após a Phase 7: "Loop Agêntico — Percepção Dirigida por Consequência" (URGENT/INSERTED). Substitui o tick fixo (driver `while` externo em `src/cognition/loop.ts`) por cadeia agêntica ReAct (ação termina → re-percebe → próximo passo). Entra ANTES da Phase 8 porque o System 1 (reflexos por preempção) depende deste modelo de loop. ⚠️ Conflito com decisão prévia "System 1 = função pura no driver fora do StateGraph" — revisitar essa decisão no planejamento da 07.1.
 
 ### Pending Todos
 
@@ -95,6 +101,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-19T22:55:01.785Z
-Stopped at: Phase 7 context gathered
-Resume file: .planning/phases/07-grounding-skillresult/07-CONTEXT.md
+Last session: 2026-06-19T23:26:33.290Z
+Stopped at: Completed 07-01-PLAN.md
+Resume file: None
