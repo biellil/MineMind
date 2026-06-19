@@ -65,6 +65,8 @@ function makeMockBot(opts: { status: string; collectHangs: boolean }) {
   ]
 
   const bot: any = {
+    // Fase 7 (07-02): captureGroundState lê bot.entity.position before/after.
+    entity: { position: { x: 0, y: 64, z: 0 } },
     findBlocks: () => positions,
     blockAt: (pos: { x: number; y: number; z: number }) => ({
       name: 'oak_log',
@@ -100,10 +102,11 @@ test(
     const hb = startHeartbeat()
     const heapBefore = process.memoryUsage().heapUsed
 
-    // [Ponto 2] a skill DEVE rejeitar (mensagem "Nenhuma instância alcançável").
-    await expect(dig(bot, { target: 'oak_log', count: 1 })).rejects.toThrow(
-      /Nenhuma instância alcançável/,
-    )
+    // [Ponto 2] Fase 7 (D-12): pré-check filtra tudo => no_effect (não rejeita), reason
+    // "Nenhuma instância alcançável". O tripé OOM/lag continua sendo o GATE.
+    const r = await dig(bot, { target: 'oak_log', count: 1 })
+    expect(r.outcome).toBe('no_effect')
+    expect(r.reason).toMatch(/Nenhuma instância alcançável/)
 
     const maxLag = hb.stop()
     const heapAfter = process.memoryUsage().heapUsed
@@ -129,8 +132,12 @@ test(
 
     const hb = startHeartbeat()
 
-    // [Ponto 2] rejeita (SkillTimeoutError) sem travar o processo.
-    await expect(dig(bot, { target: 'oak_log', count: 1 })).rejects.toThrow()
+    // [Ponto 2] Fase 7 (D-12): o timeout do executor é capturado por dig — sem coletar nada
+    // (observed:0) o resultado é outcome:'error' com reason 'SkillTimeoutError', sem rejeitar
+    // nem travar o processo.
+    const r = await dig(bot, { target: 'oak_log', count: 1 })
+    expect(r.outcome).toBe('error')
+    expect(r.reason).toBe('SkillTimeoutError')
 
     const maxLag = hb.stop()
 

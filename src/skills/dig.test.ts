@@ -1,6 +1,10 @@
 // src/skills/dig.test.ts
 // 999.1-03 / D-04/D-05: pré-check de alcançabilidade (getPathTo) antes de collect().
 // Mock mínimo de Bot com os campos do caminho `typeof target === 'string'` de dig().
+//
+// Fase 7 (07-02 / D-12): dig agora retorna SkillResult e NÃO lança em pré-condições —
+// "nenhum candidato" e "todos inalcançáveis" viram outcome:'no_effect' (não rejeição).
+// O mock ganhou entity.position porque dig agora chama captureGroundState before/after.
 import { test, expect } from 'bun:test'
 import { dig } from './dig'
 
@@ -30,6 +34,8 @@ function makeMockBot(opts: {
   opts.positions.forEach((p, i) => posToIndex.set(`${p.x},${p.y},${p.z}`, i))
 
   const bot: any = {
+    // Fase 7: captureGroundState lê bot.entity.position before/after.
+    entity: { position: { x: 0, y: 64, z: 0 } },
     findBlocks: () => opts.positions,
     blockAt: (pos: { x: number; y: number; z: number }) => ({
       name: 'oak_log',
@@ -57,7 +63,7 @@ function makeMockBot(opts: {
   return { bot, collectCalls }
 }
 
-test('caso 1: todos inalcançáveis -> lança "Nenhuma instância alcançável" e NÃO chama collect', async () => {
+test('caso 1: todos inalcançáveis -> no_effect com reason "Nenhuma instância alcançável" e NÃO chama collect (D-12)', async () => {
   const { bot, collectCalls } = makeMockBot({
     positions: [
       { x: 1, y: 64, z: 1 },
@@ -66,9 +72,10 @@ test('caso 1: todos inalcançáveis -> lança "Nenhuma instância alcançável" 
     statusFor: () => 'noPath',
   })
 
-  await expect(dig(bot, { target: 'oak_log', count: 1 })).rejects.toThrow(
-    /Nenhuma instância alcançável/,
-  )
+  const r = await dig(bot, { target: 'oak_log', count: 1 })
+  expect(r.outcome).toBe('no_effect')
+  expect(r.observed).toBe(0)
+  expect(r.reason).toMatch(/Nenhuma instância alcançável/)
   expect(collectCalls.length).toBe(0)
 }, 8000)
 
@@ -89,14 +96,15 @@ test('caso 2: ao menos um alcançável -> collect chamado só com os alcançáve
   expect(collectCalls[0]![0]!.position).toEqual({ x: 1, y: 64, z: 1 })
 }, 8000)
 
-test('caso 3: nenhum candidato -> lança "não encontrado"', async () => {
+test('caso 3: nenhum candidato -> no_effect com reason "não encontrado" (D-12)', async () => {
   const { bot, collectCalls } = makeMockBot({
     positions: [],
     statusFor: () => 'noPath',
   })
 
-  await expect(dig(bot, { target: 'oak_log', count: 1 })).rejects.toThrow(
-    /não encontrado/,
-  )
+  const r = await dig(bot, { target: 'oak_log', count: 1 })
+  expect(r.outcome).toBe('no_effect')
+  expect(r.observed).toBe(0)
+  expect(r.reason).toMatch(/não encontrado/)
   expect(collectCalls.length).toBe(0)
 }, 8000)
