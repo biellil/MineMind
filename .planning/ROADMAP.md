@@ -12,7 +12,7 @@ MineMind nasce como uma espinha sem-LLM antes de qualquer incerteza de raciocín
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Presença e Conexão (fundação sem-LLM)** - Agente conecta, permanece online, percebe o mundo e executa skills cruas com timeout e ritmo humanizado.
+- [x] **Phase 1: Presença e Conexão (fundação sem-LLM)** - Agente conecta, permanece online, percebe o mundo e executa skills cruas com timeout e ritmo humanizado.
 - [ ] **Phase 2: Loop Autônomo e Memória de Curto Prazo** - StateGraph cíclico com nós de regra fixa, comportamento autônomo e buffer de memória limitado — ainda sem LLM.
 - [ ] **Phase 3: Cognição com LLM — Loop Completo, Necessidades e Objetivos** - LLM local guia análise/plano/conversa; necessidades internas decaem e geram objetivos dinâmicos com histerese.
 - [ ] **Phase 4: Persistência, Reflexão e Identidade Viva** - Memória de longo prazo e semântica sobrevive a reinícios; reflexão, perfis por jogador e personalidade evolutiva.
@@ -32,9 +32,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Bootstrap: package.json, tsconfig, config.ts e WorldSnapshot types
-- [ ] 01-02-PLAN.md — Conexão e Percepção: createBot, reconexão automática e buildWorldSnapshot
-- [ ] 01-03-PLAN.md — Skills e Executor: executeWithSafety, navigate, dig, follow/attack stubs com Zod
+- [x] 01-01-PLAN.md — Bootstrap: package.json, tsconfig, config.ts e WorldSnapshot types
+- [x] 01-02-PLAN.md — Conexão e Percepção: createBot, reconexão automática e buildWorldSnapshot
+- [x] 01-03-PLAN.md — Skills e Executor: executeWithSafety, navigate, dig, follow/attack stubs com Zod
 
 ### Phase 2: Loop Autônomo e Memória de Curto Prazo
 **Goal**: Um loop cognitivo cíclico real, implementado como `StateGraph` do LangGraph com aresta de retorno, roda continuamente com nós de regra fixa (sem LLM) — provando a arquitetura central com zero incerteza de raciocínio. A disciplina de execução de ações (camada centralizada, rechecagem de pré-condições) e a memória de curto prazo limitada guardam o loop desde o instante em que ele começa a agir de forma contínua.
@@ -88,7 +88,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Presença e Conexão | 0/3 | Not started | - |
+| 1. Presença e Conexão | 3/3 | Complete | 2026-06-18 |
 | 2. Loop Autônomo e Memória CP | 0/TBD | Not started | - |
 | 3. Cognição com LLM | 0/TBD | Not started | - |
 | 4. Persistência e Identidade | 0/TBD | Not started | - |

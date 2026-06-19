@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-06-19T01:05:13.863Z"
-last_activity: 2026-06-18 — Roadmap criado (4 fases, granularidade coarse)
+status: executing
+stopped_at: Phase 1 complete — smoke test passed (HP:20, Food:20, skills registradas)
+last_updated: "2026-06-18T00:00:00Z"
+last_activity: 2026-06-18 -- Phase 01 complete
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 3
+  completed_plans: 3
+  percent: 25
 ---
 
 # Project State
@@ -21,16 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-18)
 
 **Core value:** O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com base em objetivos próprios e memória — sem intervenção humana. Se tudo falhar, o loop cognitivo (perceber → decidir → agir) precisa funcionar.
-**Current focus:** Phase 1 — Presença e Conexão (fundação sem-LLM)
+**Current focus:** Phase 01 — presen-a-e-conex-o-funda-o-sem-llm
 
 ## Current Position
 
-Phase: 1 of 4 (Presença e Conexão)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-06-18 — Roadmap criado (4 fases, granularidade coarse)
+Phase: 01 (presen-a-e-conex-o-funda-o-sem-llm) — COMPLETE ✓
+Next: Phase 02 — Loop Autônomo e Memória de Curto Prazo
+Last activity: 2026-06-18 -- Phase 01 complete (smoke test: HP:20, skills registradas)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 25%
 
 ## Performance Metrics
 
@@ -74,7 +73,7 @@ None yet.
 
 [Issues that affect future work]
 
-- [Fase 1]: Compatibilidade Bun↔Mineflayer é desconhecida (MEDIUM) — resolver via spike connect+walk+dig+reconnect na versão exata do MC antes de fixar o runtime.
+- [RESOLVIDO] Compatibilidade Bun 1.3.2 ↔ Mineflayer 4.37.1 confirmada — `bun install` sem erros NAPI, bot conectou em MC 1.21.4.
 - [Fase 3 / Fase 4]: Sinalizadas para /gsd:research-phase — grammar/structured-output e tool-calling do modelo local (Fase 3); estratégia de persistência e scoring de recuperação semântica (Fase 4).
 
 ## Session Continuity

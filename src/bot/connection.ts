@@ -32,13 +32,22 @@ export function createBot(onReady?: BotReadyCallback): void {
     movements.allowSprinting = true   // sprinting é comportamento humano normal
     bot.pathfinder.setMovements(movements)
 
-    console.log(
-      `[MineMind] Online — ${config.host}:${config.port} | ` +
-      `HP: ${bot.health} | Pos: ${Math.round(bot.entity.position.x)},` +
-      `${Math.round(bot.entity.position.y)},${Math.round(bot.entity.position.z)}`
-    )
+    // Em MC 1.21.x, bot.health/food chegam via pacote separado após spawn.
+    // Aguardar 'health' garante que o snapshot capture valores reais.
+    const onHealthReady = () => {
+      console.log(
+        `[MineMind] Online — ${config.host}:${config.port} | ` +
+        `HP: ${bot.health} | Pos: ${Math.round(bot.entity.position.x)},` +
+        `${Math.round(bot.entity.position.y)},${Math.round(bot.entity.position.z)}`
+      )
+      onReady?.(bot)
+    }
 
-    onReady?.(bot)
+    if (bot.health !== undefined) {
+      onHealthReady()
+    } else {
+      bot.once('health', onHealthReady)
+    }
   })
 
   bot.on('error', (err: Error) => {
