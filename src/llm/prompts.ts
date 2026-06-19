@@ -79,9 +79,10 @@ function serializeUnknown(label: string, value: unknown, max: number): string {
  * Monta uma string COMPACTA de contexto para o LLM (orçamento de prompt limitado, D-07).
  *
  * Inclui: status (health/food/timeOfDay), até ~8 tipos de bloco próximos com count,
- * jogadores próximos (username+distance), needs/goals (tipos reais virão dos Plans 02/03,
- * por ora tratados como `unknown` e serializados defensivamente) e os ~10 eventos
- * de memória mais recentes.
+ * jogadores próximos (username+distance), bloco na mira (lookingAt), bloco sob os pés
+ * (underfoot) e até ~5 entidades próximas (nome+distância), needs/goals (tipos reais
+ * virão dos Plans 02/03, por ora tratados como `unknown` e serializados defensivamente)
+ * e os ~10 eventos de memória mais recentes.
  *
  * Tolerante a snapshot null e arrays/objetos vazios — NUNCA lança.
  */
@@ -112,6 +113,22 @@ export function serializeContext(
       .map((p) => `${p.username}${p.distance != null ? ` (${Math.round(p.distance)}m)` : ''}`)
     if (nearbyPlayers.length > 0) {
       lines.push(`Jogadores próximos: ${nearbyPlayers.join(', ')}`)
+    }
+
+    // Bloco na mira (NOVO)
+    if (snapshot.lookingAt) {
+      lines.push(`Na mira: ${snapshot.lookingAt.name} (${Math.round(snapshot.lookingAt.distance)}m)`)
+    }
+
+    // Bloco sob os pés (NOVO)
+    lines.push(`Sob os pés: ${snapshot.underfoot}`)
+
+    // Entidades/mobs próximos (JÁ capturados; render NOVO, limite ~5, compacto)
+    const nearbyEntities = snapshot.entities
+      .slice(0, 5)
+      .map((e) => `${e.name} (${Math.round(e.distance)}m)`)
+    if (nearbyEntities.length > 0) {
+      lines.push(`Entidades próximas: ${nearbyEntities.join(', ')}`)
     }
   } else {
     lines.push('Status: (sem percepção disponível)')
