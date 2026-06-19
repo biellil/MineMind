@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-06-19T18:36:07.670Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-06-19T18:47:07.990Z"
 last_activity: 2026-06-19
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 24
-  completed_plans: 18
+  completed_plans: 19
   percent: 50
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-18)
 ## Current Position
 
 Phase: 04 (persist-ncia-reflex-o-e-identidade-viva) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Next: Phase 04 — Persistência, Reflexão e Identidade Viva
 Last activity: 2026-06-19
 
@@ -59,6 +59,7 @@ Progress: [█████░░░░░] 50%
 | Phase 999.1 P03 | 6 | 2 tasks | 2 files |
 | Phase 999.1 P05 | 3 | 2 tasks | 1 files |
 | Phase 04 P01 | 3 | 1 tasks | 4 files |
+| Phase 04 P02 | 12 | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,7 @@ Recent decisions affecting current work:
 - [Phase 999.1]: D-03: bounds do A* aplicados nos globais bot.pathfinder.* E em bot.collectBlock.movements (instância interna que ignora setMovements) — raiz do fix de OOM
 - [Phase 999.1]: D-07 provado por smoke headless (dig.oom.smoke.test.ts): sem OOM (heap sob teto), rejeita dentro de digTimeoutMs, lag<200ms via heartbeat — sob PERCEPTION_RADIUS=32
 - [Phase 04]: D-01 de-riscada e CONFIRMADA: sqlite-vec@0.1.9 carrega em bun:sqlite no Windows (vec0.dll) e Float32Array faz round-trip por vec0 — fallback vectra descartado; Plan 03 usa Float32Array direto (sem Buffer.from)
+- [Phase 04]: D-02 fundação: openDb é o store SQLite único (relacional + vec0) com schema versionado por user_version, WAL e recuperação graceful; vec_events criada FORA da transação; recovery fecha o handle antes de renomear .corrupt (EBUSY Windows)
 
 ### Pending Todos
 
@@ -93,6 +95,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-19T18:36:07.660Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-06-19T18:46:54.681Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
