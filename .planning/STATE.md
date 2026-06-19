@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 1 complete — smoke test passed (HP:20, Food:20, skills registradas)
-last_updated: "2026-06-18T00:00:00Z"
-last_activity: 2026-06-18 -- Phase 01 complete
+stopped_at: Phase 2 context gathered
+last_updated: "2026-06-19T02:52:07.733Z"
+last_activity: "2026-06-18 -- Phase 01 complete (smoke test: HP:20, skills registradas)"
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 3
   completed_plans: 3
-  percent: 25
+  percent: 100
 ---
 
 # Project State
@@ -78,6 +78,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-19T01:05:13.857Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-presen-a-e-conex-o-funda-o-sem-llm/01-CONTEXT.md
+Last session: 2026-06-19T02:52:07.721Z
+Stopped at: Phase 2 context gathered
+Resume file: .planning/phases/02-loop-aut-nomo-e-mem-ria-de-curto-prazo/02-CONTEXT.md
