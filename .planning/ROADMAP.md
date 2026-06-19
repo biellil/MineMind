@@ -83,10 +83,16 @@ Plans:
   2. O agente recupera memórias semânticas relevantes por similaridade, combinando recência × relevância × importância.
   3. No estado Reflecting, o agente revisa acontecimentos recentes, consolida memória e atualiza seus objetivos.
   4. O agente mantém um perfil por jogador (nome, frequência de interação, histórico, grau de confiança) e sua personalidade evolui a partir de uma linha de base estática (sem aprendizado adaptativo avançado).
-**Plans**: TBD
+**Plans**: 7 plans
 
 Plans:
-- [ ] TBD durante /gsd:plan-phase 4
+- [ ] 04-01-PLAN.md — Wave 0 de-risk: instalar sqlite-vec + smoke de load/round-trip vetorial em bun:sqlite (Windows) (MEM-03)
+- [ ] 04-02-PLAN.md — Fundação de persistência: openDb (schema/PRAGMA/migrations/recovery) + config knobs + provider.embed() (MEM-02/03)
+- [ ] 04-03-PLAN.md — Memória de longo prazo (TDD): importância heurística + escrita atômica + retrieval scoring Generative Agents (MEM-02/03)
+- [ ] 04-04-PLAN.md — Identidade social (TDD): perfis por jogador + trust determinístico (SOC-01) + personalidade evolutiva estruturada (SOC-02)
+- [ ] 04-05-PLAN.md — Reflexão: enum reflecting + PRIORITY_ORDER + ReflectionOutputSchema + gatilho híbrido/consolidação/goalUpdates (REFL-01)
+- [ ] 04-06-PLAN.md — Mente durável em disco: holder com db+personality + persistHolder/hydrateHolder (decay-on-boot) + boot/shutdown wiring (MEM-02)
+- [ ] 04-07-PLAN.md — Wiring vivo + verificação: reflexão single-flight no loop, personalidade/trust no prompt, perfis na conversa + checkpoint humano (REFL-01/SOC-01/SOC-02/MEM-02/03)
 
 ## Progress
 
@@ -98,7 +104,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Presença e Conexão | 3/3 | Complete | 2026-06-18 |
 | 2. Loop Autônomo e Memória CP | 4/4 | Complete | 2026-06-19 |
 | 3. Cognição com LLM | 0/5 | Not started | - |
-| 4. Persistência e Identidade | 0/TBD | Not started | - |
+| 4. Persistência e Identidade | 0/7 | Not started | - |
 
 ## Backlog
 
