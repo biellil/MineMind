@@ -31,6 +31,12 @@ function onBotReady(bot: Bot): void {
       console.log('[MineMind] Snapshot imutável confirmado (Object.freeze funcionando).')
     }
   }
+
+  // Demonstração de skills registradas (Fase 1 — loop cognitivo assume na Fase 2)
+  import('../skills/index').then(({ skillRegistry }) => {
+    console.log('[MineMind] Skills registradas:', Object.keys(skillRegistry).join(', '))
+    console.log('[MineMind] Fase 1 completa — conexão, percepção e skills prontas.')
+  })
 }
 
 // Iniciar o agente
