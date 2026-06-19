@@ -69,7 +69,7 @@ Plans:
 - [x] 03-01-PLAN.md — Fundação LLM: provider abstraído (LLM-03), saída estruturada com enum fechado + repair/fallback (LLM-02), persona estática (CHAT-03) e tokenizer real (js-tiktoken)
 - [x] 03-02-PLAN.md — Motivação (módulos puros TDD): necessidades híbridas com anti-starvation (NEED-01/02) e objetivos dinâmicos com histerese/preempção (GOAL-01/02)
 - [x] 03-03-PLAN.md — Integração: holder de estado durável (CONN-03), deliberação single-flight fora do grafo (COG-03), wiring needs/goals no grafo + config .env
-- [ ] 03-04-PLAN.md — Conversa e disposição: caminho conversacional isolado (CHAT-01/02), eixo AUTONOMOUS/ASSISTANT por chat (D-04/D-05), !auto (D-14)
+- [x] 03-04-PLAN.md — Conversa e disposição: caminho conversacional isolado (CHAT-01/02), eixo AUTONOMOUS/ASSISTANT por chat (D-04/D-05), !auto (D-14)
 - [ ] 03-05-PLAN.md — Verificação: smoke headless (degradação ao arbiter + tick não-bloqueante), teste de reconexão (CONN-03) e checkpoint humano ao vivo
 
 **UI hint**: no
