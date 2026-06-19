@@ -14,7 +14,7 @@ updated: 2026-06-19T22:17:28Z
 
 ### 1. Live structured-output parity across both real providers
 expected: Com LM Studio rodando + `OPENAI_API_KEY` válida + rede, o teste live (gated por `RUN_LIVE_PARITY=1`) percorre `createProvider()` em ambos os perfis e `ActionDecisionSchema.parse()` retorna saída válida nos dois — confirmando paridade real (critério de meta #2, D-15). CI nunca exercita isto por design.
-result: [pending]
+result: cloud PASS (2026-06-19 — `RUN_LIVE_PARITY=1 LLM_PROVIDER=openai`, chamada real GPT-4.1-mini, parse OK); local pendente (requer LM Studio em localhost:1235)
 
 Comandos:
 ```
@@ -30,5 +30,7 @@ issues: 0
 pending: 1
 skipped: 0
 blocked: 0
+
+(cloud-side validado ao vivo 2026-06-19; item permanece partial até paridade local live com LM Studio)
 
 ## Gaps
