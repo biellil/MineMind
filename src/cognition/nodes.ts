@@ -249,11 +249,24 @@ export function createNodes(deps: NodeDeps) {
     // próprio progressChecker (dig usa inventário; navigate usa navigateTimeoutMs). O wrap externo
     // usava defaults genéricos e duplicava o watchdog interno.
     //
+    // D-16/D-18: AbortController por skill-run para preempção event-driven
+    const skillAbort = new AbortController()
+
+    // Registrar listener ANTES de chamar a skill.
+    // hostileNearby é o gatilho de preempção v1 (D-18 — Policy: Phase 8 adicionará mais gatilhos).
+    const onHostileNearby = () => {
+      log(`preemptando ${skill} — hostileNearby recebido`)
+      skillAbort.abort('hostileNearby')
+    }
+    triggerBus.once('hostileNearby', onHostileNearby)
+
     // Fase 07.1 Plan 03: variável para carregar o resultado entre try/catch e o emit final.
     // CRITÉRIO DE ORDEM: emit SEMPRE após holder.lastObservedDelta atribuído (Pitfall 1 da research).
     let skillOutcome: import('../grounding/types').SkillOutcome | null = null
     try {
-      const params = skill === 'dig' ? { target } : { target: JSON.parse(target) }
+      const params = skill === 'dig'
+        ? { target, signal: skillAbort.signal }
+        : { target: JSON.parse(target), signal: skillAbort.signal }
       // D-09 B: a memória deriva do SkillResult OBSERVADO (result.outcome), NUNCA do não-throw.
       // Mata o bug histórico "peguei 10 tábuas" (success por Promise resolvida com observed:0).
       const result = await skillRegistry[skill!]!(bot, params)
@@ -285,6 +298,7 @@ export function createNodes(deps: NodeDeps) {
       skillOutcome = result.outcome
     } catch (err) {
       // Catch agora SÓ para exceções genuínas inesperadas (D-12) — skills não lançam como fluxo.
+      // Inclui AbortError quando a skill não tratar o signal internamente.
       const reason = err instanceof Error ? err.name : String(err)
       recordFailure(safety, target, now())
       // grounding gravado ANTES do emit (Pitfall 1 / T-07.1-10)
@@ -300,12 +314,15 @@ export function createNodes(deps: NodeDeps) {
         reason,
         timestamp: now(),
       })
-      // Fase 07.1 Plan 03: emit dentro do catch após grounding (Pitfall 1 / T-07.1-10)
-      triggerBus.emit('actionFinished', { skill, outcome: 'error' })
+      skillOutcome = 'error'
       log(`ERRO inesperado ${skill} ${target}: ${reason}`)
-      return { memory: holder.memory }
+    } finally {
+      // D-18/Pitfall 6: remover listener ANTES do abort() (evitar listener orphan)
+      triggerBus.off('hostileNearby', onHostileNearby)
+      skillAbort.abort()  // cleanup idempotente — no-op se já foi abortado
     }
-    // Fase 07.1 Plan 03: emit após try/catch (sucesso ou falha não-exception) — grounding já gravado
+
+    // Fase 07.1 Plan 03: emit após try/catch/finally — grounding já gravado (Pitfall 1 / T-07.1-10)
     triggerBus.emit('actionFinished', { skill, outcome: skillOutcome })
     return { memory: holder.memory }
   }
