@@ -55,6 +55,9 @@ export const config = {
   antiRepeatN: parseInt(process.env.ANTI_REPEAT_N || '3', 10),
   // D-11: falhas consecutivas de skill antes de cair para Idle
   backoffM: parseInt(process.env.BACKOFF_M || '3', 10),
+  // Anti-deadlock: ms "descansando" em Idle (desde a última falha) antes de zerar o streak de
+  // backoff e o bot voltar a tentar. Sem isto o fallback-to-Idle é permanente (bot congela).
+  backoffRecoveryMs: parseInt(process.env.BACKOFF_RECOVERY_MS || '10000', 10),
   // D-11: cooldown curto (ms) de um alvo marcado como falho
   targetCooldownMs: parseInt(process.env.TARGET_COOLDOWN_MS || '15000', 10),
   // D-05: raio (blocos) para considerar um jogador "próximo" (gatilho de Socializing)
@@ -227,6 +230,9 @@ if (config.minTickMs < 0) {
 }
 if (config.antiRepeatN < 1 || config.backoffM < 1) {
   throw new Error(`ANTI_REPEAT_N (${config.antiRepeatN}) e BACKOFF_M (${config.backoffM}) devem ser >= 1.`)
+}
+if (config.backoffRecoveryMs < 0) {
+  throw new Error(`BACKOFF_RECOVERY_MS inválido: ${config.backoffRecoveryMs}. Deve ser >= 0.`)
 }
 // Fase 3: validação dos parâmetros de LLM/disposição/necessidades/objetivos
 if (config.replanMinIntervalMs < 0) {

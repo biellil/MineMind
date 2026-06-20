@@ -24,6 +24,7 @@ import {
   recordFailure,
   recordSuccess,
   shouldFallbackToIdle,
+  decayBackoff,
   cooledDownTargets,
 } from './safety'
 
@@ -145,7 +146,10 @@ export function createNodes(deps: NodeDeps) {
     }
 
     if (next === null) next = arbitrate(s.snapshot, control.getMode(), excluded) // D-17 fallback
-    if (shouldFallbackToIdle(safety)) next = 'idle' // D-11: backoff -> Idle
+    // Anti-deadlock: recupera o backoff por tempo ANTES de checar o fallback. Sem isto, o Idle de
+    // backoff seria permanente (em Idle não há skill → nunca recordSuccess → streak nunca zera).
+    decayBackoff(safety, now())
+    if (shouldFallbackToIdle(safety)) next = 'idle' // D-11: backoff -> Idle (já recuperável no tempo)
     return { cogState: next }
   }
 

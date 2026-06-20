@@ -9,10 +9,11 @@ export interface SafetyState {
   repeatCount: number                 // quantas vezes a mesma key repetiu sem progresso
   consecutiveFailures: number         // falhas de skill seguidas (D-11)
   cooldownUntil: Map<string, number>  // target -> timestamp (ms) até quando está em cooldown
+  lastFailureAt: number               // timestamp (ms) da última falha — janela de recuperação do backoff
 }
 
 export function createSafetyState(): SafetyState {
-  return { lastKey: null, repeatCount: 0, consecutiveFailures: 0, cooldownUntil: new Map() }
+  return { lastKey: null, repeatCount: 0, consecutiveFailures: 0, cooldownUntil: new Map(), lastFailureAt: 0 }
 }
 
 const keyOf = (skill: string, target: string) => `${skill}:${target}`
@@ -36,6 +37,7 @@ export function shouldAbandon(s: SafetyState): boolean {
 export function recordFailure(s: SafetyState, target: string, now: number = Date.now()): void {
   s.consecutiveFailures += 1
   s.cooldownUntil.set(target, now + config.targetCooldownMs)
+  s.lastFailureAt = now
 }
 
 /** Sucesso zera os contadores de segurança. */
@@ -48,6 +50,24 @@ export function recordSuccess(s: SafetyState): void {
 /** D-11: cair para Idle quando M falhas consecutivas. */
 export function shouldFallbackToIdle(s: SafetyState): boolean {
   return s.consecutiveFailures >= config.backoffM
+}
+
+/**
+ * Recuperação por tempo do backoff (anti-deadlock). Sem isto, o fallback-to-Idle (D-11) é
+ * PERMANENTE: em Idle o bot não executa skill → nunca há recordSuccess → consecutiveFailures
+ * fica travado em ≥M para sempre, e o bot congela. Após backoffRecoveryMs "descansando" desde
+ * a última falha, zera o streak para o bot tentar de novo (rest-then-retry).
+ *
+ * Chamada por tick no analyze ANTES de shouldFallbackToIdle. Retorna true se de fato recuperou.
+ */
+export function decayBackoff(s: SafetyState, now: number = Date.now()): boolean {
+  if (s.consecutiveFailures >= config.backoffM && now - s.lastFailureAt >= config.backoffRecoveryMs) {
+    s.consecutiveFailures = 0
+    s.repeatCount = 0
+    s.lastKey = null
+    return true
+  }
+  return false
 }
 
 export function isInCooldown(s: SafetyState, target: string, now: number = Date.now()): boolean {
