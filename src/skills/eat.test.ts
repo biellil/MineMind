@@ -2,8 +2,9 @@
 // Plan 08-02 / D-05 / SURV-01: skill reflexa `eat` grounded por delta de bot.food.
 //
 // Mock mínimo de Bot (estilo dig.test.ts): bot.food mutável, heldItem, inventory.items(),
-// registry.foods (índice por item.type), equip (async no-op), consume (async que incrementa
-// bot.food), deactivateItem (spy). Cobre TODOS os casos do bloco <behavior> do plano.
+// registry.foodsByName (índice por item.name — espelha o registry REAL do mineflayer; o índice
+// por it.type estava errado e mascarava o bug que matou o bot de fome), equip (async no-op),
+// consume (async que incrementa bot.food), deactivateItem (spy). Cobre TODOS os casos do plano.
 import { test, expect } from 'bun:test'
 import { eat } from './eat'
 
@@ -17,7 +18,7 @@ interface MockItem {
  *
  * @param opts.foodBefore valor inicial de bot.food
  * @param opts.items      itens do inventário
- * @param opts.foods      registry.foods (chave = item.type → { foodPoints, saturation })
+ * @param opts.foods      registry.foodsByName (chave = item.name → { foodPoints, saturation })
  * @param opts.heldItem   item atualmente na mão (prevHeld)
  * @param opts.gainOnConsume quanto bot.food sobe quando consume() resolve (default 0)
  * @param opts.consumeThrows se true, consume() rejeita (simula falha de consumo)
@@ -26,7 +27,7 @@ interface MockItem {
 function makeMockBot(opts: {
   foodBefore: number
   items: MockItem[]
-  foods: Record<number, { foodPoints: number; saturation: number }>
+  foods: Record<string, { foodPoints: number; saturation: number }>
   heldItem?: MockItem | null
   gainOnConsume?: number
   consumeThrows?: boolean
@@ -37,7 +38,7 @@ function makeMockBot(opts: {
     food: opts.foodBefore,
     heldItem: opts.heldItem ?? null,
     inventory: { items: () => opts.items },
-    registry: { foods: opts.foods },
+    registry: { foodsByName: opts.foods },
     equip: async (item: MockItem) => {
       equipCalls.push({ name: item.name })
       bot.heldItem = item
@@ -56,7 +57,24 @@ function makeMockBot(opts: {
 
 const bread = { name: 'bread', type: 297 }
 const apple = { name: 'apple', type: 260 }
-const FOODS = { 297: { foodPoints: 5, saturation: 6 }, 260: { foodPoints: 4, saturation: 2.4 } }
+const FOODS = { bread: { foodPoints: 5, saturation: 6 }, apple: { foodPoints: 4, saturation: 2.4 } }
+
+// Regressão: o registry REAL keia foodsByName por NOME e os ids de comida (food.id) NÃO batem com
+// item.type (ex.: cooked_beef item.type=1038, food.id=989). A skill DEVE achar a comida pelo nome —
+// se voltar a indexar por it.type, este teste falha (o bot morria de fome com comida no inventário).
+test('regressão id-mismatch: acha comida por NOME mesmo com food.id != item.type', async () => {
+  const cookedBeef = { name: 'cooked_beef', type: 1038 } // item.type real ≠ food.id (989)
+  const { bot } = makeMockBot({
+    foodBefore: 9,
+    items: [cookedBeef],
+    foods: { cooked_beef: { foodPoints: 8, saturation: 12.8 } },
+    gainOnConsume: 8,
+  })
+  const r = await eat(bot, {})
+  expect(r.outcome).toBe('success')
+  expect(r.observed).toBe(8)
+  expect(r.expected).toBe(8)
+})
 
 test('sucesso: food sobe após consume -> success, observed = delta real', async () => {
   const { bot } = makeMockBot({ foodBefore: 10, items: [bread], foods: FOODS, gainOnConsume: 5 })

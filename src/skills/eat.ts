@@ -36,11 +36,14 @@ export async function eat(bot: Bot, rawParams: unknown): Promise<SkillResult> {
   const foodBefore = bot.food
   const prevHeld = bot.heldItem
 
-  // Seleção de comida: itens do inventário que estão em registry.foods, ordenados por foodPoints desc.
+  // Seleção de comida: itens do inventário que estão em registry.foodsByName, ordenados por foodPoints desc.
+  // IMPORTANTE: indexar por NOME, não por it.type. `registry.foods` é keyado pelo id PRÓPRIO da comida
+  // (food.id), que NÃO é o item.type — `foods[it.type]` retorna undefined e a skill achava "sem comida"
+  // mesmo com comida no inventário (bug que matou o bot de fome). `foodsByName[it.name]` é o índice correto.
   const foods = bot.inventory
     .items()
-    .filter((it) => bot.registry.foods?.[it.type])
-    .sort((a, b) => bot.registry.foods[b.type].foodPoints - bot.registry.foods[a.type].foodPoints)
+    .filter((it) => bot.registry.foodsByName?.[it.name])
+    .sort((a, b) => bot.registry.foodsByName[b.name].foodPoints - bot.registry.foodsByName[a.name].foodPoints)
   const food = foods[0] as Item | undefined
 
   if (!food) {
@@ -67,7 +70,7 @@ export async function eat(bot: Bot, rawParams: unknown): Promise<SkillResult> {
     )
   }
 
-  const expected = bot.registry.foods[food.type].foodPoints
+  const expected = bot.registry.foodsByName[food.name].foodPoints
 
   // NUNCA deixar lançar como fluxo (D-12): captura o erro e segue para o grounding.
   let threw: unknown = null
