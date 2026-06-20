@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
-status: verifying
-stopped_at: Phase 8 context gathered
-last_updated: "2026-06-20T20:51:58.293Z"
-last_activity: 2026-06-19
+status: executing
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-06-20T21:29:00.333Z"
+last_activity: 2026-06-20
 progress:
   total_phases: 10
   completed_phases: 3
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 15
+  completed_plans: 12
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-19)
 
 **Core value:** O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com base em objetivos próprios e memória — sem intervenção humana. Se tudo falhar, o loop cognitivo (perceber → decidir → agir) precisa funcionar.
-**Current focus:** Phase 07 — grounding-skillresult
+**Current focus:** Phase 08 — system-1-sobreviv-ncia-reflexa
 
 ## Current Position
 
-Phase: 07.1
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-06-19
+Phase: 08 (system-1-sobreviv-ncia-reflexa) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-06-20
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -59,6 +59,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 07 P02 | 8 | 4 tasks | 7 files |
 | Phase 07 P03 | 7 | 4 tasks | 13 files |
 | Phase 07 P04 | 5 | 2 tasks | 3 files |
+| Phase 08 P01 | 12 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,7 @@ Recent decisions affecting current work:
 - [Phase 07]: 07-02: 4 skills retornam SkillResult — dig/navigate grounded (captureGroundState before/after + evaluateDig/Navigate, outcome do delta real não da Promise); D-08 delta lido após catch (timeout 3/10 -> observed:3); D-12 pré-condições viram no_effect e follow/attack stubs resolvem outcome:'error' sem lançar; SkillFunction retipada Promise<SkillResult>. Handoff: execute node (nodes.ts) ainda registra success em qualquer resolução — Plan 03 deve consumir r.outcome.
 - [Phase 07]: 07-03: execute node deriva memória do SkillResult observado (result.outcome), não do não-throw — mata 'peguei 10 tábuas' na raiz (D-09 B/GRND-02). MemEvent.action ganha outcome/observed/expected (D-13, result vira derivado); partial/no_effect/error=failure preservando observed (GRND-04). holder.lastObservedDelta + bloco FATO VERIFICADO autoritativo no prompt (D-09 A). Insumo do post-filter da Plan 04.
 - [Phase 07]: 07-04: post-filter determinístico (camada C/D-09 C/D-10) reconcilia a fala do LLM contra holder.lastObservedDelta antes do bot.chat — 'peguei 10' vira 'peguei 3' (ou 0 em no_effect). Escopo mínimo (quantidade de coleta pt-BR); A=instrução, C=gate (D-11). Fase 7 completa.
+- [Phase 08]: 08-01: arbitrateReflex = função pura no driver (D-01) — winner-take-all por gravidade D-03 (ambiental>hostil>queda>vida>fome); D-17 shelter = variação do caminho hostil (cornered+noite); D-02 só fome é lifeCritical=false; limiares de sobrevivência em config com histerese enter/exit
 
 ### Roadmap Evolution
 
@@ -107,6 +109,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-20T20:51:58.288Z
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-system-1-sobreviv-ncia-reflexa/08-CONTEXT.md
+Last session: 2026-06-20T21:28:48.306Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: None

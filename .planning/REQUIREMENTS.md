@@ -26,11 +26,11 @@ Escopo comprometido deste milestone. Cada requisito mapeia para uma fase do road
 
 ### Sobrevivência — Camada Reflexa System 1 (SURV)
 
-- [ ] **SURV-01**: O agente come automaticamente antes de a fome causar dano, como reflexo (sem esperar o tick do LLM)
-- [ ] **SURV-02**: O agente detecta mob hostil próximo e reage (foge ou defende) em sub-segundo, sem esperar o LLM
-- [ ] **SURV-03**: O agente se abriga à noite / em perigo (abrigo de emergência) para não morrer de mobs noturnos
-- [ ] **SURV-04**: O agente evita perigos ambientais (lava, queda, afogamento) via guardas reflexos
-- [ ] **SURV-05**: O reflexo (System 1) tem precedência sobre a ação deliberada sem bloquear a inferência do LLM (preempção, não fila)
+- [x] **SURV-01**: O agente come automaticamente antes de a fome causar dano, como reflexo (sem esperar o tick do LLM)
+- [x] **SURV-02**: O agente detecta mob hostil próximo e reage (foge ou defende) em sub-segundo, sem esperar o LLM
+- [x] **SURV-03**: O agente se abriga à noite / em perigo (abrigo de emergência) para não morrer de mobs noturnos
+- [x] **SURV-04**: O agente evita perigos ambientais (lava, queda, afogamento) via guardas reflexos
+- [x] **SURV-05**: O reflexo (System 1) tem precedência sobre a ação deliberada sem bloquear a inferência do LLM (preempção, não fila)
 
 ### Crafting & Smelting (CRAFT)
 
@@ -115,11 +115,11 @@ Quais fases cobrem quais requisitos. Preenchido durante a criação do roadmap.
 | GRND-02 | Phase 7 | Complete |
 | GRND-03 | Phase 7 | Complete |
 | GRND-04 | Phase 7 | Complete |
-| SURV-01 | Phase 8 | Pending |
-| SURV-02 | Phase 8 | Pending |
-| SURV-03 | Phase 8 | Pending |
-| SURV-04 | Phase 8 | Pending |
-| SURV-05 | Phase 8 | Pending |
+| SURV-01 | Phase 8 | Complete |
+| SURV-02 | Phase 8 | Complete |
+| SURV-03 | Phase 8 | Complete |
+| SURV-04 | Phase 8 | Complete |
+| SURV-05 | Phase 8 | Complete |
 | BUILD-01 | Phase 9 | Pending |
 | CRAFT-01 | Phase 9 | Pending |
 | CRAFT-02 | Phase 9 | Pending |

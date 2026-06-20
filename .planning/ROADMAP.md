@@ -101,7 +101,7 @@ Plans:
   5. Toda nova chamada de pathfinder do reflexo (flee/shelter) herda os bounds do 999.1 (searchRadius/thinkTimeout/pré-check getPathTo) — sem reaparecer OOM por caminho novo
 **Plans**: 4 plans
 Plans:
-- [ ] 08-01-PLAN.md — Fundação: limiares de sobrevivência (config) + arbitrateReflex pura (tabela-verdade)
+- [x] 08-01-PLAN.md — Fundação: limiares de sobrevivência (config) + arbitrateReflex pura (tabela-verdade)
 - [ ] 08-02-PLAN.md — Skills reflexas eat (D-05) + attack 1-shot real (D-15)
 - [ ] 08-03-PLAN.md — Skills reflexas flee (GoalInvert+sprint, D-06) + shelter cavar-vs-pilar (D-08)
 - [ ] 08-04-PLAN.md — Integração: gatilhos lifeCritical + preempção generalizada (setGoal null) + System 1 no driver + gate D-20 AO VIVO
