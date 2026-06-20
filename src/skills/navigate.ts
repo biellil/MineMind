@@ -39,6 +39,8 @@ export type NavigateParams = z.infer<typeof NavigateSchema>
  * @param rawParams - Parâmetros não validados (validados via Zod antes de usar)
  */
 export async function navigate(bot: Bot, rawParams: unknown): Promise<SkillResult> {
+  // Extrair signal ANTES do Zod (não faz parte do schema — é injeção de runtime)
+  const signal = (rawParams as Record<string, unknown>)?.signal as AbortSignal | undefined
   const { target, range } = NavigateSchema.parse(rawParams)
 
   let goal: goals.Goal
@@ -63,6 +65,13 @@ export async function navigate(bot: Bot, rawParams: unknown): Promise<SkillResul
 
   const before = captureGroundState(bot)
 
+  // D-17: AbortSignal honrado via bot.pathfinder.stop()
+  if (signal) {
+    signal.addEventListener('abort', () => {
+      try { bot.pathfinder.stop() } catch { /* ignora se pathfinder já parou */ }
+    }, { once: true })
+  }
+
   let threw: unknown = null
   try {
     // ACT-03: executor centralizado aplica timeout de 30s e watchdog de posição
@@ -77,6 +86,7 @@ export async function navigate(bot: Bot, rawParams: unknown): Promise<SkillResul
         },
         progressIntervalMs: 2_000,
         noProgressToleranceMs: 10_000,
+        signal,  // D-16: 4° racer — preempção externa via AbortSignal
       }
     )
   } catch (err) {

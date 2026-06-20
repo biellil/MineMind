@@ -30,6 +30,8 @@ export interface ExecuteOptions {
   progressIntervalMs?: number
   /** Tempo máximo sem progresso antes de abortar em ms (padrão: 10000) */
   noProgressToleranceMs?: number
+  /** D-16: AbortSignal para preempção externa da skill (4° racer no race). */
+  signal?: AbortSignal
 }
 
 /** Erro lançado quando skill excede o timeout (ACT-03) */
@@ -101,9 +103,23 @@ export async function executeWithSafety<T>(
     })
   }
 
+  // D-16: AbortSignal como 4° racer — preempção externa da skill em curso
+  let abortPromise: Promise<never> | undefined
+  if (opts.signal) {
+    const sig = opts.signal
+    abortPromise = new Promise<never>((_, reject) => {
+      if (sig.aborted) {
+        reject(new Error('AbortError'))
+        return
+      }
+      sig.addEventListener('abort', () => reject(new Error('AbortError')), { once: true })
+    })
+  }
+
   try {
     const racers: Promise<T | never>[] = [action(), timeoutPromise]
     if (watchdogPromise) racers.push(watchdogPromise)
+    if (abortPromise) racers.push(abortPromise)    // D-16: 4° racer — preempção externa
 
     const result = await Promise.race(racers)
 

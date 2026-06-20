@@ -35,8 +35,17 @@ export type DigParams = z.infer<typeof DigSchema>
  * um timeout que coletou 3 de 10 reporta observed:3, não falha total.
  */
 export async function dig(bot: Bot, rawParams: unknown): Promise<SkillResult> {
+  // Extrair signal ANTES do Zod (não faz parte do schema — é injeção de runtime)
+  const signal = (rawParams as Record<string, unknown>)?.signal as AbortSignal | undefined
   const { target, count } = DigSchema.parse(rawParams)
   const before = captureGroundState(bot, typeof target === 'string' ? undefined : target)
+
+  // D-17: AbortSignal honrado via bot.pathfinder.stop()
+  if (signal) {
+    signal.addEventListener('abort', () => {
+      try { bot.pathfinder.stop() } catch { /* ignora se pathfinder já parou */ }
+    }, { once: true })
+  }
 
   let threw: unknown = null
   try {
@@ -80,6 +89,7 @@ export async function dig(bot: Bot, rawParams: unknown): Promise<SkillResult> {
           progressChecker: () => bot.inventory.items().reduce((sum, item) => sum + item.count, 0),
           progressIntervalMs: 2_000,
           noProgressToleranceMs: config.digTimeoutMs,
+          signal,  // D-16: 4° racer — preempção externa via AbortSignal
         }
       )
     } else {
@@ -99,6 +109,7 @@ export async function dig(bot: Bot, rawParams: unknown): Promise<SkillResult> {
           progressChecker: () => (bot.blockAt({ x: target.x, y: target.y, z: target.z } as Parameters<typeof bot.blockAt>[0])?.name === blockName ? 0 : 1),
           progressIntervalMs: 1_000,
           noProgressToleranceMs: config.digTimeoutMs,
+          signal,  // D-16: 4° racer — preempção externa via AbortSignal
         }
       )
     }
