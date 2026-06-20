@@ -99,7 +99,12 @@ Plans:
   3. O reflexo crítico preempta (cancela `pathfinder.stop()`/aborta a ação física em curso) a ação deliberada SEM passar pelo lock do LLM — o System 1 nunca chama o LLM, então não compete pelo `inFlight`; só vida-crítica preempta (histerese, não fila)
   4. Após introduzir o System 1, um re-teste limpo AO VIVO confirma que o `[reflect]` ainda dispara (regressão B1 não reaparece com a mudança de quando o lock do LLM fica livre)
   5. Toda nova chamada de pathfinder do reflexo (flee/shelter) herda os bounds do 999.1 (searchRadius/thinkTimeout/pré-check getPathTo) — sem reaparecer OOM por caminho novo
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 08-01-PLAN.md — Fundação: limiares de sobrevivência (config) + arbitrateReflex pura (tabela-verdade)
+- [ ] 08-02-PLAN.md — Skills reflexas eat (D-05) + attack 1-shot real (D-15)
+- [ ] 08-03-PLAN.md — Skills reflexas flee (GoalInvert+sprint, D-06) + shelter cavar-vs-pilar (D-08)
+- [ ] 08-04-PLAN.md — Integração: gatilhos lifeCritical + preempção generalizada (setGoal null) + System 1 no driver + gate D-20 AO VIVO
 **UI hint**: no
 
 ### Phase 9: Placement + Crafting/Smelting Grounded
