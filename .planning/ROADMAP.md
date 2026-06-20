@@ -103,7 +103,7 @@ Plans:
 Plans:
 - [x] 08-01-PLAN.md — Fundação: limiares de sobrevivência (config) + arbitrateReflex pura (tabela-verdade)
 - [x] 08-02-PLAN.md — Skills reflexas eat (D-05) + attack 1-shot real (D-15)
-- [ ] 08-03-PLAN.md — Skills reflexas flee (GoalInvert+sprint, D-06) + shelter cavar-vs-pilar (D-08)
+- [x] 08-03-PLAN.md — Skills reflexas flee (GoalInvert+sprint, D-06) + shelter cavar-vs-pilar (D-08)
 - [ ] 08-04-PLAN.md — Integração: gatilhos lifeCritical + preempção generalizada (setGoal null) + System 1 no driver + gate D-20 AO VIVO
 **UI hint**: no
 
@@ -141,6 +141,18 @@ Plans:
   4. A transição autônomo↔assistente preserva personalidade/relacionamento (coerente com a persona; reversão de disposition limpa)
 **Plans**: TBD
 
+### Phase 11.1: LLM recebe posições e distâncias de blocos, mobs e entidades (percepção espacial no contexto user/human) (INSERTED)
+
+**Goal:** O LLM passa a saber **o que tem em volta dele com posição e distância** (blocos, mobs e entidades) — em vez de ficar adivinhando. Hoje o contexto enviado (`serializeContext` em src/llm/prompts.ts) manda só `nome×contagem` dos blocos (descarta os `examples`/coordenadas que o snapshot já tem) e só distância (sem posição) para mobs/entidades/jogadores. Sem noção espacial, o LLM decide às cegas: manda coletar um tronco sem saber se está a 2m ou 30m, no chão ou no topo de uma árvore (inalcançável) — uma das causas-raiz do "bot parado". Esta fase enriquece o contexto **user/human** com posições/distâncias para que o LLM decida com noção de perto/longe e alcançável/inalcançável.
+**Why:** Para o LLM saber o que existe ao redor e parar de adivinhar — decisões espaciais ruins (alvos inalcançáveis) hoje derrubam o bot em explore/idle.
+**How:** Não descartar `nearbyBlockTypes[].examples` na serialização; incluir posição/distância do exemplo mais próximo por tipo de bloco e a posição (não só distância) de mobs/entidades. Entra como mensagem **user/human** (contexto), nunca como assistant.
+**Requirements**: TBD
+**Depends on:** Phase 11
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 11.1 to break down)
+
 ### Phase 12: Building Deliberado
 **Goal**: O agente implementa o estado `building` real (hoje stub) além do abrigo de emergência reflexo: constrói um abrigo funcional e estruturas simples (parede/torre/posicionar estação), reusando o primitivo `placeBlock` robusto da Fase 9.
 **Depends on**: Phase 9 (placeBlock robusto), Phase 11 (building é um objetivo autônomo selecionável)
@@ -176,7 +188,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 9 → 10 → 11 → 12 → 13 → 14
+Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 9 → 10 → 11 → 11.1 → 12 → 13 → 14
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -187,6 +199,7 @@ Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 9 → 10 → 11 → 1
 | 9. Placement + Crafting/Smelting Grounded | v2.0 | 0/TBD | Not started | - |
 | 10. Tech Tree DAG + Needs | v2.0 | 0/TBD | Not started | - |
 | 11. Modos Autônomo/Assistente | v2.0 | 0/TBD | Not started | - |
+| 11.1. Percepção espacial no contexto do LLM (INSERTED) | v2.0 | 0/TBD | Not started | - |
 | 12. Building Deliberado | v2.0 | 0/TBD | Not started | - |
 | 13. Combate Completo | v2.0 | 0/TBD | Not started | - |
 | 14. Aprendizado por Reflexão | v2.0 | 0/TBD | Not started | - |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
 status: executing
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-06-20T21:39:28.314Z"
+stopped_at: Completed 08-03-PLAN.md
+last_updated: "2026-06-20T21:48:56.234Z"
 last_activity: 2026-06-20
 progress:
-  total_phases: 10
+  total_phases: 11
   completed_phases: 3
   total_plans: 15
-  completed_plans: 13
+  completed_plans: 14
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 ## Current Position
 
 Phase: 08 (system-1-sobreviv-ncia-reflexa) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-06-20
 
@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 07 P04 | 5 | 2 tasks | 3 files |
 | Phase 08 P01 | 12 | 2 tasks | 4 files |
 | Phase 08 P02 | 7 | 2 tasks | 7 files |
+| Phase 08 P03 | 6 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -83,9 +84,11 @@ Recent decisions affecting current work:
 - [Phase 07]: 07-04: post-filter determinístico (camada C/D-09 C/D-10) reconcilia a fala do LLM contra holder.lastObservedDelta antes do bot.chat — 'peguei 10' vira 'peguei 3' (ou 0 em no_effect). Escopo mínimo (quantidade de coleta pt-BR); A=instrução, C=gate (D-11). Fase 7 completa.
 - [Phase 08]: 08-01: arbitrateReflex = função pura no driver (D-01) — winner-take-all por gravidade D-03 (ambiental>hostil>queda>vida>fome); D-17 shelter = variação do caminho hostil (cornered+noite); D-02 só fome é lifeCritical=false; limiares de sobrevivência em config com histerese enter/exit
 - [Phase 08]: 08-02: eat (D-05) equipa→consume→re-equip grounded por delta LOCAL de bot.food (Pitfall 2, não toca GroundState); attack (D-15) vira 1-shot real via bot.attack sem perseguir (stub removido); eat/attack registrados no skillRegistry
+- [Phase 08]: 08-03: flee (D-06) GoalInvert(GoalFollow)+setGoal(goal,true) com fallback sprint cego; abort forçado setGoal(null) D-07; grounded por delta de distância; shelter (D-08) cavar-vs-pilar com guarda anti-lava + placeBlock mínimo; flee/shelter no skillRegistry
 
 ### Roadmap Evolution
 
+- Phase 11.1 inserida após a Phase 11: "LLM recebe posições e distâncias de blocos, mobs e entidades (percepção espacial no contexto user/human)" (URGENT/INSERTED). Hoje `serializeContext` (src/llm/prompts.ts) manda só `nome×contagem` dos blocos (descarta `examples`/coordenadas do snapshot) e só distância (sem posição) para mobs/entidades/jogadores — o LLM decide sem noção espacial (perto/longe, alcançável/inalcançável). A info enriquecida entra como mensagem **user/human** (contexto), NÃO como assistant. Origem: investigação do "bot parado" — o LLM não sabe distância/altura dos recursos e manda coletar alvos inalcançáveis.
 - Phase 07.1 inserida após a Phase 7: "Loop Agêntico — Percepção Dirigida por Consequência" (URGENT/INSERTED). Substitui o tick fixo (driver `while` externo em `src/cognition/loop.ts`) por cadeia agêntica ReAct (ação termina → re-percebe → próximo passo). Entra ANTES da Phase 8 porque o System 1 (reflexos por preempção) depende deste modelo de loop. ⚠️ Conflito com decisão prévia "System 1 = função pura no driver fora do StateGraph" — revisitar essa decisão no planejamento da 07.1.
 
 ### Pending Todos
@@ -111,6 +114,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-20T21:39:28.309Z
-Stopped at: Completed 08-02-PLAN.md
+Last session: 2026-06-20T21:48:43.652Z
+Stopped at: Completed 08-03-PLAN.md
 Resume file: None
