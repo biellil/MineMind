@@ -81,12 +81,12 @@ Plans:
 **Goal:** Substituir o driver de tick fixo (while + sleep) por cadeia agêntica event-driven: a ação termina → re-percebe → decide o próximo passo. O agente percebe e age por consequência (actionFinished), nunca por relógio.
 **Requirements**: TBD
 **Depends on:** Phase 7
-**Plans:** 4 plans
+**Plans:** 3/4 plans executed
 
 Plans:
-- [ ] 07.1-01-PLAN.md — EntityInfo.kind + TriggerBus com edge-detectors (nightFell, hostileNearby, hungry, stuck) + config novos limiares
-- [ ] 07.1-02-PLAN.md — nextMechanicalStep arbiter-as-classifier (null = escalar ao LLM) + roteador por outcome em pickTrigger
-- [ ] 07.1-03-PLAN.md — Driver event-driven: makeParkPromise substitui sleep; enteredIdle/nextWakeMs no grafo; timers autônomos de heartbeat
+- [x] 07.1-01-PLAN.md — EntityInfo.kind + TriggerBus com edge-detectors (nightFell, hostileNearby, hungry, stuck) + config novos limiares
+- [x] 07.1-02-PLAN.md — nextMechanicalStep arbiter-as-classifier (null = escalar ao LLM) + roteador por outcome em pickTrigger
+- [x] 07.1-03-PLAN.md — Driver event-driven: makeParkPromise substitui sleep; enteredIdle/nextWakeMs no grafo; timers autônomos de heartbeat
 - [ ] 07.1-04-PLAN.md — AbortController/AbortSignal: ExecuteOptions + navigate/dig honram abort + nó execute orquestra preempção via hostileNearby
 
 ### Phase 8: System 1 — Sobrevivência Reflexa
