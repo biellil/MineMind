@@ -2,6 +2,8 @@
 // COG-01 / D-01 / D-02: driver externo single-flight. A "aresta de retorno" = re-invocar o grafo por tick.
 // Fase 3 (CONN-03/D-20): recebe o holder por parâmetro (criado 1x em bot/index.ts) — control/safety/memory
 // vivem nele e sobrevivem à reconexão. COG-03/D-19: a cada tick dispara maybeDeliberate SEM bloquear o tick.
+// Fase 07.1 Plan 03: driver event-driven — sleep fixo substituído por makeParkPromise + Promise.race;
+// TriggerBus instanciado por sessão; heartbeat (flush, prune) em setInterval autônomos (D-05/D-11).
 import type { Bot } from 'mineflayer'
 import { config } from '../config'
 import { buildGraph } from './graph'
@@ -18,8 +20,42 @@ import { shouldReflect, type ReflectionState } from './reflection'
 import { importanceOf } from '../memory/longTerm'
 import { getEvents } from '../memory/shortTerm'
 import { persistHolder } from '../memory/holder.persistence'
+import { TriggerBus } from './trigger-bus'
+import type { TriggerConfig } from './trigger-bus'
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+// ── makeParkPromise ────────────────────────────────────────────────────────────
+// Fase 07.1 Plan 03 (D-01/D-09/D-11):
+// Estaciona o driver até um dos três eventos:
+//   - 'actionFinished': nó execute emitiu — próximo passo está pronto (acorda imediatamente)
+//   - 'abort': bot.end/desconexão — sessão encerrada (acorda e sai do while)
+//   - timeout: rede de segurança — idle genuíno ou stall (acorda e verifica o estado)
+//
+// NUNCA usar minTickMs aqui — o timeout-piso é SALVAGUARDA, não motor do loop (D-09).
+// D-11: cleanup obrigatório remove TODOS os listeners e clearTimeout ao acordar (sem leak).
+type WakeReason = 'actionFinished' | 'timeout' | 'abort'
+
+function makeParkPromise(
+  triggerBus: TriggerBus,
+  abortSignal: AbortSignal,
+  nextWakeMs: number,
+): Promise<WakeReason> {
+  return new Promise<WakeReason>((resolve) => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    const onActionFinished = () => { cleanup(); resolve('actionFinished') }
+    const onAbort = () => { cleanup(); resolve('abort') }
+
+    timer = setTimeout(() => { cleanup(); resolve('timeout') }, nextWakeMs)
+    triggerBus.once('actionFinished', onActionFinished)
+    abortSignal.addEventListener('abort', onAbort, { once: true })
+
+    function cleanup() {
+      clearTimeout(timer)
+      triggerBus.off('actionFinished', onActionFinished)
+      // abortSignal.addEventListener com { once: true } se auto-remove — não precisa removeEventListener
+    }
+  })
+}
 
 /**
  * Inicia o loop cognitivo para UMA sessão de bot. Para automaticamente quando a sessão termina.
@@ -32,9 +68,25 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
   // provider degrada graciosamente se o LLM estiver off (D-17) e cai para o local ao estourar o teto.
   const provider = createProvider({ db: holder.db })
   const deliberator = createDeliberator()
+
+  // Fase 07.1 Plan 03: TriggerBus instanciado POR SESSÃO (D-12) — emite actionFinished, nightFell,
+  // dayBroke, hostileNearby, stuck, hungry. O nó execute emite actionFinished diretamente via emit().
+  // Cleanup obrigatório no bot.once('end') — evita listener leak (T-07.1-04 / D-11).
+  const triggerBus = new TriggerBus()
+  const triggerCfg: TriggerConfig = {
+    hostileRadius: config.hostileRadius,
+    hostileDebounceMs: config.hostileDebounceMs,
+    hungryThreshold: config.hungryThreshold,
+  }
+  const cleanupTriggerBus = triggerBus.setupMineflayerListeners(bot, triggerCfg)
+
   // CR#3: desestrutura o checkpointer para podá-lo periodicamente (deleteThread) — sem poda, o
   // MemorySaver acumula 1 checkpoint por super-step sob o thread_id fixo e a RAM cresce sem limite.
-  const { graph, checkpointer } = buildGraph({ bot, holder, provider })
+  // Fase 07.1 Plan 03: buildGraph agora recebe triggerBus (passado para os nós via NodeDeps).
+  const { graph, checkpointer } = buildGraph({ bot, holder, provider, triggerBus })
+
+  // Fase 07.1 Plan 03: AbortController de sessão — bot.end resolve o race sem deadlock (D-11/T-07.1-11).
+  const sessionAbort = new AbortController()
 
   // UM ÚNICO handler de chat por sessão (Pattern 5 / Pitfall 6 — handler morre com a sessão).
   // Ordem ESTRITA, tudo literal/sem-LLM exceto o passo 3:
@@ -66,6 +118,13 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
   let alive = true
   bot.once('end', () => {
     alive = false
+    // Fase 07.1 Plan 03: encerra o race sem deadlock (D-11/T-07.1-11)
+    sessionAbort.abort()
+    // Fase 07.1 Plan 03: remove listeners do TriggerBus (T-07.1-04/D-11)
+    cleanupTriggerBus()
+    // Fase 07.1 Plan 03: limpa os timers autônomos (D-05/D-11)
+    clearInterval(flushTimer)
+    clearInterval(pruneTimer)
     try {
       if (holder.db) {
         persistHolder(holder.db, holder, Date.now())
@@ -92,23 +151,52 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
   const reflState: ReflectionState = { lastReflectionAt: -Infinity, importanceAccum: 0 }
   let seenEvents = getEvents(holder.memory).length
 
-  // B2: flush periódico — limita a janela de perda em um crash duro (OOM/kill -9) a no máximo
-  // config.holderFlushIntervalMs. Independe da reflexão (que pode demorar a disparar) e do signal.
-  let lastFlushAt = -Infinity
-
   // CR#2: contador de ticks consecutivos SEM corpo (snapshot null = morte/void). Ao cruzar
   // config.deathStopTicks o while encerra graciosamente (morte/void não emitem 'end').
   let deadTicks = 0
-  // CR#3: timestamp da última poda do checkpointer (deleteThread do thread fixo).
-  let lastPruneAt = -Infinity
+
+  // Fase 07.1 Plan 03 (D-05/D-11): timers autônomos de heartbeat — independem do ritmo do tick.
+  // Declarados ANTES de bot.once('end') para que o handler possa fazer clearInterval neles.
+  // Declarados como variáveis capturadas pela closure do bot.once('end').
+  let flushTimer: ReturnType<typeof setInterval> | undefined
+  let pruneTimer: ReturnType<typeof setInterval> | undefined
+
+  // D-05: heartbeat autônomo de flush periódico (independe do ritmo do tick)
+  if (config.holderFlushIntervalMs > 0) {
+    flushTimer = setInterval(() => {
+      if (!holder.db) return
+      try {
+        persistHolder(holder.db, holder, Date.now())
+      } catch (err) {
+        console.error('[loop] flush periódico falhou:', err instanceof Error ? err.message : err)
+      }
+    }, config.holderFlushIntervalMs)
+  }
+
+  // D-05: heartbeat autônomo de poda do checkpointer (independe do ritmo do tick)
+  if (config.checkpointPruneIntervalMs > 0) {
+    pruneTimer = setInterval(async () => {
+      try {
+        await checkpointer.deleteThread('minemind-agent')
+      } catch (err) {
+        console.error('[loop] poda do checkpointer falhou:', err instanceof Error ? err.message : err)
+      }
+    }, config.checkpointPruneIntervalMs)
+  }
+
+  // Fase 07.1 Plan 03: nextWakeMs inicial = timeout-piso de navegação (antes de qualquer sinal do grafo)
+  let nextWakeMs = config.navigateTimeoutMs
 
   // driver assíncrono — não bloqueia onBotReady
   void (async () => {
     console.log(`[loop] iniciado (disposição=${holder.disposition})`)
     while (alive) {
-      const started = Date.now()
       try {
-        const result = (await graph.invoke({}, cfg)) as { snapshot?: WorldSnapshot | null }
+        const result = (await graph.invoke({}, cfg)) as {
+          snapshot?: WorldSnapshot | null
+          enteredIdle?: boolean
+          nextWakeMs?: number
+        }
         lastSnapshot = result.snapshot ?? lastSnapshot
 
         // CR#2: rastreia ticks consecutivos sem corpo (snapshot null = morte/void). Se o bot ficar
@@ -159,9 +247,11 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
           // a deliberação single-flight com trigger 'reflect' (não bloqueia o tick; o lock inFlight
           // garante que reflexão não sobrepõe ação).
           const reflectNow = Date.now()
+          // Fase 07.1 Plan 03: enteredIdle lido do sinal REAL do grafo (D-10 — corrige hardcoded false).
+          const enteredIdle = result.enteredIdle === true
           if (
             shouldReflect({
-              enteredIdle: false, // heurística: sem sinal de transição do grafo; cobre-se por acúmulo/piso
+              enteredIdle,
               goalDoneOrFailed: holder.currentGoal == null,
               importanceAccum: reflState.importanceAccum,
               lastReflectionAt: reflState.lastReflectionAt,
@@ -185,37 +275,22 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
           }
         }
 
-        // B2: flush periódico da mente — bound na perda por crash duro (OOM). Independe de
-        // reflexão/signal. Guardado em holder.db (no-op gracioso quando ausente).
-        const flushNow = Date.now()
-        if (holder.db && flushNow - lastFlushAt >= config.holderFlushIntervalMs) {
-          try {
-            persistHolder(holder.db, holder, flushNow)
-            lastFlushAt = flushNow
-          } catch (err) {
-            console.error('[loop] flush periódico falhou:', err instanceof Error ? err.message : err)
-          }
-        }
+        // Fase 07.1 Plan 03: atualiza nextWakeMs com o sinal do grafo (D-10).
+        // enteredIdle=true → park longo (idleWakeIntervalMs); senão → timeout-piso de navegação.
+        // O nó observe já calcula este valor — apenas lemos do resultado do grafo.
+        nextWakeMs = result.nextWakeMs ?? config.navigateTimeoutMs
 
-        // CR#3: poda periódica do checkpointer. O thread_id é fixo ('minemind-agent'), então o
-        // MemorySaver acumula 1 checkpoint por super-step sem podar e a RAM sobe continuamente.
-        // deleteThread limpa o histórico do thread. A continuidade entre ticks vive no holder
-        // (fonte única), não no checkpointer — podar é seguro: o próximo invoke recria o estado
-        // inicial e observe re-semeia do holder.
-        const pruneNow = Date.now()
-        if (config.checkpointPruneIntervalMs > 0 && pruneNow - lastPruneAt >= config.checkpointPruneIntervalMs) {
-          try {
-            await checkpointer.deleteThread('minemind-agent')
-            lastPruneAt = pruneNow
-          } catch (err) {
-            console.error('[loop] poda do checkpointer falhou:', err instanceof Error ? err.message : err)
-          }
-        }
+        // Fase 07.1 Plan 03 (D-01/D-09): estaciona até actionFinished, abort, ou timeout-piso.
+        // 'actionFinished' → próximo tick imediatamente (cadeia agêntica).
+        // 'abort' → bot.end — encerra o while.
+        // 'timeout' → rede de segurança (idle genuíno ou stall) → próximo tick.
+        const wakeReason = await makeParkPromise(triggerBus, sessionAbort.signal, nextWakeMs)
+        if (wakeReason === 'abort') break
+        // 'actionFinished' ou 'timeout' → continua o while imediatamente
+
       } catch (err) {
         console.error('[loop] erro no tick:', err instanceof Error ? err.message : err)
       }
-      const elapsed = Date.now() - started
-      if (elapsed < config.minTickMs) await sleep(config.minTickMs - elapsed) // D-02 intervalo mínimo
     }
     console.log('[loop] encerrado (sessão terminou)')
   })()
