@@ -17,6 +17,10 @@ export const config = {
   // 999.1 D-01: raio de busca de coleta — INDEPENDENTE de perceptionRadius.
   // dig.ts usa este valor no findBlocks({ maxDistance }); percepção (snapshot.ts) mantém perceptionRadius.
   gatherSearchRadius: parseInt(process.env.GATHER_SEARCH_RADIUS || '16', 10),
+  // C-fix: timeout (ms) do pré-check de alcançabilidade do gather (getPathTo, dig.ts). 200ms era
+  // curto demais p/ o A* — rejeitava blocos alcançáveis como "inalcançáveis" e o bot ficava parado
+  // (no_effect sem se mover). Roda em 1 bloco (count=1), então 1500ms é barato. 0 desativa o pré-check.
+  gatherReachTimeoutMs: parseInt(process.env.GATHER_REACH_TIMEOUT_MS || '1500', 10),
   // 999.1 D-02: bounds do A* do pathfinder — ativam o gate maxCost (raiz do fix de OOM).
   // searchRadius ≈ 1.5-2× perceptionRadius (default 48); thinkTimeout secundário (default 2000ms).
   pathfinderSearchRadius: parseInt(process.env.PATHFINDER_SEARCH_RADIUS || '48', 10),
@@ -210,6 +214,9 @@ if (config.pathfinderSearchRadius < 1 || config.pathfinderSearchRadius > 256) {
 }
 if (config.pathfinderThinkTimeoutMs < 1) {
   throw new Error(`PATHFINDER_THINK_TIMEOUT_MS inválido: ${config.pathfinderThinkTimeoutMs}. Deve ser >= 1.`)
+}
+if (config.gatherReachTimeoutMs < 0) {
+  throw new Error(`GATHER_REACH_TIMEOUT_MS inválido: ${config.gatherReachTimeoutMs}. Deve ser >= 0 (0 desativa o pré-check).`)
 }
 if (config.port < 1 || config.port > 65535) {
   throw new Error(`MC_PORT inválido: ${config.port}. Deve ser entre 1 e 65535.`)

@@ -68,13 +68,17 @@ export async function dig(bot: Bot, rawParams: unknown): Promise<SkillResult> {
       // Granularidade de INSTÂNCIA: filtra os blocos alcançáveis; o cooldown por-TIPO (safety.ts)
       // só dispara quando NENHUMA instância é alcançável (este no_effect alimenta o nó execute).
       const movements = bot.collectBlock?.movements ?? bot.pathfinder.movements
-      const precheckTimeoutMs = 200  // Claude's discretion: barato (poucas iterações), só para descartar inalcançáveis
-      const reachable = blocks.filter((b) => {
-        const goal = new goals.GoalGetToBlock(b.position.x, b.position.y, b.position.z)
-        const result = (bot.pathfinder as any).getPathTo(movements, goal, precheckTimeoutMs)
-        // 'success'/'partial' = alcançável o suficiente para tentar; 'noPath'/'timeout' = descartar
-        return result?.status === 'success' || result?.status === 'partial'
-      })
+      // C-fix: 200ms era curto demais p/ o A* — rejeitava blocos alcançáveis (bot ficava parado).
+      // Configurável via GATHER_REACH_TIMEOUT_MS (default 1500). Roda em count=1 bloco, então é barato.
+      const precheckTimeoutMs = config.gatherReachTimeoutMs
+      const reachable = precheckTimeoutMs <= 0
+        ? blocks  // pré-check desativado: deixa o collectBlock decidir alcançabilidade durante o pathing
+        : blocks.filter((b) => {
+            const goal = new goals.GoalGetToBlock(b.position.x, b.position.y, b.position.z)
+            const result = (bot.pathfinder as any).getPathTo(movements, goal, precheckTimeoutMs)
+            // 'success'/'partial' = alcançável o suficiente para tentar; 'noPath'/'timeout' = descartar
+            return result?.status === 'success' || result?.status === 'partial'
+          })
 
       if (reachable.length === 0) {
         // D-12: nenhuma instância alcançável — nada coletado → no_effect (não throw).
