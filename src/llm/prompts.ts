@@ -69,14 +69,16 @@ export function buildPersonaPrompt(disposition: Disposition, personality?: Perso
 export function buildDecisionGuide(): string {
   return `Decida sua PRÓXIMA AÇÃO. Responda só com JSON {action, target?, reason}.
 Ações:
-- gather: coletar um bloco próximo. target = nome do bloco (ex: oak_log). Use se há blocos úteis em "Blocos próximos".
+- gather: coletar um RECURSO próximo. target = nome do bloco (ex: oak_log).
 - explore: vagar p/ achar terreno/recursos novos. target = direção (norte/sul/leste/oeste), opcional.
 - navigate: ir até um alvo conhecido. target = nome de bloco ou "x,y,z".
 - idle: descansar. Só se nada mais fizer sentido.
 - chat: falar com jogador próximo. target = username. Só se houver jogador próximo.
+Recursos úteis, em prioridade: troncos (*_log) > pedra (stone/cobblestone) > minérios (coal_ore, iron_ore, diamond_ore).
+NÃO faça gather de grass_block, dirt, sand, water — não são recursos.
 Regras:
-- Se "FATO VERIFICADO" mostra que sua última ação FALHOU num alvo, NÃO repita esse alvo — escolha outro bloco ou explore.
-- Prefira gather se houver recurso por perto; senão explore.
+- Se "FATO VERIFICADO" mostra que sua última ação FALHOU num alvo, NÃO repita esse alvo.
+- Se o recurso prioritário falhou ou está inalcançável, use EXPLORE pra procurar outro — NÃO colete "lixo" (grass/dirt/sand).
 - reason: no máximo 1 frase curta.`
 }
 
