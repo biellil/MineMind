@@ -32,6 +32,8 @@ export interface InventorySlot {
 export interface EntityInfo {
   readonly id: number
   readonly type: string        // 'player' | 'mob' | 'object' | etc
+  /** D-14: categoria Mineflayer do mob ('Hostile mobs' | 'Passive mobs' | 'Vehicles' | 'Immobile' | 'Projectiles' | 'UNKNOWN') */
+  readonly kind: string
   readonly name: string        // username (player) ou name/type (mob)
   readonly position: Position3D
   readonly distance: number    // metros até o bot

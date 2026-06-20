@@ -16,6 +16,7 @@ describe('WorldSnapshot type contract', () => {
     const entity: EntityInfo = {
       id: 1,
       type: 'mob',
+      kind: 'Hostile mobs',
       name: 'Creeper',
       position: { x: 12, y: 64, z: -5 },
       distance: 2.0,

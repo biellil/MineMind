@@ -44,6 +44,7 @@ export function buildWorldSnapshot(bot: Bot): WorldSnapshot | null {
       return {
         id: e.id,
         type: e.type,
+        kind: (e as unknown as Record<string, string>).kind ?? 'UNKNOWN',
         name: (e as unknown as Record<string, string>).username ?? (e as unknown as Record<string, string>).name ?? e.type,
         position: { x: e.position.x, y: e.position.y, z: e.position.z },
         distance,
