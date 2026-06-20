@@ -86,7 +86,8 @@ export const config = {
   // D-15: margem de histerese para trocar de objetivo (alta/conservadora)
   hysteresisMargin: parseFloat(process.env.HYSTERESIS_MARGIN || '0.25'),
   // D-15: limiar de value de survival abaixo do qual é "crítico" (preempção por perigo)
-  survivalCriticalThreshold: parseFloat(process.env.SURVIVAL_CRITICAL_THRESHOLD || '0.3'),
+  // D-12: subido 0.3→0.5 — vida crítica preempta/foge/abriga
+  survivalCriticalThreshold: parseFloat(process.env.SURVIVAL_CRITICAL_THRESHOLD || '0.5'),
   // Itens-alvo de recurso (satisfação de resources = fração presente no inventário)
   resourceTargets: (process.env.RESOURCE_TARGETS || 'oak_log,cobblestone,bread').split(','),
 
@@ -143,9 +144,28 @@ export const config = {
   // D-13: debounce (ms) para hostileNearby (evita emissão a cada entityMoved)
   hostileDebounceMs: parseInt(process.env.HOSTILE_DEBOUNCE_MS || '800', 10),
   // D-14: limiar de food para emitir hungry (bot.food <= threshold)
-  hungryThreshold: parseInt(process.env.HUNGRY_THRESHOLD || '6', 10),
+  // D-11: come quando food<=16 (regen para em food<=17; 6 era limiar de sprint, não de saúde)
+  hungryThreshold: parseInt(process.env.HUNGRY_THRESHOLD || '16', 10),
   // D-09/D-10: intervalo de wake do park quando genuinamente idle (ms)
   idleWakeIntervalMs: parseInt(process.env.IDLE_WAKE_INTERVAL_MS || '60000', 10),
+
+  // === Fase 8: System 1 — limiares reflexos (D-11..D-14) ===
+  // D-11: histerese de fome — para de comer quando food>=18 (regen natural)
+  hungerExitThreshold: parseInt(process.env.HUNGER_EXIT_THRESHOLD || '18', 10),
+  // D-12: health<=10 dispara reflexo vida-crítica (foge/abriga); exit health>=14
+  healthCriticalThreshold: parseInt(process.env.HEALTH_CRITICAL_THRESHOLD || '10', 10),
+  healthExitThreshold: parseInt(process.env.HEALTH_EXIT_THRESHOLD || '14', 10),
+  // D-14: afogamento — oxygen<=6 emerge (≈4.5s de margem); exit oxygen>=14
+  oxygenEmergeThreshold: parseInt(process.env.OXYGEN_EMERGE_THRESHOLD || '6', 10),
+  oxygenExitThreshold: parseInt(process.env.OXYGEN_EXIT_THRESHOLD || '14', 10),
+  // D-14: queda perigosa só > 3 blocos (dano = blocos-3)
+  fallDangerBlocks: parseInt(process.env.FALL_DANGER_BLOCKS || '3', 10),
+  // D-14: lookahead de lava à frente, em blocos
+  lavaLookahead: parseInt(process.env.LAVA_LOOKAHEAD || '2', 10),
+  // D-13: distâncias graduadas de reação a mob hostil por tipo
+  creeperReactDistance: parseInt(process.env.CREEPER_REACT_DISTANCE || '10', 10),
+  meleeReactDistance: parseInt(process.env.MELEE_REACT_DISTANCE || '8', 10),
+  rangedReactDistance: parseInt(process.env.RANGED_REACT_DISTANCE || '16', 10),
 } as const
 
 // === Fase 3: pesos de necessidade POR DISPOSIÇÃO (D-06/D-10) ===
@@ -273,4 +293,16 @@ if (config.cloudMaxCallsPerWindow < 1) {
 }
 if (config.cloudWindowMs < 1) {
   throw new Error(`LLM_CLOUD_WINDOW_MS inválido: ${config.cloudWindowMs}. Deve ser >= 1.`)
+}
+// Fase 8: validação dos limiares reflexos
+if (config.hungryThreshold < 0 || config.hungryThreshold > 20) throw new Error(`HUNGRY_THRESHOLD inválido: ${config.hungryThreshold}. Deve estar em [0,20].`)
+if (config.hungerExitThreshold <= config.hungryThreshold || config.hungerExitThreshold > 20) throw new Error(`HUNGER_EXIT_THRESHOLD (${config.hungerExitThreshold}) deve ser > hungryThreshold e <= 20 (histerese).`)
+if (config.healthCriticalThreshold < 0 || config.healthCriticalThreshold > 20) throw new Error(`HEALTH_CRITICAL_THRESHOLD inválido: ${config.healthCriticalThreshold}. Deve estar em [0,20].`)
+if (config.healthExitThreshold <= config.healthCriticalThreshold || config.healthExitThreshold > 20) throw new Error(`HEALTH_EXIT_THRESHOLD (${config.healthExitThreshold}) deve ser > healthCriticalThreshold e <= 20.`)
+if (config.oxygenEmergeThreshold < 0 || config.oxygenEmergeThreshold > 20) throw new Error(`OXYGEN_EMERGE_THRESHOLD inválido: ${config.oxygenEmergeThreshold}. Deve estar em [0,20].`)
+if (config.oxygenExitThreshold <= config.oxygenEmergeThreshold || config.oxygenExitThreshold > 20) throw new Error(`OXYGEN_EXIT_THRESHOLD (${config.oxygenExitThreshold}) deve ser > oxygenEmergeThreshold e <= 20.`)
+if (config.fallDangerBlocks < 0) throw new Error(`FALL_DANGER_BLOCKS inválido: ${config.fallDangerBlocks}. Deve ser >= 0.`)
+if (config.lavaLookahead < 1 || config.lavaLookahead > 8) throw new Error(`LAVA_LOOKAHEAD inválido: ${config.lavaLookahead}. Deve estar em [1,8].`)
+for (const [name, v] of [['CREEPER_REACT_DISTANCE', config.creeperReactDistance], ['MELEE_REACT_DISTANCE', config.meleeReactDistance], ['RANGED_REACT_DISTANCE', config.rangedReactDistance]] as const) {
+  if (v < 1 || v > 64) throw new Error(`${name} inválido: ${v}. Deve estar em [1,64].`)
 }

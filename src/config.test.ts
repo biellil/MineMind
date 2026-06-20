@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'bun:test'
 
+// config.ts é um singleton avaliado no PRIMEIRO import (e cacheado pelo runtime). Para afirmar os
+// DEFAULTS do código de forma determinística, removemos overrides do .env local ANTES de qualquer
+// import de ./config (o .env de dev seta SURVIVAL_CRITICAL_THRESHOLD=0.3, mascarando o default 0.5).
+for (const k of [
+  'SURVIVAL_CRITICAL_THRESHOLD', 'HUNGRY_THRESHOLD', 'HEALTH_CRITICAL_THRESHOLD',
+  'OXYGEN_EMERGE_THRESHOLD', 'FALL_DANGER_BLOCKS', 'LAVA_LOOKAHEAD',
+  'CREEPER_REACT_DISTANCE', 'RANGED_REACT_DISTANCE',
+]) delete process.env[k]
+
 describe('config', () => {
   it('carrega com valores default sem .env', async () => {
     const { config } = await import('./config')
@@ -16,5 +25,19 @@ describe('config', () => {
   it('reconnectDelayMs é 5000 (fixo, não configurável via .env)', async () => {
     const { config } = await import('./config')
     expect(config.reconnectDelayMs).toBe(5000)
+  })
+})
+
+describe('config — limiares reflexos Fase 8', () => {
+  it('defaults dos limiares de sobrevivência (D-11..D-14)', async () => {
+    const { config } = await import('./config')
+    expect(config.hungryThreshold).toBe(16)
+    expect(config.survivalCriticalThreshold).toBe(0.5)
+    expect(config.healthCriticalThreshold).toBe(10)
+    expect(config.oxygenEmergeThreshold).toBe(6)
+    expect(config.fallDangerBlocks).toBe(3)
+    expect(config.lavaLookahead).toBe(2)
+    expect(config.creeperReactDistance).toBe(10)
+    expect(config.rangedReactDistance).toBe(16)
   })
 })
