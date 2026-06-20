@@ -50,12 +50,14 @@ describe('follow (stub) — contrato uniforme D-12', () => {
   })
 })
 
-describe('attack (stub) — contrato uniforme D-12', () => {
-  it('RESOLVE (não rejeita) com outcome:error e reason de não-implementada', async () => {
-    const r = await attack({} as any, { entityName: 'Zombie' })
+describe('attack (1-shot D-15) — contrato uniforme', () => {
+  it('RESOLVE (não rejeita) com SkillResult; alvo ausente → no_effect (não throw)', async () => {
+    const bot = { nearestEntity: () => null } as any
+    const r = await attack(bot, { entityName: 'Zombie' })
     expectSkillResultShape(r)
-    expect(r.outcome).toBe('error')
-    expect(r.reason).toContain('não implementada')
+    expect(r.outcome).toBe('no_effect')
+    expect(r.observed).toBe(0)
+    expect(r.reason).toContain('não encontrado')
   })
 
   it('params inválidos ainda rejeitam via Zod .parse (validação preservada)', async () => {

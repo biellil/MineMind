@@ -7,12 +7,14 @@ import { navigate, navigateTool } from './navigate'
 import { dig, digTool } from './dig'
 import { follow, followTool } from './follow'
 import { attack, attackTool } from './attack'
+import { eat, eatTool } from './eat'
 
 // Re-exportar individualmente para uso direto
 export { navigate, NavigateSchema, navigateTool } from './navigate'
 export { dig, DigSchema, digTool } from './dig'
 export { follow, FollowSchema, followTool } from './follow'
 export { attack, AttackSchema, attackTool } from './attack'
+export { eat, EatSchema, eatTool } from './eat'
 export { executeWithSafety, gaussianDelay, SkillTimeoutError, SkillStuckError } from './executor'
 // Fase 7: contrato de retorno das skills, re-exportado para conveniência dos consumidores.
 export type { SkillResult } from '../grounding/types'
@@ -38,6 +40,7 @@ export const skillRegistry: Record<string, SkillFunction> = {
   dig,
   follow,
   attack,
+  eat,
 }
 
 /**
@@ -50,4 +53,5 @@ export const toolRegistry: SkillTool[] = [
   digTool,
   followTool,
   attackTool,
+  eatTool,
 ]

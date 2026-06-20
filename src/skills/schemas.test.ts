@@ -75,8 +75,8 @@ describe('AttackSchema', () => {
 })
 
 describe('skillRegistry', () => {
-  it('contém as 4 skills', () => {
-    expect(Object.keys(skillRegistry)).toEqual(['navigate', 'dig', 'follow', 'attack'])
+  it('contém as 5 skills', () => {
+    expect(Object.keys(skillRegistry)).toEqual(['navigate', 'dig', 'follow', 'attack', 'eat'])
   })
 
   it('todas as entries são funções', () => {
@@ -87,8 +87,8 @@ describe('skillRegistry', () => {
 })
 
 describe('toolRegistry', () => {
-  it('contém 4 tool descriptors', () => {
-    expect(toolRegistry).toHaveLength(4)
+  it('contém 5 tool descriptors', () => {
+    expect(toolRegistry).toHaveLength(5)
   })
 
   it('todos os descriptors têm name, description, schema, execute', () => {
@@ -100,7 +100,7 @@ describe('toolRegistry', () => {
     }
   })
 
-  it('nomes dos tools são: navigate, dig, follow, attack', () => {
-    expect(toolRegistry.map((t) => t.name)).toEqual(['navigate', 'dig', 'follow', 'attack'])
+  it('nomes dos tools são: navigate, dig, follow, attack, eat', () => {
+    expect(toolRegistry.map((t) => t.name)).toEqual(['navigate', 'dig', 'follow', 'attack', 'eat'])
   })
 })
