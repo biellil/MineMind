@@ -78,13 +78,16 @@ Plans:
 
 ### Phase 07.1: Loop Agentico - Percepcao Dirigida por Consequencia (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
+**Goal:** Substituir o driver de tick fixo (while + sleep) por cadeia agêntica event-driven: a ação termina → re-percebe → decide o próximo passo. O agente percebe e age por consequência (actionFinished), nunca por relógio.
 **Requirements**: TBD
 **Depends on:** Phase 7
-**Plans:** 4/4 plans complete
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 07.1 to break down)
+- [ ] 07.1-01-PLAN.md — EntityInfo.kind + TriggerBus com edge-detectors (nightFell, hostileNearby, hungry, stuck) + config novos limiares
+- [ ] 07.1-02-PLAN.md — nextMechanicalStep arbiter-as-classifier (null = escalar ao LLM) + roteador por outcome em pickTrigger
+- [ ] 07.1-03-PLAN.md — Driver event-driven: makeParkPromise substitui sleep; enteredIdle/nextWakeMs no grafo; timers autônomos de heartbeat
+- [ ] 07.1-04-PLAN.md — AbortController/AbortSignal: ExecuteOptions + navigate/dig honram abort + nó execute orquestra preempção via hostileNearby
 
 ### Phase 8: System 1 — Sobrevivência Reflexa
 **Goal**: O agente sobrevive aos assassinos rápidos (fome, mob hostil, perigos ambientais) reagindo em sub-segundo por uma camada reflexa pura sem LLM, que tem precedência de execução física sobre a ação deliberada por preempção — sem bloquear a inferência single-flight.
@@ -168,12 +171,13 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14
+Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 9 → 10 → 11 → 12 → 13 → 14
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 6. LLM Provider Factory | v2.0 | 0/3 | Planned | - |
 | 7. Grounding + SkillResult | v2.0 | 0/4 | Planned | - |
+| 7.1. Loop Agêntico | v2.0 | 0/4 | Planned | - |
 | 8. System 1 — Sobrevivência Reflexa | v2.0 | 0/TBD | Not started | - |
 | 9. Placement + Crafting/Smelting Grounded | v2.0 | 0/TBD | Not started | - |
 | 10. Tech Tree DAG + Needs | v2.0 | 0/TBD | Not started | - |
