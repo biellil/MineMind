@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
 status: executing
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-06-20T21:29:00.333Z"
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-06-20T21:39:28.314Z"
 last_activity: 2026-06-20
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 13
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 ## Current Position
 
 Phase: 08 (system-1-sobreviv-ncia-reflexa) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-06-20
 
@@ -60,6 +60,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 07 P03 | 7 | 4 tasks | 13 files |
 | Phase 07 P04 | 5 | 2 tasks | 3 files |
 | Phase 08 P01 | 12 | 2 tasks | 4 files |
+| Phase 08 P02 | 7 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,7 @@ Recent decisions affecting current work:
 - [Phase 07]: 07-03: execute node deriva memória do SkillResult observado (result.outcome), não do não-throw — mata 'peguei 10 tábuas' na raiz (D-09 B/GRND-02). MemEvent.action ganha outcome/observed/expected (D-13, result vira derivado); partial/no_effect/error=failure preservando observed (GRND-04). holder.lastObservedDelta + bloco FATO VERIFICADO autoritativo no prompt (D-09 A). Insumo do post-filter da Plan 04.
 - [Phase 07]: 07-04: post-filter determinístico (camada C/D-09 C/D-10) reconcilia a fala do LLM contra holder.lastObservedDelta antes do bot.chat — 'peguei 10' vira 'peguei 3' (ou 0 em no_effect). Escopo mínimo (quantidade de coleta pt-BR); A=instrução, C=gate (D-11). Fase 7 completa.
 - [Phase 08]: 08-01: arbitrateReflex = função pura no driver (D-01) — winner-take-all por gravidade D-03 (ambiental>hostil>queda>vida>fome); D-17 shelter = variação do caminho hostil (cornered+noite); D-02 só fome é lifeCritical=false; limiares de sobrevivência em config com histerese enter/exit
+- [Phase 08]: 08-02: eat (D-05) equipa→consume→re-equip grounded por delta LOCAL de bot.food (Pitfall 2, não toca GroundState); attack (D-15) vira 1-shot real via bot.attack sem perseguir (stub removido); eat/attack registrados no skillRegistry
 
 ### Roadmap Evolution
 
@@ -109,6 +111,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-20T21:28:48.306Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-06-20T21:39:28.309Z
+Stopped at: Completed 08-02-PLAN.md
 Resume file: None
