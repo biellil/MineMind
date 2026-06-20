@@ -36,12 +36,16 @@ export interface LoopState {
   goals: Goal[]
   currentGoal: Goal | null
   disposition: Disposition
+  // Fase 07.1 Plan 03: sinais para o driver event-driven (D-10/D-11)
+  enteredIdle: boolean
+  nextWakeMs: number
 }
 
 export interface NodeDeps {
   bot: Bot
   holder: CognitiveStateHolder
   provider: LlmProvider
+  triggerBus: import('./trigger-bus').TriggerBus  // Fase 07.1 Plan 03 — emit('actionFinished')
 }
 
 const now = () => Date.now()
@@ -64,7 +68,7 @@ function actionToCognitiveState(action: ActionDecision['action']): CognitiveStat
 }
 
 export function createNodes(deps: NodeDeps) {
-  const { bot, holder } = deps
+  const { bot, holder, triggerBus } = deps
   const control = holder.control
   const safety = holder.safety
 
@@ -108,12 +112,19 @@ export function createNodes(deps: NodeDeps) {
     // consumiu um pedido de jogador → reseta o sinal (Plan 04 volta a setá-lo)
     if (selected?.source === 'player_request') holder.playerRequestPending = false
 
+    // Fase 07.1 Plan 03: sinais para o driver event-driven.
+    // enteredIdle=true quando não há objetivo ativo (sem skill neste tick = idle genuíno).
+    // nextWakeMs: quando idle, usa o intervalo longo; senão, o timeout-piso de navegação.
+    const enteredIdle = (holder.currentGoal == null) && (snapshot !== null)
+    const nextWakeMs = enteredIdle ? config.idleWakeIntervalMs : config.navigateTimeoutMs
     return {
       snapshot,
       needs: holder.needs,
       goals: holder.goals,
       currentGoal: holder.currentGoal,
       disposition: holder.disposition,
+      enteredIdle,
+      nextWakeMs,
     }
   }
 
@@ -205,6 +216,9 @@ export function createNodes(deps: NodeDeps) {
 
     if (!skill) {
       log(`sem acao (estado=${state})`)
+      // Fase 07.1 Plan 03: emit actionFinished mesmo sem skill — o driver precisa acordar
+      // para que o loop continue (D-01/T-07.1-10: grounding não é aplicável aqui).
+      triggerBus.emit('actionFinished', { skill: null, outcome: null })
       return { memory: holder.memory }
     }
 
@@ -224,6 +238,9 @@ export function createNodes(deps: NodeDeps) {
         reason: 'anti-repeat',
         timestamp: now(),
       })
+      // Fase 07.1 Plan 03: emit após grounding do abandon (holder.lastObservedDelta não é atualizado
+      // aqui mas não há lastObservedDelta a ler — o driver apenas acorda para o próximo tick).
+      triggerBus.emit('actionFinished', { skill, outcome: 'no_effect' })
       return { memory: holder.memory }
     }
 
@@ -231,6 +248,10 @@ export function createNodes(deps: NodeDeps) {
     // 999.1 D-06: sem wrap externo — cada skill se auto-embrulha em executeWithSafety com seu
     // próprio progressChecker (dig usa inventário; navigate usa navigateTimeoutMs). O wrap externo
     // usava defaults genéricos e duplicava o watchdog interno.
+    //
+    // Fase 07.1 Plan 03: variável para carregar o resultado entre try/catch e o emit final.
+    // CRITÉRIO DE ORDEM: emit SEMPRE após holder.lastObservedDelta atribuído (Pitfall 1 da research).
+    let skillOutcome: import('../grounding/types').SkillOutcome | null = null
     try {
       const params = skill === 'dig' ? { target } : { target: JSON.parse(target) }
       // D-09 B: a memória deriva do SkillResult OBSERVADO (result.outcome), NUNCA do não-throw.
@@ -239,6 +260,7 @@ export function createNodes(deps: NodeDeps) {
       const success = result.outcome === 'success'
       if (success) recordSuccess(safety)
       else recordFailure(safety, target, now()) // GRND-04: partial/no_effect/error = não-sucesso
+      // grounding gravado ANTES do emit (Pitfall 1 / T-07.1-10)
       holder.lastObservedDelta = {
         skill,
         target,
@@ -260,10 +282,12 @@ export function createNodes(deps: NodeDeps) {
         timestamp: now(),
       })
       log(`${result.outcome.toUpperCase()} ${skill} ${target} (${result.observed}/${result.expected})`)
+      skillOutcome = result.outcome
     } catch (err) {
       // Catch agora SÓ para exceções genuínas inesperadas (D-12) — skills não lançam como fluxo.
       const reason = err instanceof Error ? err.name : String(err)
       recordFailure(safety, target, now())
+      // grounding gravado ANTES do emit (Pitfall 1 / T-07.1-10)
       holder.lastObservedDelta = { skill, target, outcome: 'error', observed: 0, expected: 0, delta: {}, at: now() }
       holder.memory = push(holder.memory, {
         type: 'action',
@@ -276,8 +300,13 @@ export function createNodes(deps: NodeDeps) {
         reason,
         timestamp: now(),
       })
+      // Fase 07.1 Plan 03: emit dentro do catch após grounding (Pitfall 1 / T-07.1-10)
+      triggerBus.emit('actionFinished', { skill, outcome: 'error' })
       log(`ERRO inesperado ${skill} ${target}: ${reason}`)
+      return { memory: holder.memory }
     }
+    // Fase 07.1 Plan 03: emit após try/catch (sucesso ou falha não-exception) — grounding já gravado
+    triggerBus.emit('actionFinished', { skill, outcome: skillOutcome })
     return { memory: holder.memory }
   }
 

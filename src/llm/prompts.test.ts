@@ -20,7 +20,7 @@ function baseSnapshot(over: Partial<WorldSnapshot> = {}): WorldSnapshot {
 }
 
 function entity(name: string, distance: number): EntityInfo {
-  return { id: distance, type: 'mob', name, position: { x: distance, y: 64, z: 0 }, distance, health: 20, metadata: null }
+  return { id: distance, type: 'mob', kind: 'Passive mobs', name, position: { x: distance, y: 64, z: 0 }, distance, health: 20, metadata: null }
 }
 
 const oakLog: LookingAtBlock = { name: 'oak_log', position: { x: 3, y: 64, z: 0 }, distance: 3 }

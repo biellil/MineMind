@@ -221,10 +221,27 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
   })()
 }
 
-/** Escolhe um gatilho simples: 'need_threshold' se alguma urgência cruza o limiar, senão 'periodic'. */
+/**
+ * Escolhe o gatilho de deliberação com base no outcome do SkillResult (D-07/D-08):
+ * - no_effect/partial: ação mecânica sem progresso real → escalona ao LLM imediatamente.
+ * - need_threshold: urgência cruzou limiar de necessidade → re-deliberação prioritária.
+ * - periodic: fallback (tudo estável, nenhum sinal de escalada).
+ *
+ * pickTrigger apenas classifica — quem chama maybeDeliberate é o loop;
+ * o deliberator usa inFlight para single-flight (D-08: NUNCA await o LLM aqui).
+ */
 function pickTrigger(holder: CognitiveStateHolder): DeliberationTrigger {
   const mcfg = motivationConfigFor(holder.disposition)
   const t = Date.now()
+
+  // D-07: outcome do SkillResult (Fase 7) como gatilho primário de re-deliberação.
+  // no_effect/partial após um passo mecânico indica "tentativa sem progresso real" → LLM decide.
+  const lastOutcome = holder.lastObservedDelta?.outcome
+  if (lastOutcome === 'no_effect' || lastOutcome === 'partial') {
+    return 'need_threshold' // mais urgente que 'periodic' — força re-deliberação mais cedo
+  }
+
+  // D-08: necessidade cruzou limiar → disparo por need_threshold.
   const crossed = holder.needs.some((n) => urgency(n, t, mcfg) >= mcfg.goalThreshold)
   return crossed ? 'need_threshold' : 'periodic'
 }

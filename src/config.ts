@@ -129,6 +129,16 @@ export const config = {
   cloudWindowMs: parseInt(process.env.LLM_CLOUD_WINDOW_MS || String(24 * 60 * 60 * 1000), 10),
   // D-08: ação ao estourar o teto — única suportada nesta fase é cair para o LM Studio local
   cloudCapAction: (process.env.LLM_CLOUD_CAP_ACTION || 'fallback-local') as 'fallback-local',
+
+  // === Fase 07.1: Loop Agêntico — TriggerBus ===
+  // D-14: raio (blocos) para detectar mob hostil no TriggerBus
+  hostileRadius: parseInt(process.env.HOSTILE_RADIUS || '16', 10),
+  // D-13: debounce (ms) para hostileNearby (evita emissão a cada entityMoved)
+  hostileDebounceMs: parseInt(process.env.HOSTILE_DEBOUNCE_MS || '800', 10),
+  // D-14: limiar de food para emitir hungry (bot.food <= threshold)
+  hungryThreshold: parseInt(process.env.HUNGRY_THRESHOLD || '6', 10),
+  // D-09/D-10: intervalo de wake do park quando genuinamente idle (ms)
+  idleWakeIntervalMs: parseInt(process.env.IDLE_WAKE_INTERVAL_MS || '60000', 10),
 } as const
 
 // === Fase 3: pesos de necessidade POR DISPOSIÇÃO (D-06/D-10) ===
