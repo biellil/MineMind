@@ -19,11 +19,23 @@ import { z } from 'zod'
 /** Conjunto FECHADO de ações que o LLM pode escolher (LLM-02). */
 export const ActionDecisionSchema = z.object({
   /** Ação de alto nível — enum FECHADO; qualquer valor fora disto é rejeitado por .parse(). */
-  action: z.enum(['gather', 'explore', 'navigate', 'idle', 'chat']),
+  action: z
+    .enum(['gather', 'explore', 'navigate', 'idle', 'chat'])
+    .describe(
+      'gather=coletar bloco próximo; explore=vagar p/ achar terreno novo; ' +
+        'navigate=ir até alvo conhecido; idle=descansar; chat=falar com jogador próximo',
+    ),
   /** Alvo opcional de alto nível (ex.: tipo de bloco "oak_log", username, coordenada textual). */
-  target: z.string().max(64).optional(),
+  target: z
+    .string()
+    .max(64)
+    .optional()
+    .describe(
+      'gather/navigate: nome do bloco (ex: oak_log) ou "x,y,z"; explore: direção ' +
+        '(norte/sul/leste/oeste); chat: username. Omita para idle.',
+    ),
   /** Justificativa curta da decisão (obrigatória — força o modelo a "pensar"). */
-  reason: z.string().max(200),
+  reason: z.string().max(200).describe('Uma frase curta justificando a decisão.'),
 })
 
 /** Decisão de ação validada — o tipo consumido pela cognição. */

@@ -60,6 +60,26 @@ export function buildPersonaPrompt(disposition: Disposition, personality?: Perso
   )
 }
 
+/**
+ * Guia de decisão de AÇÃO (LLM-02). Diz ao modelo o que cada ação do enum faz, o que pôr em
+ * `target`, e a regra anti-repetição de alvo falho. Injetado SOMENTE no caminho de ação
+ * (deliberation.ts) — NÃO entra em reflexão/chat. Mantido curto: prompt longo piora o
+ * prompt-processing do modelo local e aproxima o timeout (D-17).
+ */
+export function buildDecisionGuide(): string {
+  return `Decida sua PRÓXIMA AÇÃO. Responda só com JSON {action, target?, reason}.
+Ações:
+- gather: coletar um bloco próximo. target = nome do bloco (ex: oak_log). Use se há blocos úteis em "Blocos próximos".
+- explore: vagar p/ achar terreno/recursos novos. target = direção (norte/sul/leste/oeste), opcional.
+- navigate: ir até um alvo conhecido. target = nome de bloco ou "x,y,z".
+- idle: descansar. Só se nada mais fizer sentido.
+- chat: falar com jogador próximo. target = username. Só se houver jogador próximo.
+Regras:
+- Se "FATO VERIFICADO" mostra que sua última ação FALHOU num alvo, NÃO repita esse alvo — escolha outro bloco ou explore.
+- Prefira gather se houver recurso por perto; senão explore.
+- reason: no máximo 1 frase curta.`
+}
+
 /** Trunca uma string longa para manter o orçamento de prompt sob controle. */
 function truncate(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max)}…`

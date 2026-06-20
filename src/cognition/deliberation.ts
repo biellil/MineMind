@@ -15,7 +15,7 @@ import type { WorldSnapshot } from '../perception/types'
 import type { CognitiveStateHolder } from './state'
 import type { LlmProvider } from '../llm/provider'
 import { decideAction } from '../llm/structured'
-import { buildPersonaPrompt, serializeContext } from '../llm/prompts'
+import { buildPersonaPrompt, buildDecisionGuide, serializeContext } from '../llm/prompts'
 import type { ActionDecision } from '../llm/schemas'
 import { ReflectionOutputSchema, type ReflectionOutput } from '../llm/schemas'
 import { arbitrate } from './arbiter'
@@ -119,8 +119,12 @@ export async function maybeDeliberate(
       await runReflection(holder, provider, snapshot, now)
     } else {
       // Caminho de AÇÃO existente. SOC-02/D-14: injeta a personalidade evolutiva no prompt.
+      // LLM-02: guia de decisão (o que cada ação faz + anti-repetição) anexado à persona —
+      // SÓ no caminho de ação (reflexão/chat não recebem). Sem isso o modelo só vê o enum cru.
       const messages: BaseMessage[] = [
-        new SystemMessage(buildPersonaPrompt(holder.disposition, holder.personality)),
+        new SystemMessage(
+          `${buildPersonaPrompt(holder.disposition, holder.personality)}\n\n${buildDecisionGuide()}`,
+        ),
         new HumanMessage(
           serializeContext(
             snapshot,
@@ -135,6 +139,10 @@ export async function maybeDeliberate(
       const fallback = () => arbiterToDecision(snapshot, holder.control.getMode())
       const decision = await decideAction(provider, messages, fallback)
       holder.llmDecision = { decision, at: now }
+      // Observabilidade do caminho de DECISÃO (vale p/ local e cloud — o cloud não loga no LM Studio).
+      console.log(
+        `[deliberate] action=${decision.action} target=${decision.target ?? '-'} reason=${decision.reason}`,
+      )
     }
   } finally {
     state.inFlight = false
