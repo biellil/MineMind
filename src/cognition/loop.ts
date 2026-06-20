@@ -18,10 +18,12 @@ import { motivationConfigFor } from '../config'
 import type { WorldSnapshot } from '../perception/types'
 import { shouldReflect, type ReflectionState } from './reflection'
 import { importanceOf } from '../memory/longTerm'
-import { getEvents } from '../memory/shortTerm'
+import { getEvents, push } from '../memory/shortTerm'
 import { persistHolder } from '../memory/holder.persistence'
 import { TriggerBus } from './trigger-bus'
 import type { TriggerConfig } from './trigger-bus'
+import { arbitrateReflex, type ReflexSensors } from './reflex'
+import { skillRegistry } from '../skills/index'
 
 // ── makeParkPromise ────────────────────────────────────────────────────────────
 // Fase 07.1 Plan 03 (D-01/D-09/D-11):
@@ -57,6 +59,74 @@ function makeParkPromise(
   })
 }
 
+// ── System 1 idle (Fase 8 / D-02/D-18/D-19) ─────────────────────────────────────
+// O System 1 vive FORA do StateGraph (D-01). A arbitragem (arbitrateReflex) é a função PURA;
+// a COLETA de sensores pode ler o bot diretamente (o driver não é puro). Aqui só rodam os
+// reflexos lifeCritical=false (eat/shelter) quando o bot está ocioso — NUNCA interrompem a
+// deliberação nem tocam o LLM/inFlight. lifeCritical=true já preempta no nó execute (Task 2).
+
+/** Monta o snapshot de sensores reflexos lendo o bot diretamente (null-safe). */
+function buildReflexSensors(bot: Bot): ReflexSensors {
+  const e = bot.entity
+  const hostile = e ? bot.nearestEntity((x) => (x as unknown as Record<string, string>).kind === 'Hostile mobs') : null
+  return {
+    food: bot.food ?? 20,
+    health: bot.health ?? 20,
+    oxygen: bot.oxygenLevel ?? 20,
+    isNight: bot.time ? bot.time.timeOfDay >= 13000 : false,
+    nearestHostile: hostile && e
+      ? {
+          kind: (hostile as unknown as Record<string, string>).kind ?? '',
+          name: hostile.name ?? '',
+          distance: e.position.distanceTo(hostile.position),
+        }
+      : null,
+    // lavaAhead/fallAhead já preemptam no execute (Task 2 via physicsTick); aqui são só p/ eat/shelter idle.
+    lavaAhead: false,
+    fallAhead: 0,
+    // predicado simples (D-16): default false → foge por padrão; pode ser refinado.
+    cornered: false,
+  }
+}
+
+/**
+ * Despacha uma skill reflexa idle pelo skillRegistry e registra um MemEvent grounded DEBOUNCED
+ * (D-19 — não inunda a memória com re-triggers). NUNCA chama o LLM nem toca inFlight (Pitfall 4 /
+ * D-18) — preserva o [reflect]. `lastReflexAt` é o estado de debounce por tipo de reflexo (sessão).
+ */
+async function runReflex(
+  bot: Bot,
+  holder: CognitiveStateHolder,
+  reflex: string,
+  lastReflexAt: Record<string, number>,
+): Promise<void> {
+  const skill = skillRegistry[reflex]
+  if (!skill) return
+  try {
+    // sem signal — um reflexo idle não é preemptado por si mesmo (lifeCritical=true vai pelo execute).
+    const result = await skill(bot, {})
+    // D-19: MemEvent grounded debounced/coalesced (janela mínima de 3s por tipo de reflexo).
+    const nowTs = Date.now()
+    if (nowTs - (lastReflexAt[reflex] ?? 0) > 3000) {
+      lastReflexAt[reflex] = nowTs
+      holder.memory = push(holder.memory, {
+        type: 'action',
+        skill: reflex,
+        target: 'reflex',
+        outcome: result.outcome,
+        observed: result.observed,
+        expected: result.expected,
+        result: result.outcome === 'success' ? 'success' : 'failure',
+        reason: result.reason,
+        timestamp: nowTs,
+      })
+      console.log(`[reflex] ${reflex} ${result.outcome} (${result.observed}/${result.expected})`)
+    }
+  } catch (err) {
+    console.error(`[reflex] ${reflex} falhou:`, err instanceof Error ? err.message : err)
+  }
+}
+
 /**
  * Inicia o loop cognitivo para UMA sessão de bot. Para automaticamente quando a sessão termina.
  * Chamar em onBotReady (1x por sessão). A reconexão chama de novo com bot novo MAS o MESMO holder
@@ -77,6 +147,13 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
     hostileRadius: config.hostileRadius,
     hostileDebounceMs: config.hostileDebounceMs,
     hungryThreshold: config.hungryThreshold,
+    // Fase 8: limiares dos gatilhos lifeCritical (physicsTick edge-detection, D-09/D-14)
+    healthCriticalThreshold: config.healthCriticalThreshold,
+    healthExitThreshold: config.healthExitThreshold,
+    oxygenEmergeThreshold: config.oxygenEmergeThreshold,
+    oxygenExitThreshold: config.oxygenExitThreshold,
+    fallDangerBlocks: config.fallDangerBlocks,
+    lavaLookahead: config.lavaLookahead,
   }
   const cleanupTriggerBus = triggerBus.setupMineflayerListeners(bot, triggerCfg)
 
@@ -150,6 +227,9 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
   // da memória de curto prazo já foram contabilizados, para somar só a importância dos NOVOS.
   const reflState: ReflectionState = { lastReflectionAt: -Infinity, importanceAccum: 0 }
   let seenEvents = getEvents(holder.memory).length
+
+  // Fase 8 (D-19): estado de debounce do System 1 idle por tipo de reflexo (escopo de sessão).
+  const lastReflexAt: Record<string, number> = {}
 
   // CR#2: contador de ticks consecutivos SEM corpo (snapshot null = morte/void). Ao cruzar
   // config.deathStopTicks o while encerra graciosamente (morte/void não emitem 'end').
@@ -287,6 +367,17 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
         const wakeReason = await makeParkPromise(triggerBus, sessionAbort.signal, nextWakeMs)
         if (wakeReason === 'abort') break
         // 'actionFinished' ou 'timeout' → continua o while imediatamente
+
+        // Fase 8 (D-02/D-18): System 1 idle — reflexos lifeCritical=false (eat/shelter) rodam SÓ
+        // quando o bot está ocioso/uma ação terminou, NUNCA interrompendo a deliberação. Os reflexos
+        // lifeCritical=true já preemptam no execute (Task 2). runReflex NUNCA toca o LLM/inFlight
+        // (Pitfall 4 / D-18) — ao terminar, o while re-percebe do zero (D-18).
+        if (alive && bot.entity) {
+          const decision = arbitrateReflex(buildReflexSensors(bot))
+          if (decision && !decision.lifeCritical && (decision.reflex === 'eat' || decision.reflex === 'shelter')) {
+            await runReflex(bot, holder, decision.reflex, lastReflexAt)
+          }
+        }
 
       } catch (err) {
         console.error('[loop] erro no tick:', err instanceof Error ? err.message : err)
