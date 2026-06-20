@@ -22,7 +22,7 @@ import { getEvents, push } from '../memory/shortTerm'
 import { persistHolder } from '../memory/holder.persistence'
 import { TriggerBus } from './trigger-bus'
 import type { TriggerConfig } from './trigger-bus'
-import { arbitrateReflex, type ReflexSensors } from './reflex'
+import { arbitrateReflex, type ReflexSensors, type ReflexDecision } from './reflex'
 import { skillRegistry } from '../skills/index'
 
 // ── makeParkPromise ────────────────────────────────────────────────────────────
@@ -64,6 +64,19 @@ function makeParkPromise(
 // a COLETA de sensores pode ler o bot diretamente (o driver não é puro). Aqui só rodam os
 // reflexos lifeCritical=false (eat/shelter) quando o bot está ocioso — NUNCA interrompem a
 // deliberação nem tocam o LLM/inFlight. lifeCritical=true já preempta no nó execute (Task 2).
+
+/**
+ * Mapeia o reflexo vencedor (arbitrateReflex) → nome da skill no skillRegistry.
+ * `defend` (encurralado de dia) usa a skill `attack`; `retreatEnv` (lava/queda) não tem skill —
+ * a preempção no execute + a re-percepção resolvem (undefined ⇒ o driver não despacha nada).
+ */
+const REFLEX_SKILL: Record<ReflexDecision['reflex'], string | undefined> = {
+  eat: 'eat',
+  flee: 'flee',
+  shelter: 'shelter',
+  defend: 'attack',
+  retreatEnv: undefined,
+}
 
 /** Monta o snapshot de sensores reflexos lendo o bot diretamente (null-safe). */
 function buildReflexSensors(bot: Bot): ReflexSensors {
@@ -368,14 +381,18 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
         if (wakeReason === 'abort') break
         // 'actionFinished' ou 'timeout' → continua o while imediatamente
 
-        // Fase 8 (D-02/D-18): System 1 idle — reflexos lifeCritical=false (eat/shelter) rodam SÓ
-        // quando o bot está ocioso/uma ação terminou, NUNCA interrompendo a deliberação. Os reflexos
-        // lifeCritical=true já preemptam no execute (Task 2). runReflex NUNCA toca o LLM/inFlight
-        // (Pitfall 4 / D-18) — ao terminar, o while re-percebe do zero (D-18).
+        // Fase 8 (D-02/D-18): System 1 — despacha o reflexo VENCEDOR após o park (idle OU logo após
+        // uma preempção lifeCritical no execute ter abortado a ação). Os gatilhos lifeCritical=true
+        // (hostileNearby/...) preemptam a ação em curso no nó execute (Task 2, setGoal(null) imediato);
+        // AQUI o driver de fato EXECUTA a resposta (fugir/atacar/comer/abrigar). Sem este dispatch o
+        // bot só PARAVA perto do mob e esperava o LLM lento decidir — e morria (validado ao vivo).
+        // retreatEnv (lava/queda) não tem skill: o abort no execute + re-percepção bastam.
+        // runReflex NUNCA toca o LLM/inFlight (Pitfall 4 / D-18); ao terminar, o while re-percebe.
         if (alive && bot.entity) {
           const decision = arbitrateReflex(buildReflexSensors(bot))
-          if (decision && !decision.lifeCritical && (decision.reflex === 'eat' || decision.reflex === 'shelter')) {
-            await runReflex(bot, holder, decision.reflex, lastReflexAt)
+          const skillName = decision ? REFLEX_SKILL[decision.reflex] : undefined
+          if (skillName) {
+            await runReflex(bot, holder, skillName, lastReflexAt)
           }
         }
 

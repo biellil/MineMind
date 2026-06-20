@@ -123,8 +123,14 @@ export class TriggerBus extends EventEmitter {
   private _wasDay: boolean = true
   /** Último valor de food conhecido (para histerese do edge-detector hungry) */
   private _lastFood: number = 20
-  /** Handle do debounce timer do hostileNearby (evita múltiplos emits por entityMoved) */
-  private _hostileDebounce: ReturnType<typeof setTimeout> | undefined
+  /**
+   * Timestamp (ms) do último emit de hostileNearby — leading-edge throttle.
+   * Fase 8 fix: o debounce TRAILING antigo (clearTimeout+setTimeout por entityMoved) era starvado —
+   * um mob te perseguindo emite entityMoved a ~20Hz e reiniciava o timer eternamente, então o
+   * hostileNearby NUNCA disparava enquanto o mob estava em movimento (exatamente quando importa).
+   * Throttle leading-edge: emite NA HORA na 1ª detecção e no máximo 1x por hostileDebounceMs depois.
+   */
+  private _lastHostileEmit = 0
 
   // === Fase 8: estado de borda dos gatilhos lifeCritical (histerese, D-09/D-14) ===
   /** true enquanto health está crítico (não re-emite até cruzar healthExitThreshold) */
@@ -180,12 +186,15 @@ export class TriggerBus extends EventEmitter {
           (e as unknown as Record<string, string>).kind === 'Hostile mobs' &&
           e.position.distanceTo(botPos) < cfg.hostileRadius,
       )
+      // Leading-edge throttle (Fase 8 fix): emite imediatamente na 1ª detecção e no máximo 1x por
+      // hostileDebounceMs depois. NÃO usar trailing debounce aqui — o entityMoved a ~20Hz de um mob
+      // em movimento reinicia o timer pra sempre e o emit nunca acontece (starvation).
       if (hasHostile) {
-        clearTimeout(this._hostileDebounce)
-        this._hostileDebounce = setTimeout(
-          () => this.emit('hostileNearby'),
-          cfg.hostileDebounceMs,
-        )
+        const now = Date.now()
+        if (now - this._lastHostileEmit >= cfg.hostileDebounceMs) {
+          this._lastHostileEmit = now
+          this.emit('hostileNearby')
+        }
       }
     }
 
@@ -227,14 +236,13 @@ export class TriggerBus extends EventEmitter {
     bot.on('physicsTick', onPhysicsTick)
 
     // ── Cleanup ────────────────────────────────────────────────────────────────
-    // Remove todos os listeners e cancela o debounce pendente (T-07.1-04).
+    // Remove todos os listeners (T-07.1-04). O throttle é só um timestamp — nada a cancelar.
     return () => {
       bot.off('health', onHealth)
       bot.off('time', onTime)
       bot.off('entitySpawn', checkHostile)
       bot.off('entityMoved', checkHostile)
       bot.off('physicsTick', onPhysicsTick)
-      clearTimeout(this._hostileDebounce)
     }
   }
 }
