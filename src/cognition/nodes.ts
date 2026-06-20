@@ -52,6 +52,10 @@ export interface NodeDeps {
 const now = () => Date.now()
 const log = (msg: string) => console.log(`[loop] ${msg}`)
 
+// Fase 8 (D-02/Pattern 2): TODOS os gatilhos lifeCritical preemptam a skill em curso.
+// O nó execute registra um listener por gatilho; cada um força setGoal(null) (D-07) ANTES do abort.
+const LIFE_CRITICAL_TRIGGERS = ['hostileNearby', 'healthCritical', 'drowning', 'lavaAhead', 'fallAhead'] as const
+
 /** Mapeia a ação do enum LLM (fechado) para um CognitiveState da Fase 2. */
 function actionToCognitiveState(action: ActionDecision['action']): CognitiveState {
   switch (action) {
@@ -256,13 +260,21 @@ export function createNodes(deps: NodeDeps) {
     // D-16/D-18: AbortController por skill-run para preempção event-driven
     const skillAbort = new AbortController()
 
-    // Registrar listener ANTES de chamar a skill.
-    // hostileNearby é o gatilho de preempção v1 (D-18 — Policy: Phase 8 adicionará mais gatilhos).
-    const onHostileNearby = () => {
-      log(`preemptando ${skill} — hostileNearby recebido`)
-      skillAbort.abort('hostileNearby')
+    // Registrar listeners ANTES de chamar a skill.
+    // Fase 8 (D-02/D-07/Pattern 2): a preempção, que na Fase 07.1 cobria só hostileNearby (D-18),
+    // foi GENERALIZADA para TODOS os gatilhos lifeCritical. Cada listener força setGoal(null) — parada
+    // FÍSICA imediata do pathfinder (D-07, não stop() gracioso) — ANTES de abortar o signal da skill.
+    const preemptListeners: Array<[string, () => void]> = []
+    for (const trig of LIFE_CRITICAL_TRIGGERS) {
+      const fn = () => {
+        log(`preemptando ${skill} — ${trig} (lifeCritical)`)
+        // D-07: parada FORÇADA imediata do pathfinder ANTES do abort do signal.
+        try { bot.pathfinder.setGoal(null) } catch { /* pathfinder pode não estar carregado */ }
+        skillAbort.abort(trig)
+      }
+      triggerBus.once(trig, fn)
+      preemptListeners.push([trig, fn])
     }
-    triggerBus.once('hostileNearby', onHostileNearby)
 
     // Fase 07.1 Plan 03: variável para carregar o resultado entre try/catch e o emit final.
     // CRITÉRIO DE ORDEM: emit SEMPRE após holder.lastObservedDelta atribuído (Pitfall 1 da research).
@@ -321,8 +333,8 @@ export function createNodes(deps: NodeDeps) {
       skillOutcome = 'error'
       log(`ERRO inesperado ${skill} ${target}: ${reason}`)
     } finally {
-      // D-18/Pitfall 6: remover listener ANTES do abort() (evitar listener orphan)
-      triggerBus.off('hostileNearby', onHostileNearby)
+      // D-18/Pitfall 6: remover TODOS os listeners ANTES do abort() (evitar listener orphan)
+      for (const [trig, fn] of preemptListeners) triggerBus.off(trig, fn)
       skillAbort.abort()  // cleanup idempotente — no-op se já foi abortado
     }
 
