@@ -13,6 +13,7 @@
 import { test, expect } from 'bun:test'
 import { buildGraph } from './graph'
 import { createCognitiveStateHolder } from './state'
+import { TriggerBus } from './trigger-bus'
 import { createDeliberator } from './deliberation'
 import { generateGoals } from '../motivation/goals'
 import { motivationConfigFor } from '../config'
@@ -62,7 +63,7 @@ const cfg = (thread_id: string) => ({ configurable: { thread_id } })
 test('A) provider OFF (available:false) -> loop degrada ao arbiter sem travar; memoria acumula (D-17)', async () => {
   const bot = makeMockBot()
   const holder = createCognitiveStateHolder()
-  const { graph } = buildGraph({ bot, holder, provider: offProvider })
+  const { graph } = buildGraph({ bot, holder, provider: offProvider, triggerBus: new TriggerBus() })
 
   let last: any
   // ~10 ticks via driver externo; nenhum deve lancar mesmo com o LLM off.
@@ -98,7 +99,7 @@ test('B) needs/goals plugados no grafo: survival reflete health/food do snapshot
   // vida/fome baixas (4/20 cada) -> survival = (4/20 + 4/20)/2 = 0.2 (degradada, < critico 0.3)
   const bot = makeMockBot({ health: 4, food: 4 })
   const holder = createCognitiveStateHolder()
-  const { graph } = buildGraph({ bot, holder, provider: offProvider })
+  const { graph } = buildGraph({ bot, holder, provider: offProvider, triggerBus: new TriggerBus() })
 
   for (let i = 0; i < 3; i++) await graph.invoke({}, cfg('phase3-needs'))
 
@@ -160,7 +161,7 @@ test('C) tick reativo nao bloqueia na deliberacao lenta; segunda chamada concorr
   }
 
   const deliberator = createDeliberator()
-  const { graph } = buildGraph({ bot, holder, provider: slowProvider })
+  const { graph } = buildGraph({ bot, holder, provider: slowProvider, triggerBus: new TriggerBus() })
   // 'periodic' sempre dispara (shouldTrigger -> true); o teto de frequencia e controlado abaixo.
   const trigger = 'periodic' as const
 

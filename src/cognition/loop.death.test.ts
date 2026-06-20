@@ -6,6 +6,7 @@
 import { test, expect } from 'bun:test'
 import { buildGraph } from './graph'
 import { createCognitiveStateHolder } from './state'
+import { TriggerBus } from './trigger-bus'
 import type { LlmProvider } from '../llm/provider'
 
 // O grafo NÃO chama o LLM no tick — provider stub que nunca é usado.
@@ -49,7 +50,7 @@ const cfg = (thread_id: string) => ({ configurable: { thread_id } })
 
 test('CR#1: invoke com bot SEM corpo (morte/void) resolve com snapshot === null e NÃO rejeita', async () => {
   const bot = makeDeadMockBot()
-  const { graph } = buildGraph({ bot, holder: createCognitiveStateHolder(), provider: stubProvider })
+  const { graph } = buildGraph({ bot, holder: createCognitiveStateHolder(), provider: stubProvider, triggerBus: new TriggerBus() })
   // Não deve lançar: a percepção é defensiva (Task 1/2) e observe degrada para { snapshot: null }.
   const last = await graph.invoke({}, cfg('death-s1'))
   expect(last).toBeDefined()
@@ -60,7 +61,7 @@ test('CR#1: invoke com bot SEM corpo (morte/void) resolve com snapshot === null 
 
 test('CR#3: checkpointer.deleteThread resolve sem lançar após alguns invokes (poda chamável)', async () => {
   const bot = makeMockBot()
-  const { graph, checkpointer } = buildGraph({ bot, holder: createCognitiveStateHolder(), provider: stubProvider })
+  const { graph, checkpointer } = buildGraph({ bot, holder: createCognitiveStateHolder(), provider: stubProvider, triggerBus: new TriggerBus() })
   for (let i = 0; i < 3; i++) await graph.invoke({}, cfg('minemind-agent'))
   // A poda do thread fixo não deve lançar — é o lever do CR#3 contra o vazamento de RAM.
   await expect(checkpointer.deleteThread('minemind-agent')).resolves.toBeUndefined()

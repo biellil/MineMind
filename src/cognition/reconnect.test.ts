@@ -12,6 +12,7 @@
 import { test, expect } from 'bun:test'
 import { createCognitiveStateHolder } from './state'
 import { buildGraph } from './graph'
+import { TriggerBus } from './trigger-bus'
 import { push } from '../memory/shortTerm'
 import type { LlmProvider } from '../llm/provider'
 import type { Goal } from '../motivation/types'
@@ -98,11 +99,11 @@ test('CONN-03: o holder reusado entre sessoes preserva memory/goals/disposition/
   // O padrao real: bot/index cria o holder 1x e o injeta nas duas sessoes. Aqui simulamos
   // o ciclo construindo um grafo/loop NOVO (nova "sessao", bot novo) apontando para o MESMO holder.
   const bot1 = makeMockBot()
-  buildGraph({ bot: bot1, holder, provider: stubProvider }) // sessao 1 (descartada na "desconexao")
+  buildGraph({ bot: bot1, holder, provider: stubProvider, triggerBus: new TriggerBus() }) // sessao 1 (descartada na "desconexao")
 
   // reconexao: novo bot, novo grafo, MESMO holder (referencia identica)
   const bot2 = makeMockBot()
-  const { graph: graphSession2 } = buildGraph({ bot: bot2, holder, provider: stubProvider })
+  const { graph: graphSession2 } = buildGraph({ bot: bot2, holder, provider: stubProvider, triggerBus: new TriggerBus() })
 
   // a sessao 2 roda alguns ticks (a mente continua de onde parou; observe re-avalia needs do snapshot)
   for (let i = 0; i < 2; i++) await graphSession2.invoke({}, { configurable: { thread_id: 'reconnect-s2' } })
