@@ -11,9 +11,20 @@ import type { Bot } from 'mineflayer'
 import type { Block } from 'prismarine-block'
 import type { Database } from 'bun:sqlite'
 import { goals } from 'mineflayer-pathfinder'
-import { placeBlockSafe, getRefAndFace } from './placeBlock'
-import { upsertPlace } from '../memory/places'
+import { placeBlockSafe as realPlaceBlockSafe, getRefAndFace as realGetRefAndFace } from './placeBlock'
+import { upsertPlace as realUpsertPlace } from '../memory/places'
 import { config } from '../config'
+
+/**
+ * Seam de injeção dos colaboradores (D-01 testabilidade). Os defaults são os imports reais; os
+ * testes sobrescrevem `__stationDeps` para observar/mockar SEM `mock.module` (que vaza global no bun
+ * — convenção do projeto é injeção de dependência, ver deliberation.test.ts).
+ */
+export const __stationDeps = {
+  placeBlockSafe: realPlaceBlockSafe as typeof realPlaceBlockSafe,
+  getRefAndFace: realGetRefAndFace as typeof realGetRefAndFace,
+  upsertPlace: realUpsertPlace as typeof realUpsertPlace,
+}
 
 /** Offsets candidatos para plantar a estação ADJACENTE ao bot (mesmo nível). */
 const ADJACENT_OFFSETS: ReadonlyArray<readonly [number, number, number]> = [
@@ -86,10 +97,10 @@ export async function ensureStation(
     let placed = false
     for (const off of ADJACENT_OFFSETS) {
       const target = { x: px + off[0], y: py + off[1], z: pz + off[2] }
-      const rf = getRefAndFace(bot, target)
+      const rf = __stationDeps.getRefAndFace(bot, target)
       if (rf) {
         // Deixa a estação plantada — NÃO recolher (D-12 #3).
-        await placeBlockSafe(bot, rf.ref, rf.face, item, target)
+        await __stationDeps.placeBlockSafe(bot, rf.ref, rf.face, item, target)
         placed = true
         break
       }
@@ -105,7 +116,7 @@ export async function ensureStation(
   try {
     const db = getDb(bot)
     if (db) {
-      upsertPlace(
+      __stationDeps.upsertPlace(
         db,
         { x: block.position.x, y: block.position.y, z: block.position.z, type: 'station', label: type },
         Date.now(),

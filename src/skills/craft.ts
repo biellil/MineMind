@@ -14,8 +14,15 @@ import type { SkillResult } from '../grounding/types'
 import { executeWithSafety } from './executor'
 import { captureGroundState } from '../grounding/capture'
 import { evaluateCraft } from '../grounding/evaluate'
-import { ensureStation } from './station'
+import { ensureStation as realEnsureStation } from './station'
 import { config } from '../config'
+
+/**
+ * Seam de injeção de ensureStation (testabilidade) — default é o import real. Os testes sobrescrevem
+ * `__craftDeps.ensureStation` SEM `mock.module` (que vaza global no bun; convenção é injeção, ver
+ * deliberation.test.ts).
+ */
+export const __craftDeps = { ensureStation: realEnsureStation as typeof realEnsureStation }
 
 /** Schema Zod do skill craft (D-11). */
 export const CraftSchema = z.object({
@@ -51,7 +58,7 @@ export async function craft(bot: Bot, rawParams: unknown): Promise<SkillResult> 
 
   // (2) se vazio, tenta com bancada (posiciona/localiza via ensureStation).
   if (recipes.length === 0) {
-    table = await ensureStation(bot, 'crafting_table', signal)
+    table = await __craftDeps.ensureStation(bot, 'crafting_table', signal)
     if (table) recipes = bot.recipesFor(id, null, count, table)
   }
 

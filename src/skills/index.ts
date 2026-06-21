@@ -10,6 +10,10 @@ import { attack, attackTool } from './attack'
 import { eat, eatTool } from './eat'
 import { flee, fleeTool } from './flee'
 import { shelter, shelterTool } from './shelter'
+import { placeBlock, placeBlockTool } from './placeBlock'
+import { craft, craftTool } from './craft'
+import { smelt, smeltTool } from './smelt'
+import { equip, equipTool } from './equip'
 
 // Re-exportar individualmente para uso direto
 export { navigate, NavigateSchema, navigateTool } from './navigate'
@@ -19,6 +23,12 @@ export { attack, AttackSchema, attackTool } from './attack'
 export { eat, EatSchema, eatTool } from './eat'
 export { flee, FleeSchema, fleeTool } from './flee'
 export { shelter, ShelterSchema, shelterTool } from './shelter'
+// Fase 9: as 4 skills novas (placement/crafting/smelting/equip) registradas neste plano.
+export { placeBlock, PlaceBlockSchema, placeBlockTool } from './placeBlock'
+export { craft, CraftSchema, craftTool } from './craft'
+export { smelt, SmeltSchema, smeltTool } from './smelt'
+export { equip, EquipSchema, equipTool, selectToolFor } from './equip'
+export { ensureStation } from './station'
 export { executeWithSafety, gaussianDelay, SkillTimeoutError, SkillStuckError } from './executor'
 // Fase 7: contrato de retorno das skills, re-exportado para conveniência dos consumidores.
 export type { SkillResult } from '../grounding/types'
@@ -47,6 +57,10 @@ export const skillRegistry: Record<string, SkillFunction> = {
   eat,
   flee,
   shelter,
+  placeBlock,
+  craft,
+  smelt,
+  equip,
 }
 
 /**
@@ -62,4 +76,8 @@ export const toolRegistry: SkillTool[] = [
   eatTool,
   fleeTool,
   shelterTool,
+  placeBlockTool,
+  craftTool,
+  smeltTool,
+  equipTool,
 ]

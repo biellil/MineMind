@@ -75,8 +75,11 @@ describe('AttackSchema', () => {
 })
 
 describe('skillRegistry', () => {
-  it('contém as 7 skills', () => {
-    expect(Object.keys(skillRegistry)).toEqual(['navigate', 'dig', 'follow', 'attack', 'eat', 'flee', 'shelter'])
+  it('contém as 11 skills (7 base + placeBlock/craft/smelt/equip da Fase 9)', () => {
+    expect(Object.keys(skillRegistry)).toEqual([
+      'navigate', 'dig', 'follow', 'attack', 'eat', 'flee', 'shelter',
+      'placeBlock', 'craft', 'smelt', 'equip',
+    ])
   })
 
   it('todas as entries são funções', () => {
@@ -87,8 +90,8 @@ describe('skillRegistry', () => {
 })
 
 describe('toolRegistry', () => {
-  it('contém 7 tool descriptors', () => {
-    expect(toolRegistry).toHaveLength(7)
+  it('contém 11 tool descriptors', () => {
+    expect(toolRegistry).toHaveLength(11)
   })
 
   it('todos os descriptors têm name, description, schema, execute', () => {
@@ -100,7 +103,10 @@ describe('toolRegistry', () => {
     }
   })
 
-  it('nomes dos tools são: navigate, dig, follow, attack, eat, flee, shelter', () => {
-    expect(toolRegistry.map((t) => t.name)).toEqual(['navigate', 'dig', 'follow', 'attack', 'eat', 'flee', 'shelter'])
+  it('nomes dos tools: 7 base + placeBlock, craft, smelt, equip', () => {
+    expect(toolRegistry.map((t) => t.name)).toEqual([
+      'navigate', 'dig', 'follow', 'attack', 'eat', 'flee', 'shelter',
+      'placeBlock', 'craft', 'smelt', 'equip',
+    ])
   })
 })

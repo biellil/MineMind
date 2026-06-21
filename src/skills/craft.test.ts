@@ -6,15 +6,12 @@
 // Mockamos './station' (ensureStation) via mock.module. O bot é mockado: registry.itemsByName,
 // recipesFor (sequência por cenário), bot.craft async que muta o inventário ou lança, inventory.items
 // mutável (para o captureGroundState antes/depois).
-import { test, expect, mock, beforeEach } from 'bun:test'
+// Injeção via __craftDeps (NÃO mock.module — vaza global no bun; convenção é injeção).
+import { test, expect, mock, beforeEach, afterEach } from 'bun:test'
+import { craft, __craftDeps } from './craft'
 
+const realDeps = { ...__craftDeps }
 let ensureStationSpy = mock(async (_bot: any, _type: any, _signal?: any): Promise<any> => null)
-
-mock.module('./station', () => ({
-  ensureStation: (...a: any[]) => (ensureStationSpy as any)(...a),
-}))
-
-const { craft } = await import('./craft')
 
 interface MockItem {
   name: string
@@ -63,6 +60,11 @@ const recipeTable = { result: { id: 270, metadata: 0, count: 1 }, requiresTable:
 
 beforeEach(() => {
   ensureStationSpy = mock(async (_bot: any, _type: any, _signal?: any): Promise<any> => null)
+  __craftDeps.ensureStation = ensureStationSpy as any
+})
+
+afterEach(() => {
+  Object.assign(__craftDeps, realDeps)
 })
 
 // ── testes ───────────────────────────────────────────────────────────────────
@@ -82,7 +84,8 @@ test('receita 2x2 disponível -> success, observed = result.count*count', async 
 })
 
 test('2x2 vazio mas ensureStation retorna bancada e recipesFor(table) retorna receita -> success', async () => {
-  ensureStationSpy = mock(async () => ({ name: 'crafting_table', position: { x: 1, y: 64, z: 0 } }))
+  const tableSpy = mock(async () => ({ name: 'crafting_table', position: { x: 1, y: 64, z: 0 } }))
+  __craftDeps.ensureStation = tableSpy as any
   const { bot, craftSpy } = makeMockBot({
     inv: [{ name: 'oak_planks', count: 3 }, { name: 'stick', count: 2 }],
     // 1ª chamada (table=null) vazia; 2ª chamada (com bancada) retorna a receita.
@@ -92,13 +95,13 @@ test('2x2 vazio mas ensureStation retorna bancada e recipesFor(table) retorna re
     craftAddCount: 1,
   })
   const r = await craft(bot, { itemName: 'wooden_pickaxe', count: 1 })
-  expect(ensureStationSpy).toHaveBeenCalledTimes(1)
+  expect(tableSpy).toHaveBeenCalledTimes(1)
   expect(r.outcome).toBe('success')
   expect(craftSpy).toHaveBeenCalledTimes(1)
 })
 
 test('sem receita em ambos (requiresTable sem bancada) -> no_effect; bot.craft NÃO chamado (gate D-15 #3)', async () => {
-  ensureStationSpy = mock(async () => null) // não conseguiu bancada
+  __craftDeps.ensureStation = mock(async () => null) as any // não conseguiu bancada
   const { bot, craftSpy } = makeMockBot({
     inv: [{ name: 'oak_planks', count: 3 }],
     recipesByCall: [[], []],

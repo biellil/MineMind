@@ -48,6 +48,10 @@ process.on('SIGTERM', () => shutdown('SIGTERM'))
  */
 function onBotReady(bot: Bot): void {
   console.log('[MineMind] Bot pronto — iniciando loop cognitivo (Fase 3).')
+  // Fase 9 (D-13): expõe o handle do DB durável no bot para o ensureStation registrar o POI
+  // 'station' best-effort (skills só recebem `bot`). O POI é CACHE, não verdade — o registro é
+  // try/catch dentro de station.ts e NUNCA bloqueia a estação se o handle estiver ausente.
+  ;(bot as unknown as { mineMindDb?: typeof db }).mineMindDb = db
   startCognitiveLoop(bot, holder)
 }
 

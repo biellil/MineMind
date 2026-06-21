@@ -2,33 +2,21 @@
 // Plan 09-03 / Task 1 / D-12/D-13/D-14: ensureStation localiza|navega|posiciona uma estação
 // (crafting_table/furnace) e registra o POI 'station' best-effort.
 //
-// Mockamos os módulos colaboradores ('./placeBlock' e '../memory/places') via mock.module ANTES
-// de importar station — assim controlamos placeBlockSafe/getRefAndFace e observamos upsertPlace
-// sem tocar o SQLite. O bot é mockado (findBlock, pathfinder.goto, inventory.items, registry,
-// entity.position).
-import { test, expect, mock, beforeEach } from 'bun:test'
+// Injeção de dependência via __stationDeps (NÃO mock.module — que vaza global no bun; convenção do
+// projeto é injeção, ver deliberation.test.ts). beforeEach/afterEach restauram os colaboradores reais.
+import { test, expect, mock, beforeEach, afterEach } from 'bun:test'
+import { ensureStation, __stationDeps } from './station'
 
-// ── spies dos colaboradores ──────────────────────────────────────────────────
-let placeBlockSafeSpy = mock(async () => ({ outcome: 'success', observed: 1, expected: 1, delta: {} }))
-let getRefAndFaceSpy = mock((_bot: any, _t: any) => ({ ref: { name: 'dirt' }, face: { x: 0, y: 1, z: 0 } }))
-let upsertPlaceSpy = mock((_db: any, _poi: any, _now: number) => {})
+const realDeps = { ...__stationDeps }
 
-mock.module('./placeBlock', () => ({
-  placeBlockSafe: (...a: any[]) => (placeBlockSafeSpy as any)(...a),
-  getRefAndFace: (...a: any[]) => (getRefAndFaceSpy as any)(...a),
-}))
-mock.module('../memory/places', () => ({
-  upsertPlace: (...a: any[]) => (upsertPlaceSpy as any)(...a),
-}))
-
-// Import APÓS os mocks (bun resolve o mock.module no carregamento do SUT).
-const { ensureStation } = await import('./station')
-
-// ── helpers de mock ──────────────────────────────────────────────────────────
 interface MockBlock {
   name: string
   position: { x: number; y: number; z: number }
 }
+
+let placeBlockSafeSpy: ReturnType<typeof mock>
+let getRefAndFaceSpy: ReturnType<typeof mock>
+let upsertPlaceSpy: ReturnType<typeof mock>
 
 /**
  * Cria um bot mockado com os campos que ensureStation usa.
@@ -42,9 +30,7 @@ function makeMockBot(opts: {
   let call = 0
   const gotoSpy = mock(async (_goal: any) => {})
   const bot: any = {
-    registry: {
-      blocksByName: { crafting_table: { id: 58 }, furnace: { id: 61 } },
-    },
+    registry: { blocksByName: { crafting_table: { id: 58 }, furnace: { id: 61 } } },
     entity: { position: { x: 10.5, y: 64, z: 20.5 } },
     inventory: { items: () => opts.items ?? [] },
     findBlock: mock((_q: any) => {
@@ -52,11 +38,10 @@ function makeMockBot(opts: {
       call++
       return r
     }),
-    pathfinder: { goto: gotoSpy },
+    pathfinder: { goto: gotoSpy, stop: () => {} },
     blockAt: (_p: any) => null,
   }
-  // db best-effort exposto no bot (acesso ao handle durável — best-effort, não bloqueia)
-  bot.mineMindDb = {}
+  bot.mineMindDb = {} // handle do db best-effort (não bloqueia)
   return { bot, gotoSpy }
 }
 
@@ -64,6 +49,13 @@ beforeEach(() => {
   placeBlockSafeSpy = mock(async () => ({ outcome: 'success', observed: 1, expected: 1, delta: {} }))
   getRefAndFaceSpy = mock((_bot: any, _t: any) => ({ ref: { name: 'dirt' }, face: { x: 0, y: 1, z: 0 } }))
   upsertPlaceSpy = mock((_db: any, _poi: any, _now: number) => {})
+  __stationDeps.placeBlockSafe = placeBlockSafeSpy as any
+  __stationDeps.getRefAndFace = getRefAndFaceSpy as any
+  __stationDeps.upsertPlace = upsertPlaceSpy as any
+})
+
+afterEach(() => {
+  Object.assign(__stationDeps, realDeps)
 })
 
 // ── testes ───────────────────────────────────────────────────────────────────
@@ -113,9 +105,9 @@ test('registra POI station via upsertPlace quando a estação é confirmada (bes
 })
 
 test('upsertPlace lança -> ensureStation NÃO falha e ainda retorna a estação (POI é cache, não verdade)', async () => {
-  upsertPlaceSpy = mock(() => {
+  __stationDeps.upsertPlace = mock(() => {
     throw new Error('db indisponível')
-  })
+  }) as any
   const furnace: MockBlock = { name: 'furnace', position: { x: 12, y: 64, z: 20 } }
   const { bot } = makeMockBot({ findResults: [furnace] })
 
