@@ -125,6 +125,7 @@ Recent decisions affecting current work:
 | 260619-qwx | Enriquecer percepção: lookingAt (bloco na mira), underfoot (bloco sob os pés) e render de entities/mobs no prompt | 2026-06-19 | f1b32d0 | [260619-qwx-enriquecer-percepcao-lookingat-bloco-na-](./quick/260619-qwx-enriquecer-percepcao-lookingat-bloco-na-/) |
 | 260619-rv8 | Tratar morte/void do bot (snapshot null + parada graciosa por deadTicks) e vazamento de RAM (poda periódica do MemorySaver via deleteThread) | 2026-06-19 | eb1df53 | [260619-rv8-tratar-morte-void-do-bot-e-vazamento-de-](./quick/260619-rv8-tratar-morte-void-do-bot-e-vazamento-de-/) |
 | 260621-ir4 | Consertar starvation da reflexão no loop — pickDispatch puro dá prioridade ao reflect; ação não rouba mais o lock single-flight todo tick (reflexão nunca rodava ao vivo) | 2026-06-21 | 87ccfc2 | [260621-ir4-consertar-starvation-da-reflexao-no-loop](./quick/260621-ir4-consertar-starvation-da-reflexao-no-loop/) |
+| 260621-jhi | Parse lenient do priority na reflexão (schema sem .min/.max) + clamp [0,1] na aplicação — destrava embedding/addVector no Chroma que o modelo local quebrava ao emitir priority 10/12/8 | 2026-06-21 | 9ca318d | [260621-jhi-consertar-parse-lenient-do-priority-na-r](./quick/260621-jhi-consertar-parse-lenient-do-priority-na-r/) |
 
 ## Session Continuity
 
