@@ -81,6 +81,8 @@ O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com
 
 **Phase 7 (Grounding + SkillResult) completa 2026-06-19:** módulo `grounding/` (contrato `SkillResult` tagueado por `outcome`, `captureGroundState` imutável, avaliadores puros `evaluateDig`/`evaluateNavigate`); as 4 skills (navigate/dig/follow/attack) sempre retornam `SkillResult` grounded e nunca lançam como fluxo normal (D-08/D-12); o execute node deriva a memória do `outcome`/`observed` real em vez da resolução da Promise (bug de raiz morto, D-09 B); `MemEvent` estendido com outcome/observed/expected (D-13); post-filter determinístico reescreve afirmações de quantidade na fala contra o delta real (D-10). 279 testes pass (1 fail pré-existente de config `.env`). Métrica de drift ao vivo (LM Studio + servidor) fica como verificação humana não-bloqueante.
 
+**Phase 08.1 (Refatorar Memória — ChromaDB + Fiação + POIs + Morte) completa 2026-06-21:** consertado o bug de fiação (`persistEvent` nunca chamado → `events=0`) via helper `recordEvent` em 6 call-sites; camada vetorial migrada de sqlite-vec para ChromaDB (`localhost:8000`, circuit breaker hand-rolled que degrada sem abortar o loop); o LLM agora consome memórias recuperadas (KNN top-3 no caminho de AÇÃO, seção `Memórias relevantes:`); memória espacial via `places` com POIs `danger`/`resource`/`village` + busca por proximidade injetada no prompt (`nearbyPlacesString`); evento de morte registrado; tabela de lições como semente da Phase 14. GAP-01 (POIs incompletos) fechado no 08.1-07. 25/25 must-haves verificados; loop central de memória **PASSOU em teste ao vivo** (events>0, reflexão, vetor no Chroma, recall KNN `score=1.89`, morte→death+danger). `base`/`landmark`/criação-de-lições deferidos p/ Phase 14.
+
 A espinha cognitiva (perceber → decidir → agir), o loop com LLM local, e toda a camada de persistência/reflexão/identidade (Fase 4) estão **implementadas e cobertas por testes unitários/smoke**. Persistência ao vivo foi parcialmente comprovada (perfil de jogador + holder gravados em SQLite/WAL).
 
 ### Known Gaps (v1.0 shipped com dívida consciente)
@@ -135,4 +137,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-19 — Phase 7 (Grounding + SkillResult) completa: toda skill retorna resultado verificado por delta real e o agente só relata o que o estado confirma (mata "peguei 10 tábuas")*
+*Last updated: 2026-06-21 — Phase 08.1 (Refatorar Memória) completa: events persistem, vetores no ChromaDB, LLM consome memórias via KNN no caminho de AÇÃO, POIs espaciais (danger/resource/village) + morte registrada — loop de memória comprovado ao vivo*
