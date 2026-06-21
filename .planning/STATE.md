@@ -128,9 +128,10 @@ Recent decisions affecting current work:
 | 260619-rv8 | Tratar morte/void do bot (snapshot null + parada graciosa por deadTicks) e vazamento de RAM (poda periódica do MemorySaver via deleteThread) | 2026-06-19 | eb1df53 | [260619-rv8-tratar-morte-void-do-bot-e-vazamento-de-](./quick/260619-rv8-tratar-morte-void-do-bot-e-vazamento-de-/) |
 | 260621-ir4 | Consertar starvation da reflexão no loop — pickDispatch puro dá prioridade ao reflect; ação não rouba mais o lock single-flight todo tick (reflexão nunca rodava ao vivo) | 2026-06-21 | 87ccfc2 | [260621-ir4-consertar-starvation-da-reflexao-no-loop](./quick/260621-ir4-consertar-starvation-da-reflexao-no-loop/) |
 | 260621-jhi | Parse lenient do priority na reflexão (schema sem .min/.max) + clamp [0,1] na aplicação — destrava embedding/addVector no Chroma que o modelo local quebrava ao emitir priority 10/12/8 | 2026-06-21 | 9ca318d | [260621-jhi-consertar-parse-lenient-do-priority-na-r](./quick/260621-jhi-consertar-parse-lenient-do-priority-na-r/) |
+| 260621-lj3 | Aposentar de vez a vec_events e a dependência sqlite-vec — openDb deixa de carregar o sqlite-vec e de criar a virtual table vec0; dependência removida de package.json/bun.lock (SQLite vira só relacional; memória vetorial 100% no ChromaDB); órfã antiga deixada inerte | 2026-06-21 | 541cd16 | [260621-lj3-aposentar-de-vez-a-vec-events-e-a-depend](./quick/260621-lj3-aposentar-de-vez-a-vec-events-e-a-depend/) |
 
 ## Session Continuity
 
-Last session: 2026-06-21T18:08:24.654Z
-Stopped at: Completed 08.1-07-PLAN.md
+Last session: 2026-06-21T18:38:05Z
+Stopped at: Completed quick task 260621-lj3 (aposentar vec_events + sqlite-vec)
 Resume file: None
