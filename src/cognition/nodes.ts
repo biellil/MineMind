@@ -10,7 +10,7 @@ import { skillRegistry } from '../skills/index'
 import { config, motivationConfigFor } from '../config'
 import type { CognitiveState } from './types'
 import type { ShortTermMemory } from '../memory/shortTerm'
-import { push } from '../memory/shortTerm'
+import { recordEvent } from '../memory/recordEvent'
 import type { CognitiveStateHolder } from './state'
 import type { LlmProvider } from '../llm/provider'
 import type { ActionDecision } from '../llm/schemas'
@@ -235,7 +235,7 @@ export function createNodes(deps: NodeDeps) {
     if (shouldAbandon(safety)) {
       log(`abandonando ${skill}:${target} (repetido ${config.antiRepeatN}x sem progresso)`)
       recordFailure(safety, target, now())
-      holder.memory = push(holder.memory, {
+      recordEvent(holder, {
         type: 'action',
         skill,
         target,
@@ -245,7 +245,7 @@ export function createNodes(deps: NodeDeps) {
         result: 'failure',
         reason: 'anti-repeat',
         timestamp: now(),
-      })
+      }, now())
       // Fase 07.1 Plan 03: emit após grounding do abandon (holder.lastObservedDelta não é atualizado
       // aqui mas não há lastObservedDelta a ler — o driver apenas acorda para o próximo tick).
       triggerBus.emit('actionFinished', { skill, outcome: 'no_effect' })
@@ -299,7 +299,7 @@ export function createNodes(deps: NodeDeps) {
         delta: { ...result.delta },
         at: now(),
       }
-      holder.memory = push(holder.memory, {
+      recordEvent(holder, {
         type: 'action',
         skill,
         target,
@@ -309,7 +309,7 @@ export function createNodes(deps: NodeDeps) {
         result: success ? 'success' : 'failure', // derivado (GRND-04)
         reason: result.reason,
         timestamp: now(),
-      })
+      }, now())
       log(`${result.outcome.toUpperCase()} ${skill} ${target} (${result.observed}/${result.expected})`)
       skillOutcome = result.outcome
     } catch (err) {
@@ -319,7 +319,7 @@ export function createNodes(deps: NodeDeps) {
       recordFailure(safety, target, now())
       // grounding gravado ANTES do emit (Pitfall 1 / T-07.1-10)
       holder.lastObservedDelta = { skill, target, outcome: 'error', observed: 0, expected: 0, delta: {}, at: now() }
-      holder.memory = push(holder.memory, {
+      recordEvent(holder, {
         type: 'action',
         skill,
         target,
@@ -329,7 +329,7 @@ export function createNodes(deps: NodeDeps) {
         result: 'failure',
         reason,
         timestamp: now(),
-      })
+      }, now())
       skillOutcome = 'error'
       log(`ERRO inesperado ${skill} ${target}: ${reason}`)
     } finally {

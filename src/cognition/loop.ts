@@ -18,7 +18,8 @@ import { motivationConfigFor } from '../config'
 import type { WorldSnapshot } from '../perception/types'
 import { shouldReflect, type ReflectionState } from './reflection'
 import { importanceOf } from '../memory/longTerm'
-import { getEvents, push } from '../memory/shortTerm'
+import { getEvents } from '../memory/shortTerm'
+import { recordEvent } from '../memory/recordEvent'
 import { persistHolder } from '../memory/holder.persistence'
 import { TriggerBus } from './trigger-bus'
 import type { TriggerConfig } from './trigger-bus'
@@ -122,7 +123,7 @@ async function runReflex(
     const nowTs = Date.now()
     if (nowTs - (lastReflexAt[reflex] ?? 0) > 3000) {
       lastReflexAt[reflex] = nowTs
-      holder.memory = push(holder.memory, {
+      recordEvent(holder, {
         type: 'action',
         skill: reflex,
         target: 'reflex',
@@ -132,7 +133,7 @@ async function runReflex(
         result: result.outcome === 'success' ? 'success' : 'failure',
         reason: result.reason,
         timestamp: nowTs,
-      })
+      }, nowTs)
       console.log(`[reflex] ${reflex} ${result.outcome} (${result.observed}/${result.expected})`)
     }
   } catch (err) {
