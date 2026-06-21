@@ -115,7 +115,7 @@ export function applyGoalUpdates(
     }
     if (u.action === 'drop') continue // filtra fora
     if (u.action === 'reprioritize' && u.priority !== undefined) {
-      out.push({ ...g, priority: u.priority })
+      out.push({ ...g, priority: Math.max(0, Math.min(1, u.priority)) })
       continue
     }
     out.push({ ...g }) // 'keep' ou 'reprioritize' sem priority — inalterado

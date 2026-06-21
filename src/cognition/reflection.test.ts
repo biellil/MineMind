@@ -173,6 +173,20 @@ test('applyGoalUpdates: reprioritize muda priority (com priority fornecido)', ()
   expect(out[0]!.priority).toBe(0.9)
 })
 
+test('applyGoalUpdates: clampa priority acima de 1 para 1', () => {
+  const goals = [goal('a', 0.2)]
+  const updates: ReflectionOutput['goalUpdates'] = [{ id: 'a', action: 'reprioritize', priority: 10 }]
+  const out = applyGoalUpdates(goals, updates, 100)
+  expect(out[0]!.priority).toBe(1)
+})
+
+test('applyGoalUpdates: clampa priority abaixo de 0 para 0', () => {
+  const goals = [goal('a', 0.2)]
+  const updates: ReflectionOutput['goalUpdates'] = [{ id: 'a', action: 'reprioritize', priority: -3 }]
+  const out = applyGoalUpdates(goals, updates, 100)
+  expect(out[0]!.priority).toBe(0)
+})
+
 test('applyGoalUpdates: reprioritize sem priority é no-op de prioridade (mantém goal)', () => {
   const goals = [goal('a', 0.2)]
   const updates: ReflectionOutput['goalUpdates'] = [{ id: 'a', action: 'reprioritize' }]

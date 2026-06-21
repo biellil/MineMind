@@ -51,7 +51,7 @@ export const ReflectionOutputSchema = z.object({
   goalUpdates: z.array(z.object({
     id: z.string(),
     action: z.enum(['keep', 'drop', 'reprioritize']),
-    priority: z.number().min(0).max(1).optional(),
+    priority: z.number().optional().describe('urgência normalizada em [0,1]; valores fora da faixa são clampados na aplicação'),
   })).max(8).default([]),
 })
 

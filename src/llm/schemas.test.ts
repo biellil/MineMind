@@ -1,7 +1,7 @@
 // src/llm/schemas.test.ts
 // LLM-02 / CHAT-03: schema de decisão com enum FECHADO + persona prompt por disposição.
 import { test, expect } from 'bun:test'
-import { ActionDecisionSchema } from './schemas'
+import { ActionDecisionSchema, ReflectionOutputSchema } from './schemas'
 import { buildPersonaPrompt, serializeContext } from './prompts'
 import type { WorldSnapshot } from '../perception/types'
 import type { MemEvent } from '../cognition/types'
@@ -46,6 +46,17 @@ test('ActionDecisionSchema rejeita reason maior que 200 chars', () => {
   expect(() =>
     ActionDecisionSchema.parse({ action: 'idle', reason: 'r'.repeat(201) }),
   ).toThrow()
+})
+
+// === ReflectionOutputSchema: parse lenient no priority (quick 260621-jhi) ===
+
+test('ReflectionOutputSchema: priority fora de [0,1] NÃO derruba o parse e summary sobrevive', () => {
+  const out = ReflectionOutputSchema.parse({
+    summary: 'resumo válido',
+    goalUpdates: [{ id: 'g1', action: 'reprioritize', priority: 10 }],
+  })
+  expect(out.summary).toBe('resumo válido')
+  expect(out.goalUpdates[0]!.priority).toBe(10)
 })
 
 // === buildPersonaPrompt: persona estática por disposição (CHAT-03 / D-01/D-02/D-06) ===
