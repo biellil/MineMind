@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import type { Bot } from 'mineflayer'
 import type { SkillResult } from '../grounding/types'
+import { selectToolFor } from './equip'
 
 export const AttackSchema = z.object({
   entityName: z.string().max(64).describe('Nome do jogador ou mob a atacar'),
@@ -31,6 +32,14 @@ export async function attack(bot: Bot, rawParams: unknown): Promise<SkillResult>
   )
   if (!target) {
     return { outcome: 'no_effect', observed: 0, expected: 1, delta: {}, reason: `alvo '${entityName}' não encontrado` }
+  }
+  // B2/D-16: pré-flight de arma (sword/axe) — binário por categoria (D-17, sem tier). Best-effort:
+  // falha de equip NÃO bloqueia o golpe nem altera o grounding do attack.
+  try {
+    const weapon = selectToolFor(bot, 'weapon')
+    if (weapon && bot.heldItem?.name !== weapon.name) await bot.equip(weapon, 'hand')
+  } catch {
+    /* best-effort; não bloqueia o golpe */
   }
   bot.attack(target) // index.d.ts:345 — void, golpe único
   return { outcome: 'success', observed: 1, expected: 1, delta: {} }

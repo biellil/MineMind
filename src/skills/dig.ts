@@ -8,6 +8,7 @@ import { executeWithSafety } from './executor'
 import { captureGroundState } from '../grounding/capture'
 import { evaluateDig } from '../grounding/evaluate'
 import type { SkillResult } from '../grounding/types'
+import { selectToolFor } from './equip'
 import { config } from '../config'
 
 export const DigSchema = z.object({
@@ -39,6 +40,16 @@ export async function dig(bot: Bot, rawParams: unknown): Promise<SkillResult> {
   const signal = (rawParams as Record<string, unknown>)?.signal as AbortSignal | undefined
   const { target, count } = DigSchema.parse(rawParams)
   const before = captureGroundState(bot, typeof target === 'string' ? undefined : target)
+
+  // B2/D-16: pré-flight de ferramenta — rede de segurança (o LLM local frequentemente omite equipar).
+  // Binário por categoria (D-17, sem tier). Best-effort: falha de equip NÃO aborta o dig (o grounding
+  // por delta decide o sucesso real).
+  try {
+    const tool = selectToolFor(bot, 'pickaxe')
+    if (tool && bot.heldItem?.name !== tool.name) await bot.equip(tool, 'hand')
+  } catch {
+    /* pré-flight best-effort; o grounding por delta decide o sucesso */
+  }
 
   // D-17: AbortSignal honrado via bot.pathfinder.stop()
   if (signal) {
