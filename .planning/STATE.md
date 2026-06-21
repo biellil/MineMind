@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
 status: executing
-stopped_at: Completed 08.1-04-PLAN.md
-last_updated: "2026-06-21T14:59:52.804Z"
+stopped_at: Completed 08.1-05-PLAN.md
+last_updated: "2026-06-21T15:10:15.605Z"
 last_activity: 2026-06-21
 progress:
   total_phases: 12
   completed_phases: 3
   total_plans: 21
-  completed_plans: 18
+  completed_plans: 19
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 ## Current Position
 
 Phase: 08.1 (refatorar-memoria-chromadb) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-06-21
 
@@ -66,6 +66,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 08.1 P02 | 4 | 2 tasks | 4 files |
 | Phase 08.1 P03 | 9 | 3 tasks | 4 files |
 | Phase 08.1 P04 | 11 | 3 tasks | 7 files |
+| Phase 08.1 P05 | 7 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,7 @@ Recent decisions affecting current work:
 - [Phase 08.1]: 08.1-02: recordEvent (push CP + persistEvent LP, embedding null) plugado nos 4 pontos de origem (nodes.ts x3, loop.ts x1) — mata events=0 ao vivo; try/catch interno preserva o tick (Core Value); embedding null mantém o LLM fora do caminho quente (D-07)
 - [Phase 08.1]: 08.1-03: ChromaDB isolado atrás de ChromaMemoryClient (health/addVector/queryVectors/isAvailable); circuit breaker hand-rolled + withTimeout via Promise.race garantem que o loop nunca aborta nem pendura por causa do Chroma (D-02); get-or-create cosine dim 768 bring-your-own (D-03/D-05/D-23); aviso OFFLINE debounced (D-22); now injetável torna o breaker testável sem servidor
 - [Phase 08.1]: 08.1-04: consolidate grava o vetor no ChromaDB (String(id), D-07); retrieve consulta o Chroma (KNN) preservando o scoring Generative Agents; chroma é param OPCIONAL (default null → fallback de recência D-02); vec0 aposentado em consolidate E persistEvent (sem tabela órfã); health-check boot + chromaProbeTimer periódico religam o caminho vetorial (D-22)
+- [Phase 08.1]: 08.1-05: caminho de AÇÃO recupera memórias (top-k=3) por query=embedding(currentGoal) cacheado por hash do goal (D-11, ~1 embed por troca de goal); seção 'Memórias relevantes:' injetada antes do FATO VERIFICADO (D-12); log [recall] por memória torna o uso da memória verificável ao vivo (D-13) — correção central da fase
 
 ### Roadmap Evolution
 
@@ -123,6 +125,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-21T14:59:52.797Z
-Stopped at: Completed 08.1-04-PLAN.md
+Last session: 2026-06-21T15:10:02.192Z
+Stopped at: Completed 08.1-05-PLAN.md
 Resume file: None
