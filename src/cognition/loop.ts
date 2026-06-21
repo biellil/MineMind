@@ -20,6 +20,7 @@ import { shouldReflect, type ReflectionState } from './reflection'
 import { importanceOf } from '../memory/longTerm'
 import { getEvents } from '../memory/shortTerm'
 import { recordEvent } from '../memory/recordEvent'
+import { createChromaClient } from '../memory/chromaClient'
 import { persistHolder } from '../memory/holder.persistence'
 import { TriggerBus } from './trigger-bus'
 import type { TriggerConfig } from './trigger-bus'
@@ -153,6 +154,16 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
   const provider = createProvider({ db: holder.db })
   const deliberator = createDeliberator()
 
+  // Plan 04 (D-22 / Pattern 4): cliente Chroma 1x por sessão — índice vetorial DERIVADO/descartável
+  // (D-01). Toda chamada passa por breaker+timeout e degrada gracioso (o loop nunca aborta por causa
+  // do Chroma). Health-check no boot (não bloqueia) + re-sondagem periódica (chromaProbeTimer) fazem
+  // o caminho vetorial RELIGAR sozinho quando o Chroma volta (half-open do breaker).
+  const chroma = createChromaClient()
+  void chroma.health().then((ok) => {
+    if (ok) console.log('[chroma] online — memória vetorial habilitada')
+    // se !ok, o próprio chromaClient já emitiu o aviso [chroma] OFFLINE debounced (D-22)
+  })
+
   // Fase 07.1 Plan 03: TriggerBus instanciado POR SESSÃO (D-12) — emite actionFinished, nightFell,
   // dayBroke, hostileNearby, stuck, hungry. O nó execute emite actionFinished diretamente via emit().
   // Cleanup obrigatório no bot.once('end') — evita listener leak (T-07.1-04 / D-11).
@@ -216,6 +227,8 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
     // Fase 07.1 Plan 03: limpa os timers autônomos (D-05/D-11)
     clearInterval(flushTimer)
     clearInterval(pruneTimer)
+    // Plan 04 (D-22): limpa o timer de re-sondagem do Chroma (sem leak)
+    clearInterval(chromaProbeTimer)
     try {
       if (holder.db) {
         persistHolder(holder.db, holder, Date.now())
@@ -254,6 +267,7 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
   // Declarados como variáveis capturadas pela closure do bot.once('end').
   let flushTimer: ReturnType<typeof setInterval> | undefined
   let pruneTimer: ReturnType<typeof setInterval> | undefined
+  let chromaProbeTimer: ReturnType<typeof setInterval> | undefined
 
   // D-05: heartbeat autônomo de flush periódico (independe do ritmo do tick)
   if (config.holderFlushIntervalMs > 0) {
@@ -276,6 +290,14 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
         console.error('[loop] poda do checkpointer falhou:', err instanceof Error ? err.message : err)
       }
     }, config.checkpointPruneIntervalMs)
+  }
+
+  // Plan 04 (D-22): re-sondagem periódica do Chroma — combinada com o half-open do breaker,
+  // religa o caminho vetorial sozinho quando o Chroma volta. `health()` nunca lança (degrada).
+  if (config.chromaCooldownMs > 0) {
+    chromaProbeTimer = setInterval(() => {
+      void chroma.health()
+    }, config.chromaCooldownMs)
   }
 
   // Fase 07.1 Plan 03: nextWakeMs inicial = timeout-piso de navegação (antes de qualquer sinal do grafo)
@@ -358,7 +380,7 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
             // reflexão DE FATO executou (ran === true); caso contrário o gatilho persiste e tenta
             // de novo num tick posterior (na janela livre de inFlight entre ações).
             void deliberator
-              .maybeDeliberate(deliberator.state, holder, provider, lastSnapshot, 'reflect', reflectNow)
+              .maybeDeliberate(deliberator.state, holder, provider, lastSnapshot, 'reflect', reflectNow, chroma)
               .then((ran) => {
                 if (ran) {
                   reflState.lastReflectionAt = reflectNow

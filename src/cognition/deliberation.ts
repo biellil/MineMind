@@ -24,6 +24,7 @@ import { getEvents } from '../memory/shortTerm'
 import { consolidate, applyGoalUpdates } from './reflection'
 import { retrieve } from '../memory/longTerm'
 import { persistHolder } from '../memory/holder.persistence'
+import type { ChromaMemoryClient } from '../memory/chromaClient'
 import { config } from '../config'
 
 /** Gatilhos de deliberação (D-19). `reflect` (REFL-01/D-12) reusa o single-flight existente. */
@@ -104,6 +105,7 @@ export async function maybeDeliberate(
   snapshot: WorldSnapshot,
   trigger: DeliberationTrigger,
   now: number,
+  chroma: ChromaMemoryClient | null = null,
 ): Promise<boolean> {
   if (state.inFlight) return false // single-flight (D-02/D-19/D-12) — vale p/ ação E reflexão
   // D-19: o orçamento de replan é APENAS para o caminho de AÇÃO. A reflexão pula este gate
@@ -116,7 +118,7 @@ export async function maybeDeliberate(
   try {
     if (trigger === 'reflect') {
       // REFL-01/D-12: ramo de reflexão — reusa o lock single-flight herdado (não sobrepõe ação).
-      await runReflection(holder, provider, snapshot, now)
+      await runReflection(holder, provider, snapshot, now, chroma)
     } else {
       // Caminho de AÇÃO existente. SOC-02/D-14: injeta a personalidade evolutiva no prompt.
       // LLM-02: guia de decisão (o que cada ação faz + anti-repetição) anexado à persona —
@@ -167,6 +169,7 @@ export async function runReflection(
   provider: LlmProvider,
   snapshot: WorldSnapshot,
   now: number,
+  chroma: ChromaMemoryClient | null = null,
 ): Promise<void> {
   const recent = getEvents(holder.memory)
   let summary: string | undefined
@@ -175,7 +178,7 @@ export async function runReflection(
   if (await provider.available()) {
     try {
       // Contexto recuperado (D-08): memórias relevantes ao colorir a reflexão (fallback sem embedding).
-      const recalled = holder.db ? retrieve(holder.db, null, now, { limit: 5 }) : []
+      const recalled = holder.db ? await retrieve(holder.db, chroma, null, now, { limit: 5 }) : []
       const messages: BaseMessage[] = [
         new SystemMessage(buildPersonaPrompt(holder.disposition, holder.personality)),
         new HumanMessage(
@@ -206,7 +209,20 @@ export async function runReflection(
       emb = null
     }
   }
-  if (holder.db) consolidate(holder.db, recent, now, emb, summary)
+  // Warning 1: captura o id do evento consolidado para gravar o vetor no Chroma (D-07).
+  const idConsolidado = holder.db ? consolidate(holder.db, recent, now, emb, summary) : null
+
+  // D-07: o VETOR do evento consolidado vai para o ChromaDB (não mais para o vec0). addVector já
+  // degrada gracioso (breaker) — se o Chroma estiver offline, o relacional segue intacto (D-01).
+  if (chroma && emb && summary && idConsolidado != null) {
+    await chroma.addVector({
+      id: String(idConsolidado), // Open Question 2: String do lastInsertRowid consolidado
+      embedding: emb, // 768-dim, sempre local
+      metadata: { type: 'reflection', ts: now, importance: 8 },
+      document: summary,
+    })
+    console.log(`[reflect] consolidado #${idConsolidado} (vetor enviado ao chroma se online)`)
+  }
 
   // Atualiza objetivos (fallback no-op se vazio):
   holder.goals = applyGoalUpdates(holder.goals, updates, now)
@@ -228,6 +244,7 @@ export function createDeliberator(): {
     snapshot: WorldSnapshot,
     trigger: DeliberationTrigger,
     now: number,
+    chroma?: ChromaMemoryClient | null,
   ) => Promise<boolean>
 } {
   const state: DeliberationState = { inFlight: false, lastRunAt: -Infinity }

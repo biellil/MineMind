@@ -192,6 +192,9 @@ test('C) maybeDeliberate("reflect") single-flight: 2ª chamada concorrente retor
     'reflect',
     Date.now(),
   )
+  // Plan 04: runReflection ganhou um await extra (retrieve agora é async — KNN no Chroma) ANTES de
+  // decide; drena microtasks para que a 1ª reflexão alcance provider.decide antes do assert.
+  for (let i = 0; i < 5; i++) await Promise.resolve()
   expect(decideCalls).toBe(1)
 
   // libera o gate: a 1ª reflexão conclui.
