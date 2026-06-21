@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
 status: executing
-stopped_at: Completed 08.1-01-PLAN.md
-last_updated: "2026-06-21T14:32:17.684Z"
+stopped_at: Completed 08.1-02-PLAN.md
+last_updated: "2026-06-21T14:38:22.598Z"
 last_activity: 2026-06-21
 progress:
   total_phases: 12
   completed_phases: 3
   total_plans: 21
-  completed_plans: 15
+  completed_plans: 16
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 ## Current Position
 
 Phase: 08.1 (refatorar-memoria-chromadb) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-06-21
 
@@ -63,6 +63,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 08 P02 | 7 | 2 tasks | 7 files |
 | Phase 08 P03 | 6 | 2 tasks | 6 files |
 | Phase 08.1 P01 | 4 | 2 tasks | 3 files |
+| Phase 08.1 P02 | 4 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,7 @@ Recent decisions affecting current work:
 - [Phase 08]: 08-02: eat (D-05) equipa→consume→re-equip grounded por delta LOCAL de bot.food (Pitfall 2, não toca GroundState); attack (D-15) vira 1-shot real via bot.attack sem perseguir (stub removido); eat/attack registrados no skillRegistry
 - [Phase 08]: 08-03: flee (D-06) GoalInvert(GoalFollow)+setGoal(goal,true) com fallback sprint cego; abort forçado setGoal(null) D-07; grounded por delta de distância; shelter (D-08) cavar-vs-pilar com guarda anti-lava + placeBlock mínimo; flee/shelter no skillRegistry
 - [Phase 08.1]: 08.1-01: schema migra user_version 1→2 por degraus idempotente (cold start 0→2 e DB v1→2 no mesmo caminho); places.type (D-14), tabela lessons (D-19), idx_places_xz (D-16); vec_events fica inerte (aposentado no Plan 04); PlaceType/LessonRow exportados p/ Plans 05/06
+- [Phase 08.1]: 08.1-02: recordEvent (push CP + persistEvent LP, embedding null) plugado nos 4 pontos de origem (nodes.ts x3, loop.ts x1) — mata events=0 ao vivo; try/catch interno preserva o tick (Core Value); embedding null mantém o LLM fora do caminho quente (D-07)
 
 ### Roadmap Evolution
 
@@ -117,6 +119,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-21T14:32:01.533Z
-Stopped at: Completed 08.1-01-PLAN.md
+Last session: 2026-06-21T14:38:22.591Z
+Stopped at: Completed 08.1-02-PLAN.md
 Resume file: None
