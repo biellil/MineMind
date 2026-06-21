@@ -61,6 +61,9 @@ export interface CognitiveStateHolder {
     delta: Record<string, number>
     at: number
   } | null
+  /** Cache do embedding da query de recuperação (D-11), chaveado por hash do texto do goal. */
+  queryEmbedding: number[] | null
+  queryEmbeddingHash: string | null
 }
 
 /**
@@ -81,5 +84,7 @@ export function createCognitiveStateHolder(now: number = Date.now()): CognitiveS
     db: null,
     personality: defaultPersonality(now),
     lastObservedDelta: null,
+    queryEmbedding: null,
+    queryEmbeddingHash: null,
   }
 }

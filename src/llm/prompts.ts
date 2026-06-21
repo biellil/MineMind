@@ -105,6 +105,10 @@ function serializeUnknown(label: string, value: unknown, max: number): string {
  * e os ~10 eventos de memória mais recentes.
  *
  * Tolerante a snapshot null e arrays/objetos vazios — NUNCA lança.
+ *
+ * D-11/D-12: o parâmetro opcional `recalled` (memórias recuperadas top-k) é renderizado numa
+ * seção "Memórias relevantes:" posicionada DEPOIS dos eventos recentes e ANTES do FATO VERIFICADO
+ * (que permanece a ÚLTIMA linha). É opcional para não quebrar call-sites que passam 4-5 args.
  */
 export function serializeContext(
   snapshot: WorldSnapshot | null,
@@ -118,6 +122,7 @@ export function serializeContext(
     observed: number
     expected: number
   } | null,
+  recalled?: ReadonlyArray<{ id: number; summary: string; score: number }>,
 ): string {
   const lines: string[] = []
 
@@ -170,6 +175,13 @@ export function serializeContext(
   if (recent.length > 0) {
     const evts = recent.map((e) => truncate(JSON.stringify(e), 120)).join('\n  ')
     lines.push(`Eventos recentes:\n  ${evts}`)
+  }
+
+  // D-11/D-12: memórias recuperadas (top-k), DEPOIS dos eventos recentes e ANTES do FATO VERIFICADO.
+  if (recalled && recalled.length > 0) {
+    lines.push(
+      'Memórias relevantes:\n  ' + recalled.map((r) => truncate(r.summary, 120)).join('\n  '),
+    )
   }
 
   // D-09 A: o último delta observado é FATO AUTORITATIVO — o LLM narra SÓ a partir disto.
