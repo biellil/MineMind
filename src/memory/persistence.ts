@@ -1,19 +1,22 @@
 // src/memory/persistence.ts
-// MEM-02 / D-01/D-02/D-03: fundação de persistência. Um único arquivo SQLite (relacional +
-// vetorial via sqlite-vec) com schema versionado por PRAGMA user_version, PRAGMAs de
-// durabilidade (WAL) e recuperação graceful contra corrupção (Core Value: o loop NUNCA aborta).
+// MEM-02 / D-02/D-03: fundação de persistência. Um único arquivo SQLite RELACIONAL com schema
+// versionado por PRAGMA user_version, PRAGMAs de durabilidade (WAL) e recuperação graceful contra
+// corrupção (Core Value: o loop NUNCA aborta).
+//
+// Memória VETORIAL vive no ChromaDB (serviço externo; embeddings locais via LM Studio) — o SQLite
+// é só relacional. A virtual table `vec_events` (vec0/sqlite-vec) foi APOSENTADA (quick 260621-lj3):
+// não é mais criada em DBs novos e o módulo sqlite-vec não é mais carregado no boot. DBs antigos
+// mantêm a `vec_events` órfã/inerte — ela abre sem o módulo (quick_check=ok) e não afeta o relacional.
 //
 // Schema atual: v2 (D-14 places.type, D-19 tabela lessons, D-16 idx_places_xz). A migração é
 // INCREMENTAL POR DEGRAUS e idempotente: roda tanto em cold start (user_version=0) quanto em DBs
 // já existentes em v1, levando ambos a v2 sem perder dados (08.1-01).
-//
-// Bind de embedding: Float32Array DIRETO (não Buffer.from) — provado no Wave 0 (04-01-SUMMARY).
 import { Database } from 'bun:sqlite'
-import * as sqliteVec from 'sqlite-vec'
 import { renameSync, existsSync } from 'node:fs'
 import { config } from '../config'
 
-/** Dimensão do índice vetorial vec0 — deve casar com o modelo de embedding (Pitfall 2). */
+/** Dimensão dos embeddings — deve casar com o modelo (Pitfall 2). Usado pelo ChromaDB e pela
+ *  validação de dimensão em chromaClient/longTerm (não há mais índice vetorial no SQLite). */
 export const EMBEDDING_DIM = config.embeddingDim
 /** Versão do schema. Migrations checam PRAGMA user_version e aplicam migrações por degraus. */
 const SCHEMA_VERSION = 2
@@ -32,7 +35,7 @@ export interface LessonRow {
   created_at: number
 }
 
-/** DDL relacional (Pattern 2). A virtual table vec0 é criada SEPARADAMENTE (ver applySchema). */
+/** DDL relacional (Pattern 2). */
 const RELATIONAL_DDL = `
   CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY, type TEXT NOT NULL, ts INTEGER NOT NULL,
@@ -50,13 +53,6 @@ const RELATIONAL_DDL = `
     visits INTEGER NOT NULL DEFAULT 1, notes TEXT );
   CREATE TABLE IF NOT EXISTS kv ( key TEXT PRIMARY KEY, value TEXT NOT NULL, ts INTEGER NOT NULL );
 `
-
-/** DDL da virtual table vec0 (dimensão dinâmica). Não pode entrar em transação em algumas versões. */
-function vecDdl(): string {
-  return `CREATE VIRTUAL TABLE IF NOT EXISTS vec_events USING vec0(
-    embedding float[${EMBEDDING_DIM}] distance_metric=cosine,
-    ts integer, importance integer, +event_id integer )`
-}
 
 /** Aplica PRAGMAs de durabilidade/performance (D-02). */
 function applyPragmas(db: Database): void {
@@ -82,8 +78,7 @@ function addColumnIfMissing(db: Database, table: string, column: string, typeDdl
  * Aplica o schema POR DEGRAUS, idempotente, até SCHEMA_VERSION (D-03). Cobre dois casos com o
  * mesmo caminho: cold start (user_version=0 — cria o schema base v1) e DB já em v1 (só migra).
  *
- * - version < 1 (cold start): cria RELATIONAL_DDL (transação) + vec0 (FORA da transação — alguns
- *   builds do vec0 não suportam CREATE VIRTUAL TABLE dentro de BEGIN). NÃO seta user_version aqui;
+ * - version < 1 (cold start): cria RELATIONAL_DDL (transação). NÃO seta user_version aqui;
  *   a sequência de migração abaixo leva o DB recém-criado de v1 → v2 no mesmo boot.
  * - version < 2 (cold start recém-criado OU DB existente em v1): migração 1→2 (D-14/D-19/D-16).
  *
@@ -99,9 +94,6 @@ export function applySchema(db: Database): void {
       db.run(RELATIONAL_DDL)
     })
     createRelational()
-    // vec0 fora da transação (ver nota acima). A TABELA vec_events permanece nesta fase como
-    // artefato (a escrita/leitura vetorial migra p/ ChromaDB no Plan 04 — D-01).
-    db.run(vecDdl())
   }
 
   if (version < 2) {
@@ -125,9 +117,10 @@ export function applySchema(db: Database): void {
 }
 
 /**
- * Abre (ou cria) o store SQLite único. Carrega sqlite-vec, aplica PRAGMAs e o schema.
+ * Abre (ou cria) o store SQLite relacional. Aplica PRAGMAs e o schema (sem carregar sqlite-vec —
+ * a memória vetorial vive no ChromaDB). DBs antigos com a `vec_events` órfã abrem normalmente.
  *
- * Recuperação graceful (D-03): se a abertura/carga/schema falhar OU integrity_check acusar
+ * Recuperação graceful (D-03): se a abertura/schema falhar OU integrity_check acusar
  * corrupção, o arquivo corrompido é renomeado para `<path>.corrupt-<ts>` e um DB novo é
  * aberto do zero (recursão única). NUNCA propaga — o Core Value exige que o loop sempre rode.
  */
@@ -135,7 +128,6 @@ export function openDb(path: string = config.dbPath, _isRetry = false): Database
   let db: Database | undefined
   try {
     db = new Database(path)
-    sqliteVec.load(db)
     applyPragmas(db)
 
     // Detecta corrupção ANTES de mexer no schema (quick_check é mais barato que integrity_check).
@@ -158,7 +150,6 @@ export function openDb(path: string = config.dbPath, _isRetry = false): Database
       console.error('[persistence] retentativa também falhou — usando DB em memória (volátil).')
       const mem = new Database(':memory:')
       try {
-        sqliteVec.load(mem)
         applyPragmas(mem)
         applySchema(mem)
       } catch {
