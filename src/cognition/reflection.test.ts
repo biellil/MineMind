@@ -113,10 +113,8 @@ test('consolidate: sem LLM/summary promove UM evento episódico CP→LP (events)
   expect(row.importance).toBeGreaterThanOrEqual(config.ltImportanceFloor)
   expect(row.importance).toBeGreaterThanOrEqual(8)
 
-  // Plan 04: o vec0 foi aposentado — consolidate NÃO escreve mais em vec_events; o vetor vai
-  // para o ChromaDB (responsabilidade do caller runReflection, fora desta função síncrona).
-  const vecRow = db.prepare('SELECT COUNT(*) AS n FROM vec_events WHERE rowid = ?').get(id) as { n: number }
-  expect(vecRow.n).toBe(0)
+  // O vec0 foi aposentado — consolidate NÃO escreve mais vetor no SQLite; o vetor vai para o
+  // ChromaDB (responsabilidade do caller runReflection, fora desta função síncrona).
   db.close()
 })
 
@@ -148,8 +146,6 @@ test('consolidate: sem embedding ainda persiste o evento (degradação graciosa 
   expect(id).not.toBeNull()
   const after = (db.prepare('SELECT COUNT(*) AS n FROM events').get() as { n: number }).n
   expect(after).toBe(before + 1)
-  const vecRow = db.prepare('SELECT COUNT(*) AS n FROM vec_events WHERE rowid = ?').get(id) as { n: number }
-  expect(vecRow.n).toBe(0)
   db.close()
 })
 

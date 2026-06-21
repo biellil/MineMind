@@ -5,19 +5,14 @@
 // Rodar:  bun run test/db.ts   (pode passar outro caminho: bun run test/db.ts ./outro.sqlite)
 
 import { Database } from 'bun:sqlite'
-import * as sqliteVec from 'sqlite-vec'
 
 const path = process.argv[2] || './minemind.sqlite'
 console.log(`[db] abrindo ${path}\n`)
 
+// Abre SEM sqlite-vec (aposentado em 260621-lj3): DBs antigos com a vec_events órfã abrem normalmente.
 const db = new Database(path)
-try {
-  sqliteVec.load(db)
-} catch (e) {
-  console.log('(sqlite-vec não carregou:', (e as Error).message, ')')
-}
 
-const tables = ['events', 'vec_events', 'players', 'places', 'kv']
+const tables = ['events', 'players', 'places', 'kv']
 console.log('=== CONTAGEM POR TABELA ===')
 for (const t of tables) {
   try {

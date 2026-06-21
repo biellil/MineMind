@@ -142,9 +142,7 @@ test('persistEvent: importância >= floor insere em events (vec0 aposentado — 
 
   const evRow = db.prepare('SELECT COUNT(*) AS n FROM events WHERE id = ?').get(id) as { n: number }
   expect(evRow.n).toBe(1)
-  // Plan 04 (Warning 2): persistEvent NÃO escreve mais em vec_events — o vetor é exclusivo da reflexão (Chroma).
-  const vecRow = db.prepare('SELECT COUNT(*) AS n FROM vec_events WHERE rowid = ?').get(id) as { n: number }
-  expect(vecRow.n).toBe(0)
+  // persistEvent não escreve mais em vec_events — o vetor é exclusivo da reflexão (Chroma).
   db.close()
 })
 

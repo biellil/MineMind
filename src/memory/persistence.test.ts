@@ -1,13 +1,13 @@
 // src/memory/persistence.test.ts
 // MEM-02 / D-02/D-03: prova a fundação de persistência —
-//  1) cold start cria o schema versionado (user_version=2 + 5 tabelas)
+//  1) cold start cria o schema versionado (user_version=2 + 5 tabelas relacionais)
 //  2) sobrevivência a reabertura (base de MEM-02)
 //  3) recuperação graceful de um arquivo corrompido (D-03 — nunca aborta)
-//  4) dimensão do vec0 = config.embeddingDim (Pitfall 2)
+// (vec0/vec_events foi aposentado — quick 260621-lj3; a memória vetorial vive no ChromaDB.)
 import { test, expect, afterAll } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { unlinkSync, existsSync, writeFileSync, readdirSync } from 'node:fs'
-import { openDb, kvSet, kvGet, EMBEDDING_DIM } from './persistence'
+import { openDb, kvSet, kvGet } from './persistence'
 
 const DB_PATH = './minemind.persist.test.sqlite'
 // Path isolado para o teste de corrupção: WAL/handle de outro teste não pode "salvar" o
@@ -15,7 +15,7 @@ const DB_PATH = './minemind.persist.test.sqlite'
 const CORRUPT_PATH = './minemind.persist.corrupt.test.sqlite'
 
 // Windows mantém o handle do SQLite/WAL por um instante após db.close(); unlink direto lança EBUSY.
-// Guardamos a remoção (mesma estratégia do vec.smoke.test.ts). Varre TODOS os artefatos de teste.
+// Guardamos a remoção. Varre TODOS os artefatos de teste.
 function safeCleanup(): void {
   const prefixes = ['minemind.persist.test.sqlite', 'minemind.persist.corrupt.test.sqlite']
   const targets: string[] = []
@@ -52,9 +52,11 @@ test('cold start: openDb num path inexistente cria o schema (user_version=2 + 5 
       name: string
     }[]
   ).map((r) => r.name)
-  for (const t of ['events', 'players', 'places', 'kv', 'vec_events']) {
+  for (const t of ['events', 'players', 'places', 'kv', 'lessons']) {
     expect(tables).toContain(t)
   }
+  // vec_events foi aposentada (260621-lj3): DBs novos NÃO a criam mais.
+  expect(tables).not.toContain('vec_events')
   db.close()
 })
 
@@ -90,33 +92,4 @@ test('recuperação graceful: arquivo corrompido NÃO lança e retorna um DB uti
   )
   expect(hasCorrupt).toBe(true)
   db!.close()
-})
-
-test('vec0 tem dimensão = config.embeddingDim: Float32Array do tamanho certo OK, errado lança (Pitfall 2)', () => {
-  safeCleanup()
-  const db = openDb(DB_PATH)
-
-  const right = new Float32Array(EMBEDDING_DIM).fill(0.1)
-  expect(() => {
-    db.prepare('INSERT INTO vec_events (rowid, embedding, ts, importance, event_id) VALUES (?, ?, ?, ?, ?)').run(
-      1,
-      right,
-      Date.now(),
-      5,
-      1,
-    )
-  }).not.toThrow()
-
-  const wrong = new Float32Array(EMBEDDING_DIM + 1).fill(0.1)
-  expect(() => {
-    db.prepare('INSERT INTO vec_events (rowid, embedding, ts, importance, event_id) VALUES (?, ?, ?, ?, ?)').run(
-      2,
-      wrong,
-      Date.now(),
-      5,
-      2,
-    )
-  }).toThrow()
-
-  db.close()
 })
