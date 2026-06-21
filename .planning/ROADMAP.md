@@ -120,13 +120,13 @@ Plans:
   - **Conhecimento/lições aprendidas (evolutivo):** um lugar dedicado para o bot acumular o que aprendeu a fazer/saber (ex: "tronco no alto de árvore costuma ser inalcançável", "à noite zumbis aparecem perto da água") — entradas com texto + confiança/contador que EVOLUEM com o tempo (reforço quando confirma, decai/corrige quando falha). Distinto de `events` (fato pontual): isto é conhecimento generalizado e durável que o LLM consulta para decidir melhor. Semente do loop de aprendizado da Phase 14.
 **Requirements**: TBD
 **Depends on:** Phase 8
-**Plans:** 3/6 plans executed
+**Plans:** 4/6 plans executed
 
 Plans:
 - [x] 08.1-01-PLAN.md — Migration user_version 1→2 (places.type, tabela lessons, idx_places_xz) (D-14/D-19/D-21)
 - [x] 08.1-02-PLAN.md — recordEvent: conserta o bug de fiação (push CP + persistEvent LP embedding null) nos 4 pontos de origem (D-06/D-08)
 - [x] 08.1-03-PLAN.md — chromaClient.ts: ChromaDB@3.4.3 + circuit breaker + health-check + get-or-create cosine (D-01..D-05/D-22/D-23)
-- [ ] 08.1-04-PLAN.md — Fiação do Chroma: consolidate grava vetor + retrieve consulta KNN + health-check no boot (D-07/D-09)
+- [x] 08.1-04-PLAN.md — Fiação do Chroma: consolidate grava vetor + retrieve consulta KNN + health-check no boot (D-07/D-09)
 - [ ] 08.1-05-PLAN.md — Uso pelo LLM: recall injetado no caminho de AÇÃO (query=embedding(goal) cacheado) + seção Memórias relevantes + log [recall] (D-10..D-13)
 - [ ] 08.1-06-PLAN.md — POIs (upsert por bucket + busca proximidade) + morte (evento+danger POI) + lições (reforço/decay/consulta) (D-14..D-21)
 

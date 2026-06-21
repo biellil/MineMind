@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
 status: executing
-stopped_at: Completed 08.1-03-PLAN.md
-last_updated: "2026-06-21T14:46:33.247Z"
+stopped_at: Completed 08.1-04-PLAN.md
+last_updated: "2026-06-21T14:59:52.804Z"
 last_activity: 2026-06-21
 progress:
   total_phases: 12
   completed_phases: 3
   total_plans: 21
-  completed_plans: 17
+  completed_plans: 18
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 ## Current Position
 
 Phase: 08.1 (refatorar-memoria-chromadb) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-06-21
 
@@ -65,6 +65,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 08.1 P01 | 4 | 2 tasks | 3 files |
 | Phase 08.1 P02 | 4 | 2 tasks | 4 files |
 | Phase 08.1 P03 | 9 | 3 tasks | 4 files |
+| Phase 08.1 P04 | 11 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,7 @@ Recent decisions affecting current work:
 - [Phase 08.1]: 08.1-01: schema migra user_version 1→2 por degraus idempotente (cold start 0→2 e DB v1→2 no mesmo caminho); places.type (D-14), tabela lessons (D-19), idx_places_xz (D-16); vec_events fica inerte (aposentado no Plan 04); PlaceType/LessonRow exportados p/ Plans 05/06
 - [Phase 08.1]: 08.1-02: recordEvent (push CP + persistEvent LP, embedding null) plugado nos 4 pontos de origem (nodes.ts x3, loop.ts x1) — mata events=0 ao vivo; try/catch interno preserva o tick (Core Value); embedding null mantém o LLM fora do caminho quente (D-07)
 - [Phase 08.1]: 08.1-03: ChromaDB isolado atrás de ChromaMemoryClient (health/addVector/queryVectors/isAvailable); circuit breaker hand-rolled + withTimeout via Promise.race garantem que o loop nunca aborta nem pendura por causa do Chroma (D-02); get-or-create cosine dim 768 bring-your-own (D-03/D-05/D-23); aviso OFFLINE debounced (D-22); now injetável torna o breaker testável sem servidor
+- [Phase 08.1]: 08.1-04: consolidate grava o vetor no ChromaDB (String(id), D-07); retrieve consulta o Chroma (KNN) preservando o scoring Generative Agents; chroma é param OPCIONAL (default null → fallback de recência D-02); vec0 aposentado em consolidate E persistEvent (sem tabela órfã); health-check boot + chromaProbeTimer periódico religam o caminho vetorial (D-22)
 
 ### Roadmap Evolution
 
@@ -121,6 +123,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-21T14:46:20.387Z
-Stopped at: Completed 08.1-03-PLAN.md
+Last session: 2026-06-21T14:59:52.797Z
+Stopped at: Completed 08.1-04-PLAN.md
 Resume file: None
