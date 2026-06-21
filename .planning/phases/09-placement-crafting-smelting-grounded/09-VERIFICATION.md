@@ -1,9 +1,9 @@
 ---
 phase: 09-placement-crafting-smelting-grounded
 verified: 2026-06-21T00:00:00Z
-status: passed
-score: 13/13 must-haves verified
-re_verification: false
+status: gaps_found
+score: 13/13 capability must-haves verified; 1 behavioral integration gap (G-01) found on re-review
+re_verification: true
 ---
 
 # Phase 9: Placement + Crafting/Smelting Grounded Verification Report
@@ -126,11 +126,34 @@ None blocking. The following are inherently runtime/live-server behaviors valida
 
 ### Gaps Summary
 
-No gaps blocking goal achievement. All 13 observable truths verified, all 12 artifacts pass levels 1-4 (exist, substantive, wired, data flowing), all 9 key links wired, all 5 requirements satisfied. The full test suite (420 tests) is green with no regressions, TypeScript compiles clean, and the registry/config load at runtime without throwing.
+**Capability layer: PASS.** All 13 observable truths verified, all 12 artifacts pass levels 1-4 (exist, substantive, wired, data flowing), all 9 key links wired. Full test suite (420 tests) green, TypeScript compiles clean, registry/config load at runtime.
 
-The phase goal is achieved: `placeBlock` robusto is implemented once and shared (shelter consumes it, station falls back to it), and the craft→station→smelt→equip chain is grounded by inventory delta / world state / local state rather than Promise resolution.
+**Behavioral layer: 1 GAP (G-01).** On re-review against the literal requirement text ("**O agente** crafta/funde/coloca…"), the autonomous agent never actually invokes craft/smelt/equip/placeBlock at runtime. The skills are built, tested, grounded, and registered — but they are **not reachable from the decision loop**. CRAFT-01/02/03 and BUILD-01 are true at the *capability* level (skill-when-invoked) but NOT at the *behavioral* level (agent-acts-autonomously).
+
+## Gaps
+
+### G-01: craft/smelt/equip/placeBlock não fiados à decisão do agente (integration gap)
+
+**Status:** failed
+**Requirements affected:** CRAFT-01, CRAFT-02, CRAFT-03, BUILD-01 (behavioral reading)
+**Severity:** integration — capability exists, decision surface does not reach it
+
+**Evidence (code-verified):**
+- `src/llm/schemas.ts:23` — `ActionDecisionSchema.action` is a CLOSED enum: `['gather','explore','navigate','idle','chat']`. There is no `craft`/`smelt`/`equip`/`place` value, so the LLM cannot choose to craft, smelt, equip, or place a block.
+- `src/cognition/nodes.ts:184-225` (`execute` node) maps cognitive state → skill for ONLY `dig` (gathering) and `navigate` (exploring/socializing). No branch dispatches `craft`/`smelt`/`equip`/`placeBlock` from `skillRegistry`.
+- `toolRegistry` (`src/skills/index.ts:71-83`) is consumed by NO runtime code — it is never fed into the LLM prompt. (`placeBlock` runs only indirectly via `shelter` in System 1; `equip`'s `selectToolFor` runs only as a dig/attack pre-flight. The standalone verbs `craft`/`smelt`/`equip`/`placeBlock` are dormant.)
+
+**Required to close (MINIMAL decision-wiring — scope-bounded):**
+1. Open the LLM decision surface so the agent CAN choose the new verbs — extend `ActionDecisionSchema` (e.g. add `craft`/`smelt`/`equip`/`place` to the enum, with `target` carrying item name / count / block) OR feed `toolRegistry` to the prompt. Keep the enum closed/validated (LLM-02 / D-10 still hold — the LLM picks high-level action + target, never raw physical params).
+2. Map those decisions → skill dispatch in `nodes.ts` `execute`, building physical params (item, count, block) from the high-level `target`. Reuse the existing `SkillResult`/grounding/memory path (the execute node already records `outcome`/`observed` — no new grounding needed).
+3. Add coverage proving the agent-level path: given an LLM decision `action: 'craft'`, the execute node dispatches `skillRegistry.craft` with correct params and records grounded memory.
+
+**OUT OF SCOPE (stays Phase 10 — do NOT plan here):** tech-tree DAG, needs-driven prioritization, recursive progression madeira→pedra→ferro. Phase 9 gap-closure only makes the verbs *reachable* when the LLM chooses them; deciding *when/what* to craft intelligently is Phase 10's declared goal. The gap plan must not implement prioritization logic.
+
+**Live verification deferred (non-blocking, carried forward):** timeout false-negative on a lagged server (G truth #1) and full smelt cycle on a real furnace (truth #2) — see "Human Verification Required" above.
 
 ---
 
-_Verified: 2026-06-21_
-_Verifier: Claude (gsd-verifier)_
+_Verified: 2026-06-21 (initial: passed at capability layer)_
+_Re-reviewed: 2026-06-21 — behavioral integration gap G-01 recorded for gap closure_
+_Verifier: Claude (gsd-verifier) / re-review: Claude_
