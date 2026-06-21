@@ -142,7 +142,7 @@ Plans:
   4. O agente equipa a ferramenta/armadura apropriada do inventário antes de usá-la
 **Plans**: 4 plans
 Plans:
-- [ ] 09-01-PLAN.md — placeBlock robusto (placeBlockSafe + getRefAndFace) + evaluateCraft/Smelt/Equip + PlaceType station + config timeouts (BUILD-01)
+- [x] 09-01-PLAN.md — placeBlock robusto (placeBlockSafe + getRefAndFace) + evaluateCraft/Smelt/Equip + PlaceType station + config timeouts (BUILD-01)
 - [ ] 09-02-PLAN.md — Refator do shelter para consumir placeBlockSafe, commit isolado (BUILD-01/D-05)
 - [ ] 09-03-PLAN.md — ensureStation + craft(itemName,count) + smelt por item + registro das 4 skills (CRAFT-01/02/03/BUILD-01)
 - [ ] 09-04-PLAN.md — equip standalone + selectToolFor + pré-flight em dig/attack (CRAFT-04)
@@ -158,6 +158,18 @@ Plans:
   4. O agente minera com a ferramenta correta para o tier (pré-flight de ferramenta antes de minerar — sem cavar "a seco" e dropar nada)
   5. Toda nova chamada de pathfinder da busca de recurso/estação herda os bounds do 999.1; raio de busca separado de `PERCEPTION_RADIUS`; soak sem OOM ao buscar minério/fornalha
 **Plans**: TBD
+
+### Phase 10.1: Paralelismo no processamento do LLM (deliberação concorrente) (INSERTED)
+
+**Goal:** Substituir a deliberação **single-flight (serial)** por execução **concorrente** de tarefas cognitivas distintas (ação, reflexão, resposta a jogador), de modo que elas não disputem mais o mesmo lock `inFlight` — destravando a concorrência autônomo+assistente que a Phase 11 exige e eliminando a contenção que hoje faz a reflexão starvar.
+**Why:** O lock single-flight já produziu bug real — o quick `260621-ir4` corrigiu *starvation da reflexão* (a ação roubava o lock todo tick e `[reflect]` nunca rodava ao vivo) só com priorização via `pickDispatch`, um remendo, não a raiz. A partir da Phase 11 as demandas concorrentes crescem (raciocinar o próprio objetivo **enquanto** responde a um pedido de jogador), e a Phase 14 precisa refletir **enquanto** age. Sem concorrência real, essas fases herdam a mesma contenção.
+**How (escopo a planejar):** Revisitar o gargalo single-flight no loop cognitivo (`src/cognition/`); permitir mais de uma chamada LLM em voo para tarefas independentes (ação vs reflexão vs resposta a jogador) sem corromper o estado compartilhado. ⚠️ **Caveat:** com modelo **local** (LM Studio, 1 GPU) a inferência serializa de qualquer jeito — o ganho de paralelizar é de **responsividade/concorrência de tarefas**, não de throughput bruto; throughput real só com provider **cloud** (GPT-4.1-mini, infra da Phase 6 já existe). Bounds/escopo definitivos saem no `/gsd:plan-phase 10.1`.
+**Requirements**: TBD
+**Depends on:** Phase 10 (precisa dos objetivos autônomos da tech-tree gerando demanda cognitiva real), habilita a Phase 11 (autônomo+assistente concorrente)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 10.1 to break down)
 
 ### Phase 11: Modos Autônomo/Assistente
 **Goal**: Em modo autônomo (default), o agente seleciona o próprio objetivo da hierarquia sem intervenção humana (self-prompting) e NÃO fica grudado em nenhum jogador; sob pedido direto no chat entra em modo assistente (objetivo de alta prioridade com condição-de-saída), executa, e volta sozinho ao autônomo — preservando persona/relacionamento.
@@ -217,7 +229,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 8.1 → 9 → 10 → 11 → 11.1 → 12 → 13 → 14
+Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 8.1 → 9 → 10 → 10.1 → 11 → 11.1 → 12 → 13 → 14
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -228,6 +240,7 @@ Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 8.1 → 9 → 10 → 
 | 8.1. Refatoração da memória (ChromaDB + fiação + POIs + morte) (INSERTED) | v2.0 | 0/6 | Planned | - |
 | 9. Placement + Crafting/Smelting Grounded | v2.0 | 0/TBD | Not started | - |
 | 10. Tech Tree DAG + Needs | v2.0 | 0/TBD | Not started | - |
+| 10.1. Paralelismo no processamento do LLM (deliberação concorrente) (INSERTED) | v2.0 | 0/TBD | Not started | - |
 | 11. Modos Autônomo/Assistente | v2.0 | 0/TBD | Not started | - |
 | 11.1. Percepção espacial no contexto do LLM (INSERTED) | v2.0 | 0/TBD | Not started | - |
 | 12. Building Deliberado | v2.0 | 0/TBD | Not started | - |

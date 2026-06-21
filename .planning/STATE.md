@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
-status: completed
-stopped_at: Phase 9 context gathered
-last_updated: "2026-06-21T19:27:48.589Z"
+status: executing
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-06-21T20:05:36.315Z"
 last_activity: 2026-06-21
 progress:
-  total_phases: 12
+  total_phases: 13
   completed_phases: 4
-  total_plans: 22
-  completed_plans: 21
+  total_plans: 26
+  completed_plans: 22
   percent: 95
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-19)
 
 **Core value:** O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com base em objetivos próprios e memória — sem intervenção humana. Se tudo falhar, o loop cognitivo (perceber → decidir → agir) precisa funcionar.
-**Current focus:** Phase 08.1 — refatorar-memoria
+**Current focus:** Phase 09 — placement-crafting-smelting-grounded
 
 ## Current Position
 
-Phase: 11.1 of 7 (llm recebe posi es e dist ncias de blocos mobs e entidades percep o espacial no contexto user human)
-Plan: Not started
-Status: Phase 08.1 complete — all 7 plans executed
+Phase: 09 (placement-crafting-smelting-grounded) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
 Last activity: 2026-06-21
 
 Progress: [█████████░] 95%
@@ -69,6 +69,7 @@ Progress: [█████████░] 95%
 | Phase 08.1 P05 | 7 | 2 tasks | 5 files |
 | Phase 08.1 P06 | 18 | 3 tasks | 10 files |
 | Phase 08.1 P07 | 2 | 2 tasks | 3 files |
+| Phase 09 P01 | 6 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,7 @@ Recent decisions affecting current work:
 - [Phase 08.1]: 08.1-05: caminho de AÇÃO recupera memórias (top-k=3) por query=embedding(currentGoal) cacheado por hash do goal (D-11, ~1 embed por troca de goal); seção 'Memórias relevantes:' injetada antes do FATO VERIFICADO (D-12); log [recall] por memória torna o uso da memória verificável ao vivo (D-13) — correção central da fase
 - [Phase 08.1]: 08.1-06: memória espacial (POIs) com dedup por bucket espacial (GRID=12, ON CONFLICT) + busca bounding-box/euclidiana injetada como 'POIs próximos:' no prompt (D-14/D-15/D-16); morte grava MemEvent type:'death' imp=10 + danger POI com causa inferida localmente (D-17/D-18/D-21); helpers de lições (reforço/decay aritmético clampado) como gancho durável da Phase 14 dentro da FRONTEIRA (D-19/D-20)
 - [Phase 08.1]: 08.1-07 (GAP-01): POIs de proximidade fiados no nó execute — recordResourcePoi (coleta success → POI resource, só fato verificado D-09 B) e recordVillagePoi (aldeão no snapshot → POI village, exclui zombie_villager); reusam upsertPlace (dedup por bucket) e entram no prompt via nearbyPlacesString já fiado (deliberation.ts intacto). landmark/base e lições FORA do escopo.
+- [Phase 09]: 09-01: placeBlockSafe deriva outcome de bot.blockAt (não da Promise) e engole o timeout do blockUpdate como falso-negativo (D-01/Pitfall 1); getRefAndFace puro prefere face de baixo; evaluateCraft/Smelt por delta do alvo, evaluateEquip LOCAL (D-18/19/20); PlaceType += 'station' (D-14); 4 timeouts de config; placeRetries reservado sem corpo (D-04)
 
 ### Roadmap Evolution
 
@@ -132,6 +134,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-21T19:27:48.582Z
-Stopped at: Phase 9 context gathered
-Resume file: .planning/phases/09-placement-crafting-smelting-grounded/09-CONTEXT.md
+Last session: 2026-06-21T20:05:22.711Z
+Stopped at: Completed 09-01-PLAN.md
+Resume file: None
