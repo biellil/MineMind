@@ -2,6 +2,9 @@
 NAPI_ERROR.txt
 bun.lockb
 
+# Claude Code — settings locais pessoais + worktrees efêmeras de agentes
+.claude/
+
 # Test SQLite artifacts (smoke tests; Windows mantém o handle e gera WAL/SHM)
 *.test.sqlite
 *.test.sqlite-wal
