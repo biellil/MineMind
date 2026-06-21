@@ -11,6 +11,7 @@ import { config, motivationConfigFor } from '../config'
 import type { CognitiveState } from './types'
 import type { ShortTermMemory } from '../memory/shortTerm'
 import { recordEvent } from '../memory/recordEvent'
+import { recordResourcePoi, recordVillagePoi } from '../memory/poi-detect'
 import type { CognitiveStateHolder } from './state'
 import type { LlmProvider } from '../llm/provider'
 import type { ActionDecision } from '../llm/schemas'
@@ -171,6 +172,8 @@ export function createNodes(deps: NodeDeps) {
   // EXECUTE: dispara NO MÁXIMO uma skill (D-02 single-flight). Grava memória NO HOLDER (fonte única).
   const execute = async (s: LoopState): Promise<Partial<LoopState>> => {
     const snap = s.snapshot
+    // GAP-01: aldeão percebido → POI village no local (1x por tick; dedup por bucket evita flood).
+    if (snap && holder.db) recordVillagePoi(holder.db, snap, now())
     const state = s.cogState
     const fresh = holder.llmDecision
     const llmTarget =
@@ -310,6 +313,9 @@ export function createNodes(deps: NodeDeps) {
         reason: result.reason,
         timestamp: now(),
       }, now())
+      // GAP-01: coleta/mineração com SUCESSO → POI resource no local do recurso (replica o padrão
+      // death→danger de loop.ts:267). recordResourcePoi filtra outcome !== 'success' internamente.
+      if (snap && holder.db) recordResourcePoi(holder.db, snap, target, result.outcome, now())
       log(`${result.outcome.toUpperCase()} ${skill} ${target} (${result.observed}/${result.expected})`)
       skillOutcome = result.outcome
     } catch (err) {
