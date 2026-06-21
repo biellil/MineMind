@@ -115,7 +115,7 @@ Recent decisions affecting current work:
 [Issues that affect future work]
 
 - [Known Gap v1.0 → gate da Phase 14]: Fase 4 NÃO verificada ao vivo (`[reflect]` dispara? KNN relevante? estado sobrevive a kill duro?). Resolver como gate de entrada da Phase 14 (Aprendizado), não em paralelo.
-- [Phase 8]: re-testar `[reflect]` AO VIVO depois de introduzir o System 1 — a nova camada muda quando o lock do LLM fica livre (regressão B1 pode reaparecer).
+- [Phase 8]: re-testar `[reflect]` AO VIVO depois de introduzir o System 1 — a nova camada muda quando o lock do LLM fica livre (regressão B1 pode reaparecer). PARCIALMENTE ENDEREÇADO por quick 260621-ir4: a starvation estrutural (ação roubava o lock single-flight todo tick) foi corrigida via pickDispatch — falta validar AO VIVO que `[reflect]` agora dispara.
 - [Research flags]: Phases 10 (Tech-tree DAG), 13 (Combate) e 14 (Aprendizado) sinalizadas para /gsd:research-phase no planejamento.
 
 ### Quick Tasks Completed
@@ -124,6 +124,7 @@ Recent decisions affecting current work:
 |---|-------------|------|--------|-----------|
 | 260619-qwx | Enriquecer percepção: lookingAt (bloco na mira), underfoot (bloco sob os pés) e render de entities/mobs no prompt | 2026-06-19 | f1b32d0 | [260619-qwx-enriquecer-percepcao-lookingat-bloco-na-](./quick/260619-qwx-enriquecer-percepcao-lookingat-bloco-na-/) |
 | 260619-rv8 | Tratar morte/void do bot (snapshot null + parada graciosa por deadTicks) e vazamento de RAM (poda periódica do MemorySaver via deleteThread) | 2026-06-19 | eb1df53 | [260619-rv8-tratar-morte-void-do-bot-e-vazamento-de-](./quick/260619-rv8-tratar-morte-void-do-bot-e-vazamento-de-/) |
+| 260621-ir4 | Consertar starvation da reflexão no loop — pickDispatch puro dá prioridade ao reflect; ação não rouba mais o lock single-flight todo tick (reflexão nunca rodava ao vivo) | 2026-06-21 | 87ccfc2 | [260621-ir4-consertar-starvation-da-reflexao-no-loop](./quick/260621-ir4-consertar-starvation-da-reflexao-no-loop/) |
 
 ## Session Continuity
 
