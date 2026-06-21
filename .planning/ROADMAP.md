@@ -158,7 +158,10 @@ Plans:
   3. Os objetivos têm `dependsOn` preenchido e são selecionados respeitando-os (escolhe o ancestral executável, não o folha bloqueado); as necessidades internas (needs) reordenam dinamicamente a prioridade em runtime
   4. O agente minera com a ferramenta correta para o tier (pré-flight de ferramenta antes de minerar — sem cavar "a seco" e dropar nada)
   5. Toda nova chamada de pathfinder da busca de recurso/estação herda os bounds do 999.1; raio de busca separado de `PERCEPTION_RADIUS`; soak sem OOM ao buscar minério/fornalha
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 10-01-PLAN.md — resolveDag (tech-tree.ts puro) + SMELT_MAP + selectGoal com completedIds + wiring nodes.ts (TECH-01, TECH-03)
+- [ ] 10-02-PLAN.md — selectToolFor com tier ranking + ponte need→DAG no observe + roteador goal→skill no execute (TECH-02, TECH-04, TECH-05)
 
 ### Phase 10.1: Paralelismo no processamento do LLM (deliberação concorrente) (INSERTED)
 
@@ -240,7 +243,7 @@ Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 8.1 → 9 → 10 → 
 | 8. System 1 — Sobrevivência Reflexa | v2.0 | 0/TBD | Not started | - |
 | 8.1. Refatoração da memória (ChromaDB + fiação + POIs + morte) (INSERTED) | v2.0 | 0/6 | Planned | - |
 | 9. Placement + Crafting/Smelting Grounded | v2.0 | 0/TBD | Not started | - |
-| 10. Tech Tree DAG + Needs | v2.0 | 0/TBD | Not started | - |
+| 10. Tech Tree DAG + Needs | v2.0 | 0/2 | Planned | - |
 | 10.1. Paralelismo no processamento do LLM (deliberação concorrente) (INSERTED) | v2.0 | 0/TBD | Not started | - |
 | 11. Modos Autônomo/Assistente | v2.0 | 0/TBD | Not started | - |
 | 11.1. Percepção espacial no contexto do LLM (INSERTED) | v2.0 | 0/TBD | Not started | - |
@@ -252,8 +255,7 @@ Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 8.1 → 9 → 10 → 
 
 Fases que provavelmente precisam de `/gsd:research-phase` no planejamento (da pesquisa, confiança HIGH):
 
-- **Phase 10 (Tech Tree DAG):** parte mais difícil — resolução recursiva de receitas com minecraft-data, estações como nós, profundidade/memo. Ponto mais provável de pesquisa profunda.
 - **Phase 13 (Combate):** orquestração manual de combate sem mineflayer-pvp (cooldown ~0.6s, re-seleção de alvo, kiting, desengajar) — superfície de falha alta.
 - **Phase 14 (Aprendizado):** depende de resolver o Known Gap não-verificado da Fase 4 ao vivo; precisa de protocolo de verificação de influência, não só de registro.
 
-Fases com padrões bem documentados (provavelmente skip research-phase): 6 (Provider), 7 (Grounding), 8-9 (System 1 / placement / craft-smelt).
+Fases com padrões bem documentados (provavelmente skip research-phase): 6 (Provider), 7 (Grounding), 8-9 (System 1 / placement / craft-smelt), 10 (Tech Tree DAG — pesquisa concluída com HIGH confidence).
