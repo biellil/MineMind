@@ -379,6 +379,11 @@ test('F) reflect respeita D-12: não sobrepõe uma ação in-flight (retorna fal
   )
   expect(ranReflect).toBe(false)
   expect(reflectDecideCalls).toBe(0) // nenhuma 2ª inferência iniciada
+  // O caminho de AÇÃO agora faz recall async (retrieve) ANTES de decideAction (Plan 08.1-05);
+  // drena microtasks p/ a ação chegar de fato a decideAction antes de asserir o contador.
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
   expect(actionDecideCalls).toBe(1)
 
   // libera a ação e conclui.

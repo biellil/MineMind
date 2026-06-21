@@ -30,6 +30,43 @@ import { config } from '../config'
 /** Gatilhos de deliberação (D-19). `reflect` (REFL-01/D-12) reusa o single-flight existente. */
 export type DeliberationTrigger = 'chat' | 'goal_changed' | 'need_threshold' | 'periodic' | 'reflect'
 
+/** Hash estável e barato (djb2) — chaveia o cache do query embedding por texto do goal (D-11). */
+export function hashString(s: string): string {
+  let h = 5381
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0
+  return (h >>> 0).toString(36)
+}
+
+/** Trunca p/ o log [recall] (slice local; não acopla ao helper não-exportado de prompts). */
+function truncate(s: string, max: number): string {
+  return s.length <= max ? s : `${s.slice(0, max)}…`
+}
+
+/**
+ * Computa (com cache D-11) o embedding da query de recuperação = embedding(currentGoal).
+ *
+ * O cache é chaveado pelo HASH do texto do goal: enquanto o goal não muda, NÃO re-embeda
+ * (gasta ~1 embed por TROCA de goal, não por deliberação — invariante de custo). Goal null →
+ * query embedding null (retrieve cai no fallback de recência). Degrada gracioso: falha de embed
+ * → null (sem lançar). Exportado para teste.
+ */
+export async function computeGoalQueryEmbedding(
+  holder: CognitiveStateHolder,
+  provider: LlmProvider,
+): Promise<number[] | null> {
+  const goalText = holder.currentGoal ? JSON.stringify(holder.currentGoal) : ''
+  const goalHash = hashString(goalText)
+  if (holder.queryEmbeddingHash !== goalHash) {
+    try {
+      holder.queryEmbedding = goalText ? await provider.embed(goalText) : null
+    } catch {
+      holder.queryEmbedding = null // degrada: sem embedding → fallback de recência
+    }
+    holder.queryEmbeddingHash = goalHash
+  }
+  return holder.queryEmbedding
+}
+
 /** Estado single-flight da deliberação (vive no closure do deliberator — testável/sem global). */
 export interface DeliberationState {
   inFlight: boolean
@@ -120,6 +157,13 @@ export async function maybeDeliberate(
       // REFL-01/D-12: ramo de reflexão — reusa o lock single-flight herdado (não sobrepõe ação).
       await runReflection(holder, provider, snapshot, now, chroma)
     } else {
+      // D-11/D-12/D-13: recuperação de memórias no caminho de AÇÃO (correção central da fase).
+      // query = embedding(currentGoal) CACHEADO por hash (~1 embed por troca de goal); top-k=3.
+      const queryEmb = await computeGoalQueryEmbedding(holder, provider)
+      const recalled = holder.db ? await retrieve(holder.db, chroma, queryEmb, now, { limit: 3 }) : []
+      for (const r of recalled) {
+        console.log(`[recall] #${r.id} score=${r.score.toFixed(2)} ${truncate(r.summary, 60)}`)
+      }
       // Caminho de AÇÃO existente. SOC-02/D-14: injeta a personalidade evolutiva no prompt.
       // LLM-02: guia de decisão (o que cada ação faz + anti-repetição) anexado à persona —
       // SÓ no caminho de ação (reflexão/chat não recebem). Sem isso o modelo só vê o enum cru.
@@ -134,6 +178,7 @@ export async function maybeDeliberate(
             holder.currentGoal,
             getEvents(holder.memory),
             holder.lastObservedDelta, // D-09 A: fato autoritativo no caminho de AÇÃO
+            recalled.map((r) => ({ id: r.id, summary: r.summary, score: r.score })), // D-12
           ),
         ),
       ]

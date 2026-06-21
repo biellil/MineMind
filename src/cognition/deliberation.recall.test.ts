@@ -129,9 +129,9 @@ test('caminho de AÇÃO emite log [recall] por memória recuperada', async () =>
   )`)
 
   const dmg: MemEvent = { type: 'world', event: 'damage', detail: 'caiu de altura', timestamp: 1 }
-  const chat: MemEvent = { type: 'chat_command', from: 'steve', command: 'venha', mode: 'assistant', timestamp: 2 } as MemEvent
+  const cmd: MemEvent = { type: 'chat_command', from: 'steve', command: 'venha', mode: 'autonomous', timestamp: 2 }
   persistEvent(db, dmg, null, 10)
-  persistEvent(db, chat, null, 10)
+  persistEvent(db, cmd, null, 10)
 
   const { provider } = spyProvider()
   const holder = createCognitiveStateHolder(0)

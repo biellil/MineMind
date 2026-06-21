@@ -133,6 +133,10 @@ test('single-flight concorrente: segunda chamada durante a primeira não redispa
   const state: DeliberationState = freshState()
   const snap = mockSnapshot()
   const first = maybeDeliberate(state, holder, provider, snap, 'goal_changed', 1000)
+  // O caminho de AÇÃO agora faz recall async (computeGoalQueryEmbedding) ANTES de decideAction
+  // (Plan 08.1-05): drena microtasks p/ a 1ª chegar de fato a decideAction (resolveDecide setado).
+  await Promise.resolve()
+  await Promise.resolve()
   // enquanto a 1ª está pendente (inFlight=true), a 2ª deve retornar sem nova chamada a available
   await maybeDeliberate(state, holder, provider, snap, 'goal_changed', 1001)
   expect((provider.available as ReturnType<typeof mock>).mock.calls.length).toBe(1)
