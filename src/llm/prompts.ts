@@ -109,6 +109,10 @@ function serializeUnknown(label: string, value: unknown, max: number): string {
  * D-11/D-12: o parâmetro opcional `recalled` (memórias recuperadas top-k) é renderizado numa
  * seção "Memórias relevantes:" posicionada DEPOIS dos eventos recentes e ANTES do FATO VERIFICADO
  * (que permanece a ÚLTIMA linha). É opcional para não quebrar call-sites que passam 4-5 args.
+ *
+ * D-16: o parâmetro opcional `poisLine` ("POIs próximos: ...", memória espacial) é renderizado
+ * LOGO APÓS as memórias relevantes e ANTES do FATO VERIFICADO (mundo espacial agrupado com as
+ * memórias). Opcional/'' → omitido.
  */
 export function serializeContext(
   snapshot: WorldSnapshot | null,
@@ -123,6 +127,7 @@ export function serializeContext(
     expected: number
   } | null,
   recalled?: ReadonlyArray<{ id: number; summary: string; score: number }>,
+  poisLine?: string,
 ): string {
   const lines: string[] = []
 
@@ -183,6 +188,9 @@ export function serializeContext(
       'Memórias relevantes:\n  ' + recalled.map((r) => truncate(r.summary, 120)).join('\n  '),
     )
   }
+
+  // D-16: POIs próximos (memória espacial) — agrupados com as memórias, ANTES do FATO VERIFICADO.
+  if (poisLine) lines.push(poisLine)
 
   // D-09 A: o último delta observado é FATO AUTORITATIVO — o LLM narra SÓ a partir disto.
   if (lastObservedDelta) {

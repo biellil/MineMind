@@ -20,6 +20,8 @@ import { shouldReflect, type ReflectionState } from './reflection'
 import { importanceOf } from '../memory/longTerm'
 import { getEvents } from '../memory/shortTerm'
 import { recordEvent } from '../memory/recordEvent'
+import { upsertPlace } from '../memory/places'
+import { decayLessons } from '../memory/lessons'
 import { createChromaClient } from '../memory/chromaClient'
 import { persistHolder } from '../memory/holder.persistence'
 import { TriggerBus } from './trigger-bus'
@@ -164,6 +166,10 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
     // se !ok, o próprio chromaClient já emitiu o aviso [chroma] OFFLINE debounced (D-22)
   })
 
+  // D-20: decaimento temporal das lições UMA vez no boot (NÃO no tick — fora do caminho quente).
+  // Exercita o decay aritmético; degrada gracioso (decayLessons nunca lança).
+  if (holder.db) decayLessons(holder.db)
+
   // Fase 07.1 Plan 03: TriggerBus instanciado POR SESSÃO (D-12) — emite actionFinished, nightFell,
   // dayBroke, hostileNearby, stuck, hungry. O nó execute emite actionFinished diretamente via emit().
   // Cleanup obrigatório no bot.once('end') — evita listener leak (T-07.1-04 / D-11).
@@ -244,7 +250,29 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
   // O Mineflayer normalmente respawna sozinho; estes handlers são informativos. A percepção já é
   // defensiva (Task 1/2), então NÃO chamamos buildWorldSnapshot aqui. A parada graciosa quando o
   // corpo não volta é feita no while por deadTicks (abaixo).
-  bot.on('death', () => console.log('[loop] bot morreu — aguardando respawn'))
+  // D-17/D-18/D-21: a morte é o ponto de convergência. Infere a causa LOCALMENTE (sem LLM) a partir
+  // dos sensores reflexos + posição, grava um MemEvent type:'death' (importância 10) e faz upsert de
+  // um POI 'danger' no local. NUNCA lança (degrada) — a morte/void já é caminho frágil (CR#2).
+  bot.on('death', () => {
+    console.log('[loop] bot morreu — aguardando respawn')
+    try {
+      const s = buildReflexSensors(bot) // expõe nearestHostile { kind, name, distance } + isNight
+      const pos = bot.entity?.position
+      const cause = s.nearestHostile
+        ? `morto perto de ${s.nearestHostile.name} a ${Math.round(s.nearestHostile.distance)}m${s.isNight ? ', à noite' : ''}`
+        : 'morto por causa ambiental/desconhecida'
+      const ts = Date.now()
+      if (pos) {
+        recordEvent(holder, { type: 'death', cause, x: pos.x, y: pos.y, z: pos.z, timestamp: ts }, ts) // importância 10
+        if (holder.db) upsertPlace(holder.db, { x: pos.x, y: pos.y, z: pos.z, type: 'danger', notes: cause }, ts) // D-21: morte→danger POI
+      } else {
+        recordEvent(holder, { type: 'death', cause, x: 0, y: 0, z: 0, timestamp: ts }, ts)
+      }
+      console.log(`[death] ${cause}`)
+    } catch (err) {
+      console.error('[death] handler falhou (degradando):', err instanceof Error ? err.message : err)
+    }
+  })
   bot.on('respawn', () => console.log('[loop] respawn'))
 
   const cfg = { configurable: { thread_id: 'minemind-agent' } }

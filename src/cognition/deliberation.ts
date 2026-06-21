@@ -23,6 +23,7 @@ import type { CognitiveState, ControlMode } from './types'
 import { getEvents } from '../memory/shortTerm'
 import { consolidate, applyGoalUpdates } from './reflection'
 import { retrieve } from '../memory/longTerm'
+import { nearbyPlacesString } from '../memory/places'
 import { persistHolder } from '../memory/holder.persistence'
 import type { ChromaMemoryClient } from '../memory/chromaClient'
 import { config } from '../config'
@@ -164,6 +165,9 @@ export async function maybeDeliberate(
       for (const r of recalled) {
         console.log(`[recall] #${r.id} score=${r.score.toFixed(2)} ${truncate(r.summary, 60)}`)
       }
+      // D-16: memória espacial — "POIs próximos:" pela posição atual (top-3 por distância euclidiana).
+      const pos = snapshot?.status?.position
+      const poisLine = holder.db && pos ? nearbyPlacesString(holder.db, pos.x, pos.y, pos.z, 3) : ''
       // Caminho de AÇÃO existente. SOC-02/D-14: injeta a personalidade evolutiva no prompt.
       // LLM-02: guia de decisão (o que cada ação faz + anti-repetição) anexado à persona —
       // SÓ no caminho de ação (reflexão/chat não recebem). Sem isso o modelo só vê o enum cru.
@@ -179,6 +183,7 @@ export async function maybeDeliberate(
             getEvents(holder.memory),
             holder.lastObservedDelta, // D-09 A: fato autoritativo no caminho de AÇÃO
             recalled.map((r) => ({ id: r.id, summary: r.summary, score: r.score })), // D-12
+            poisLine || undefined, // D-16: POIs próximos (memória espacial)
           ),
         ),
       ]

@@ -71,3 +71,23 @@ test('serializeContext(null, ...) não lança e retorna fallback de sem percepç
   const s = serializeContext(null, undefined, undefined, [])
   expect(s).toContain('(sem percepção disponível)')
 })
+
+test('D-16: poisLine renderizado e ANTES do FATO VERIFICADO', () => {
+  const delta = { skill: 'gather', target: 'oak_log', outcome: 'partial', observed: 1, expected: 3 }
+  const s = serializeContext(
+    baseSnapshot(),
+    undefined,
+    undefined,
+    [],
+    delta,
+    undefined,
+    'POIs próximos: casa (12m), veia de ferro (40m)',
+  )
+  expect(s).toContain('POIs próximos: casa (12m)')
+  expect(s.indexOf('POIs próximos:')).toBeLessThan(s.indexOf('FATO VERIFICADO'))
+})
+
+test('D-16: poisLine undefined -> saída NÃO contém "POIs próximos"', () => {
+  const s = serializeContext(baseSnapshot(), undefined, undefined, [])
+  expect(s).not.toContain('POIs próximos')
+})
