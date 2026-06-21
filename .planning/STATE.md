@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
 status: executing
-stopped_at: Phase 08.1 context gathered
-last_updated: "2026-06-21T13:42:42.459Z"
-last_activity: 2026-06-20
+stopped_at: Completed 08.1-01-PLAN.md
+last_updated: "2026-06-21T14:32:17.684Z"
+last_activity: 2026-06-21
 progress:
   total_phases: 12
   completed_phases: 3
-  total_plans: 15
-  completed_plans: 14
+  total_plans: 21
+  completed_plans: 15
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-19)
 
 **Core value:** O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com base em objetivos próprios e memória — sem intervenção humana. Se tudo falhar, o loop cognitivo (perceber → decidir → agir) precisa funcionar.
-**Current focus:** Phase 08 — system-1-sobreviv-ncia-reflexa
+**Current focus:** Phase 08.1 — refatorar-memoria-chromadb
 
 ## Current Position
 
-Phase: 08 (system-1-sobreviv-ncia-reflexa) — EXECUTING
-Plan: 4 of 4
+Phase: 08.1 (refatorar-memoria-chromadb) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
-Last activity: 2026-06-20
+Last activity: 2026-06-21
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 08 P01 | 12 | 2 tasks | 4 files |
 | Phase 08 P02 | 7 | 2 tasks | 7 files |
 | Phase 08 P03 | 6 | 2 tasks | 6 files |
+| Phase 08.1 P01 | 4 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,7 @@ Recent decisions affecting current work:
 - [Phase 08]: 08-01: arbitrateReflex = função pura no driver (D-01) — winner-take-all por gravidade D-03 (ambiental>hostil>queda>vida>fome); D-17 shelter = variação do caminho hostil (cornered+noite); D-02 só fome é lifeCritical=false; limiares de sobrevivência em config com histerese enter/exit
 - [Phase 08]: 08-02: eat (D-05) equipa→consume→re-equip grounded por delta LOCAL de bot.food (Pitfall 2, não toca GroundState); attack (D-15) vira 1-shot real via bot.attack sem perseguir (stub removido); eat/attack registrados no skillRegistry
 - [Phase 08]: 08-03: flee (D-06) GoalInvert(GoalFollow)+setGoal(goal,true) com fallback sprint cego; abort forçado setGoal(null) D-07; grounded por delta de distância; shelter (D-08) cavar-vs-pilar com guarda anti-lava + placeBlock mínimo; flee/shelter no skillRegistry
+- [Phase 08.1]: 08.1-01: schema migra user_version 1→2 por degraus idempotente (cold start 0→2 e DB v1→2 no mesmo caminho); places.type (D-14), tabela lessons (D-19), idx_places_xz (D-16); vec_events fica inerte (aposentado no Plan 04); PlaceType/LessonRow exportados p/ Plans 05/06
 
 ### Roadmap Evolution
 
@@ -115,6 +117,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-21T13:42:42.451Z
-Stopped at: Phase 08.1 context gathered
-Resume file: .planning/phases/08.1-refatorar-mem-ria-migrar-vetores-para-chromadb-j-rodando-local-consertar-grava-o-de-eventos-lugares-garantir-uso-real-pelo-llm-mem-ria-espacial-pois-e-registro-de-morte/08.1-CONTEXT.md
+Last session: 2026-06-21T14:32:01.533Z
+Stopped at: Completed 08.1-01-PLAN.md
+Resume file: None
