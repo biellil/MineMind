@@ -17,7 +17,7 @@ import type { LlmProvider } from '../llm/provider'
 import type { ActionDecision } from '../llm/schemas'
 import type { Disposition, Goal, Need } from '../motivation/types'
 import { evaluateNeeds, urgency } from '../motivation/needs'
-import { generateGoals, selectGoal } from '../motivation/goals'
+import { generateGoals, selectGoal, advanceProgress } from '../motivation/goals'
 import { arbitrate, highestPriorityGatherTarget } from './arbiter'
 import {
   recordAttempt,
@@ -115,11 +115,17 @@ export function createNodes(deps: NodeDeps) {
       survivalNeed !== undefined &&
       urgency(survivalNeed, t, mcfg) > 0 &&
       survivalNeed.value < mcfg.survivalCriticalThreshold
-    const selected = selectGoal(holder.currentGoal, candidates, {
-      survivalCritical,
-      playerRequestPending: holder.playerRequestPending,
-      disposition: holder.disposition,
-    }, mcfg)
+    const selected = selectGoal(
+      holder.currentGoal,
+      candidates,
+      {
+        survivalCritical,
+        playerRequestPending: holder.playerRequestPending,
+        disposition: holder.disposition,
+      },
+      mcfg,
+      holder.completedGoalIds, // D-06: filtra goals bloqueados por dependsOn não satisfeitas
+    )
     holder.goals = candidates
     holder.currentGoal = selected
 
@@ -335,8 +341,20 @@ export function createNodes(deps: NodeDeps) {
       // Mata o bug histórico "peguei 10 tábuas" (success por Promise resolvida com observed:0).
       const result = await skillRegistry[skill!]!(bot, params)
       const success = result.outcome === 'success'
-      if (success) recordSuccess(safety)
-      else recordFailure(safety, target, now()) // GRND-04: partial/no_effect/error = não-sucesso
+      if (success) {
+        recordSuccess(safety)
+        // D-07/TECH-03: sub-goal do DAG completo quando outcome=success — avança progresso
+        // e registra no set de completos para selectGoal filtrar no próximo tick (D-06).
+        if (holder.currentGoal) {
+          const goalId = holder.currentGoal.id
+          const updated = advanceProgress(holder.currentGoal, 1)
+          holder.goals = holder.goals.map(g => g.id === goalId ? updated : g)
+          holder.currentGoal = updated
+          holder.completedGoalIds.add(goalId)
+        }
+      } else {
+        recordFailure(safety, target, now()) // GRND-04: partial/no_effect/error = não-sucesso
+      }
       // grounding gravado ANTES do emit (Pitfall 1 / T-07.1-10)
       holder.lastObservedDelta = {
         skill,

@@ -64,6 +64,13 @@ export interface CognitiveStateHolder {
   /** Cache do embedding da query de recuperação (D-11), chaveado por hash do texto do goal. */
   queryEmbedding: number[] | null
   queryEmbeddingHash: string | null
+  /**
+   * Set de IDs de goals completados (D-06/TECH-03): populado pelo execute node após
+   * outcome=success em sub-goals do DAG (prefixos gather:/craft:/smelt:/ensure:).
+   * Passado ao selectGoal para filtrar goals bloqueados por dependsOn não satisfeitas.
+   * Persiste durante a sessão; limpo apenas quando o DAG-raiz é reconstruído (D-03).
+   */
+  completedGoalIds: Set<string>
 }
 
 /**
@@ -86,5 +93,6 @@ export function createCognitiveStateHolder(now: number = Date.now()): CognitiveS
     lastObservedDelta: null,
     queryEmbedding: null,
     queryEmbeddingHash: null,
+    completedGoalIds: new Set<string>(),
   }
 }

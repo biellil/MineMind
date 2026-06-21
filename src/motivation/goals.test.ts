@@ -149,3 +149,40 @@ test('advanceProgress clampa acima de 1', () => {
 test('advanceProgress clampa abaixo de 0', () => {
   expect(advanceProgress(goal('a', 1, { progress: 0.2 }), -0.5).progress).toBe(0)
 })
+
+// --- selectGoal: filtro de dependsOn com completedIds (D-06) ---
+
+test('selectGoal: completedIds vazio não filtra goals sem dependsOn (retrocompat)', () => {
+  const candidates = [goal('a', 0.9, { dependsOn: [] }), goal('b', 0.7, { dependsOn: [] })]
+  // Sem completedIds (default) — ambos os goals passam
+  const result = selectGoal(null, candidates, ctx(), cfg)
+  expect(result!.id).toBe('a') // melhor prioridade
+})
+
+test('selectGoal: filtra goal cujo dependsOn não está satisfeito em completedIds', () => {
+  const blocked = goal('craft:oak_planks', 0.9, { dependsOn: ['gather:oak_log'] })
+  const free     = goal('need:curiosity', 0.5, { dependsOn: [] })
+  const completedIds = new Set<string>() // gather:oak_log NÃO está completo
+
+  const result = selectGoal(null, [blocked, free], ctx(), cfg, completedIds)
+  // craft:oak_planks está bloqueado — deve retornar need:curiosity (único desbloqueado)
+  expect(result!.id).toBe('need:curiosity')
+})
+
+test('selectGoal: inclui goal cujo dependsOn está satisfeito em completedIds', () => {
+  const ready  = goal('craft:oak_planks', 0.9, { dependsOn: ['gather:oak_log'] })
+  const free   = goal('need:curiosity', 0.5, { dependsOn: [] })
+  const completedIds = new Set<string>(['gather:oak_log']) // dep satisfeita
+
+  const result = selectGoal(null, [ready, free], ctx(), cfg, completedIds)
+  // craft:oak_planks está desbloqueado e tem maior prioridade
+  expect(result!.id).toBe('craft:oak_planks')
+})
+
+test('selectGoal: sem 5º parâmetro funciona igual ao comportamento atual (backward compat)', () => {
+  const current = goal('a', 1.0)
+  const candidates = [goal('b', 1.2)]
+  // Sem completedIds — comportamento original (não filtra nada, default new Set())
+  const result = selectGoal(current, candidates, ctx(), cfg)
+  expect(result!.id).toBe('b') // 1.2 >= 1.0 + 0.1 → troca normalmente
+})

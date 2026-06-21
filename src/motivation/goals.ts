@@ -56,22 +56,32 @@ function bestCandidate(candidates: Goal[]): Goal | null {
  *   crítica OU (em ASSISTANT) pedido de jogador pendente.
  * - Caso contrário, mantém o objetivo atual a menos que o melhor candidato o
  *   supere pela margem de histerese (cfg.hysteresisMargin) — GOAL-02.
+ *
+ * @param completedIds - Set de IDs de goals já completados (D-06). Goals cujo
+ *   dependsOn contém IDs ausentes deste set são filtrados ANTES da histerese.
+ *   Default new Set() = sem filtragem (backward-compatible).
  */
 export function selectGoal(
   current: Goal | null,
   candidates: Goal[],
   ctx: SelectGoalContext,
   cfg: MotivationConfig,
+  completedIds: Set<string> = new Set(), // D-06: filtro de dependsOn — backward-compatible
 ): Goal | null {
+  // D-06: filtrar ANTES da histerese — goals bloqueados por deps não satisfeitas são removidos
+  const unblocked = candidates.filter(g =>
+    g.dependsOn.every(depId => completedIds.has(depId))
+  )
+
   const preempt =
     ctx.survivalCritical || (ctx.disposition === 'ASSISTANT' && ctx.playerRequestPending)
 
   if (current && !preempt) {
-    const best = bestCandidate(candidates)
+    const best = bestCandidate(unblocked)
     // histerese: só troca se o melhor superar o atual pela margem (não por empate).
     if (!best || best.priority < current.priority + cfg.hysteresisMargin) return current
   }
-  return bestCandidate(candidates) ?? current
+  return bestCandidate(unblocked) ?? current
 }
 
 /** Avança o progresso de um objetivo (imutável), com clamp 0..1. */
