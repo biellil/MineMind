@@ -95,8 +95,8 @@ export const config = {
   // D-01/D-02: caminho do arquivo SQLite (store único relacional + vetorial)
   dbPath: process.env.DB_PATH || './minemind.sqlite',
   // D-09: modelo de embedding no LM Studio + dimensão (Pitfall 2 — validar no boot)
-  embeddingModel: process.env.EMBEDDING_MODEL || 'text-embedding-nomic-embed-text-v1.5',
-  embeddingDim: parseInt(process.env.EMBEDDING_DIM || '768', 10),
+  embeddingModel: process.env.EMBEDDING_MODEL || 'text-embedding-qwen3-embedding-0.6b',
+  embeddingDim: parseInt(process.env.EMBEDDING_DIM || '1024', 10),
   // D-06: limiar de importância mínimo para persistir um evento em LP (descarta ticks triviais — Pitfall 6)
   ltImportanceFloor: parseInt(process.env.LT_IMPORTANCE_FLOOR || '3', 10),
   // D-07: meia-vida de recência (ms) e nº de candidatos KNN antes da reordenação ponderada
