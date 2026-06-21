@@ -1,159 +1,150 @@
 ---
 phase: 09-placement-crafting-smelting-grounded
 verified: 2026-06-21T00:00:00Z
-status: gaps_found
-score: 13/13 capability must-haves verified; 1 behavioral integration gap (G-01) found on re-review
-re_verification: true
+status: passed
+score: 14/14 must-haves verified (13 capability + G-01 behavioral closure)
+re_verification:
+  previous_status: gaps_found
+  previous_score: 13/13 capability; 1 behavioral gap (G-01)
+  gaps_closed:
+    - "G-01: craft/smelt/equip/placeBlock agora alcançáveis a partir da decisão do agente (enum LLM + dispatch no execute node)"
+  gaps_remaining: []
+  regressions: []
+human_verification:
+  - test: "Falso-negativo do timeout ao vivo (servidor lagado)"
+    expected: "placeBlock reporta 'success' quando o bloco realmente apareceu, mesmo com timeout de blockUpdate"
+    why_human: "Requer servidor real com lag; unit test cobre o caminho com mock"
+  - test: "Ciclo completo de smelt ao vivo (iron_ore + charcoal em fornalha real)"
+    expected: "iron_ingot no inventário, fornalha fechada, sem travar o loop ~10s"
+    why_human: "Timing assíncrono real da fornalha; unit test usa EventEmitter mock"
 ---
 
 # Phase 9: Placement + Crafting/Smelting Grounded Verification Report
 
-**Phase Goal:** O agente posiciona blocos de forma confiável e crafta/funde/equipa itens com verificação grounded — o primitivo `placeBlock` robusto é implementado uma vez (compartilhado por abrigo, building e estações) e a cadeia tábuas→bancada→ferramenta→fornalha→ferro produz resultados verídicos confirmados pelo inventário.
+**Phase Goal:** O agente posiciona blocos de forma confiável e crafta/funde/equipa itens com verificação grounded — o primitivo `placeBlock` robusto é implementado uma vez (compartilhado por abrigo, building e estações) e a cadeia tábuas→bancada→ferramenta→fornalha→ferro produz resultados verídicos confirmados pelo inventário. Além disso (gap G-01), as 4 skills (placeBlock/craft/smelt/equip) devem ser alcançáveis a partir da decisão do agente (LLM action enum + dispatch no execute node).
 **Verified:** 2026-06-21
 **Status:** passed
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — after G-01 gap closure (plan 09-05)
+
+## Re-Verification Summary
+
+A verificação anterior aprovou 13/13 verdades de CAPACIDADE mas registrou **G-01** (gap de integração comportamental): as 4 skills estavam construídas/grounded/registradas mas o enum de ação do LLM era fechado em `['gather','explore','navigate','idle','chat']` e o execute node só despachava `dig`/`navigate` — o agente nunca podia ESCOLHER craftar/fundir/equipar/colocar. O plano 09-05 (gap-closure) abriu a superfície de decisão e fiou os verbos ao dispatch. **G-01 está fechado** (verificado em código + teste). Nenhuma regressão nos 13 itens de capacidade.
 
 ## Goal Achievement
 
-### Observable Truths (from ROADMAP Success Criteria + PLAN must_haves)
+### Observable Truths
 
 | #   | Truth                                                                                                                           | Status     | Evidence                                                                                                                              |
 | --- | ----------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | placeBlock confiável: deriva outcome de `bot.blockAt(alvo)`, engole timeout `blockUpdate` como falso-negativo, equipa item, face correta | ✓ VERIFIED | placeBlock.ts:104 equip; :108-112 swallow total; :115 `isFilled` pós-check; :120-124 outcome de blockAt; FALSE_NEGATIVE/GENUINE_FAIL regex :24-25 |
-| 2   | getRefAndFace puro: ref sólido + face exposta, faceVector correto (preferência face de baixo)                                   | ✓ VERIFIED | placeBlock.ts:67-83 puro (só blockAt), FACES `[0,-1,0]` primeiro, retorna -faceVector, null se cercado; 4 testes verdes              |
-| 3   | placeBlock implementado UMA VEZ — shelter consome placeBlockSafe/getRefAndFace (D-05), nenhuma chamada crua resta              | ✓ VERIFIED | shelter.ts:18 import; :70/:95 placeBlockSafe nos 2 branches; grep de `bot.placeBlock(` ativo = 0; UNSAFE_BELOW + grounding preservados |
-| 4   | craft grounded por delta de inventário; gate de mesa retorna no_effect SEM deixar bot.craft lançar (Pitfall 4)                  | ✓ VERIFIED | craft.ts:67-69 no_effect ANTES do bot.craft (:76); evaluateCraft :86; expected = result.count*count :85; teste "bot.craft not called" verde |
-| 5   | ensureStation localiza/navega/posiciona + registra POI 'station' (best-effort), re-valida por findBlock (POI é cache)          | ✓ VERIFIED | station.ts ensureStation findBlock→GoalNear→fallback placeBlockSafe→re-findBlock; upsertPlace POI 'station'; 3 caminhos testados      |
-| 6   | smelt funde 1 item por chamada, close() obrigatório no finally, grounded por delta do produto (outputItem é verdade)            | ✓ VERIFIED | smelt.ts:149-150 close() no finally; :143 putInput 1; :145 outputItem() captura nome; evaluateSmelt :156; teste close-on-throw verde  |
-| 7   | equip standalone grounded por estado LOCAL (heldItem/slot armadura), NÃO por delta; selectToolFor binário sem ranking de tier  | ✓ VERIFIED | equip.ts evaluateEquip local, sem captureGroundState; selectToolFor `.find` (primeiro match, sem tier); teste "no ranking" verde     |
-| 8   | dig/attack fazem pré-flight selectToolFor antes de agir (rede de segurança B2), best-effort                                     | ✓ VERIFIED | dig.ts:48 selectToolFor(bot,'pickaxe') em try/catch; attack.ts:39 selectToolFor(bot,'weapon') em try/catch                           |
-| 9   | evaluateCraft/Smelt classificam por delta do item-alvo; evaluateEquip por estado local                                         | ✓ VERIFIED | evaluate.ts:52-67 craft (Math.max(0,delta[target])); :74-82 smelt delega; :90-97 equip booleano; testes verdes                       |
-| 10  | PlaceType aceita 'station'; 4 timeouts em config com validação de range                                                        | ✓ VERIFIED | persistence.ts union contém 'station'; config carrega placeTimeoutMs=6000/smeltUpdateTimeoutMs=12000/smeltTimeoutMs=15000/placeRetries=0 sem throw |
-| 11  | As 4 skills (placeBlock/craft/smelt/equip) registradas em skillRegistry + toolRegistry                                          | ✓ VERIFIED | index.ts:52-64 skillRegistry; :71-83 toolRegistry; runtime check `skills ok: true | tools: 11`                                       |
-| 12  | Testes da Fase 7/8 (shelter/dig/attack) continuam verdes após refator                                                          | ✓ VERIFIED | 64 testes de fase verdes; suite global 420 pass / 0 fail / 1 skip                                                                    |
-| 13  | Cadeia tábuas→bancada→ferramenta→fornalha→ferro produz resultado verídico confirmado pelo inventário                            | ✓ VERIFIED | craft (delta) + ensureStation (bancada/fornalha como Block real) + smelt (outputItem/delta) + equip (local) — wiring completo e tipado |
+| 1   | placeBlock confiável: outcome de `bot.blockAt(alvo)`, engole timeout `blockUpdate` como falso-negativo, equipa item, face correta | ✓ VERIFIED | (regressão) placeBlock.ts grounded por blockAt; FALSE_NEGATIVE/GENUINE_FAIL preservados                                              |
+| 2   | getRefAndFace puro: ref sólido + face exposta, faceVector correto                                                               | ✓ VERIFIED | (regressão) função pura, FACES preferência face de baixo, null se cercado                                                            |
+| 3   | placeBlock implementado UMA VEZ — shelter consome placeBlockSafe/getRefAndFace, 0 chamadas cruas                               | ✓ VERIFIED | (regressão) shelter.ts importa placeBlockSafe; grep `bot.placeBlock(` ativo = 0                                                      |
+| 4   | craft grounded por delta; gate de mesa retorna no_effect SEM deixar bot.craft lançar                                           | ✓ VERIFIED | (regressão) craft.ts gate antes do bot.craft; evaluateCraft                                                                          |
+| 5   | ensureStation localiza/navega/posiciona + registra POI 'station', re-valida por findBlock                                      | ✓ VERIFIED | (regressão) station.ts find→navigate→place→re-findBlock + upsertPlace                                                                |
+| 6   | smelt funde 1 item por chamada, close() obrigatório no finally, grounded por delta do produto                                 | ✓ VERIFIED | (regressão) smelt.ts close() no finally; outputItem truth                                                                            |
+| 7   | equip standalone grounded por estado LOCAL (heldItem/slot), selectToolFor binário sem ranking de tier                         | ✓ VERIFIED | (regressão) equip.ts local grounding; selectToolFor `.find` sem tier                                                                 |
+| 8   | dig/attack fazem pré-flight selectToolFor antes de agir (best-effort)                                                          | ✓ VERIFIED | (regressão) dig.ts/attack.ts selectToolFor em try/catch                                                                              |
+| 9   | evaluateCraft/Smelt classificam por delta do item-alvo; evaluateEquip por estado local                                        | ✓ VERIFIED | (regressão) evaluate.ts 3 funções puras                                                                                              |
+| 10  | PlaceType aceita 'station'; 4 timeouts em config com validação                                                                 | ✓ VERIFIED | (regressão) union contém 'station'; config carrega 6000/12000/15000/0                                                                |
+| 11  | As 4 skills registradas em skillRegistry + toolRegistry                                                                        | ✓ VERIFIED | index.ts:52-64 skillRegistry; :71-83 toolRegistry (11 tools)                                                                         |
+| 12  | Testes da Fase 7/8 (shelter/dig/attack) continuam verdes após refator                                                          | ✓ VERIFIED | suite global 432 pass / 0 fail / 1 skip                                                                                              |
+| 13  | Cadeia tábuas→bancada→ferramenta→fornalha→ferro produz resultado verídico confirmado pelo inventário                          | ✓ VERIFIED | (regressão) craft+ensureStation+smelt+equip wiring completo e tipado                                                                 |
+| 14  | **G-01 fechado:** as 4 skills alcançáveis a partir da decisão do agente (enum LLM action + dispatch no execute node)          | ✓ VERIFIED | schemas.ts:27 enum estende craft/smelt/equip/place (FECHADO); nodes.ts:73-77 → 'building'; nodes.ts:233-266 dispatch monta params; nodes.test.ts 8 testes verdes |
 
-**Score:** 13/13 truths verified
+**Score:** 14/14 truths verified
+
+### G-01 Closure Detail (focus of re-verification)
+
+| Sub-claim (must_have 09-05)                                                                 | Status     | Evidence (code-verified)                                                                                                  |
+| ------------------------------------------------------------------------------------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Enum aceita craft/smelt/equip/place e rejeita fora do enum (continua FECHADO — LLM-02/D-10) | ✓ VERIFIED | schemas.ts:26-35 `z.enum([...,'craft','smelt','equip','place'])`; target permanece `z.string().max(64).optional()` (:37-48) |
+| action='craft' → despacha skillRegistry.craft com {itemName, count} derivados do target     | ✓ VERIFIED | nodes.ts:239-244 parse `item:N`, count clampado 1-64; teste "craft dispatch" verde (itemName/count assertados)            |
+| action='smelt' → despacha skillRegistry.smelt com {oreName, count}                           | ✓ VERIFIED | nodes.ts:245-249; teste "smelt dispatch" verde                                                                            |
+| action='equip' → despacha skillRegistry.equip com {itemName, destination?}                   | ✓ VERIFIED | nodes.ts:250-255 parse `item@slot`; testes equip (com/sem slot) verdes                                                    |
+| action='place' → despacha skillRegistry.placeBlock com {target:{x,y,z}, itemName}           | ✓ VERIFIED | nodes.ts:256-265 parse `nome @ x,y,z` (chave 'placeBlock', não 'place'); teste "place dispatch" verde                     |
+| MemEvent grounded deriva do SkillResult (no_effect/observed=0 → result=failure)             | ✓ VERIFIED | caminho de grounding reusado (nodes.ts:336-360); teste "grounded memory" verde                                            |
+| Target inválido degrada para sem-ação SEM lançar (Core Value: o tick continua)             | ✓ VERIFIED | nodes.ts:256-265 place sem posição não seta skill; nodes.ts:269-275 emit actionFinished skill:null; teste "place sem posição" verde |
+| Nenhuma lógica tech-tree/needs no dispatch (boundary Phase 10 intacto)                       | ✓ VERIFIED | grep em nodes.ts: `needs` só no pipeline `observe` (Fase 2), 0 ocorrências no branch building de execute                  |
 
 ### Required Artifacts
 
 | Artifact                       | Expected                                                  | Status     | Details                                                  |
 | ------------------------------ | -------------------------------------------------------- | ---------- | -------------------------------------------------------- |
-| `src/skills/placeBlock.ts`     | placeBlockSafe + getRefAndFace + schema + tool           | ✓ VERIFIED | Exists, substantive, wired (shelter/station/index)       |
-| `src/grounding/evaluate.ts`    | evaluateCraft/Smelt/Equip                                | ✓ VERIFIED | 3 funções puras, importadas por craft/smelt/equip        |
-| `src/memory/persistence.ts`    | PlaceType += 'station'                                    | ✓ VERIFIED | Union contém 'station'                                   |
-| `src/config.ts`                | 4 timeouts + validação                                   | ✓ VERIFIED | Carrega sem throw; valores válidos                       |
-| `src/skills/shelter.ts`        | refator consumindo placeBlockSafe                        | ✓ VERIFIED | 0 chamadas cruas; branches + grounding preservados       |
-| `src/skills/station.ts`        | ensureStation (find|navigate|place + POI)                | ✓ VERIFIED | Exists, wired a places/placeBlock/craft/smelt            |
-| `src/skills/craft.ts`          | craft + gate de mesa + grounded                          | ✓ VERIFIED | Gate antes do bot.craft; evaluateCraft                   |
-| `src/skills/smelt.ts`          | smelt por item + close() finally                         | ✓ VERIFIED | close() garantido; outputItem truth                      |
-| `src/skills/equip.ts`          | equip + selectToolFor                                    | ✓ VERIFIED | Local grounding; binário sem tier                        |
-| `src/skills/dig.ts`            | pré-flight selectToolFor('pickaxe')                      | ✓ VERIFIED | try/catch best-effort                                    |
-| `src/skills/attack.ts`         | pré-flight selectToolFor('weapon')                       | ✓ VERIFIED | try/catch best-effort                                    |
+| `src/llm/schemas.ts`           | enum action estendido com craft/smelt/equip/place (FECHADO)| ✓ VERIFIED | Exists, substantive; enum fechado, target string; tsc 0 |
+| `src/cognition/nodes.ts`       | actionToCognitiveState + branch dispatch 'building'      | ✓ VERIFIED | Exists, substantive, wired a skillRegistry               |
+| `src/cognition/nodes.test.ts`  | cobertura agent-level do dispatch dos 4 verbos           | ✓ VERIFIED | Exists; 8 testes verdes (4 verbos + grounded + degrade)  |
+| `src/skills/placeBlock.ts`     | placeBlockSafe + getRefAndFace + schema + tool           | ✓ VERIFIED | (regressão) wired (shelter/station/index/nodes)          |
+| `src/grounding/evaluate.ts`    | evaluateCraft/Smelt/Equip                                | ✓ VERIFIED | (regressão) 3 funções puras                              |
+| `src/skills/{craft,smelt,equip,station}.ts` | cadeia grounded + ensureStation              | ✓ VERIFIED | (regressão) grounded por delta/local; POI 'station'      |
 | `src/skills/index.ts`          | registro das 4 skills                                    | ✓ VERIFIED | skillRegistry + toolRegistry (11 tools)                  |
 
 ### Key Link Verification
 
-| From               | To                       | Via                          | Status  |
-| ------------------ | ------------------------ | ---------------------------- | ------- |
-| placeBlock.ts      | grounding/types.ts       | import SkillResult           | ✓ WIRED |
-| placeBlock.ts      | executor.ts              | executeWithSafety            | ✓ WIRED |
-| shelter.ts         | placeBlock.ts            | placeBlockSafe + getRefAndFace | ✓ WIRED |
-| craft.ts           | station.ts               | import ensureStation         | ✓ WIRED |
-| station.ts         | memory/places.ts         | upsertPlace POI 'station'    | ✓ WIRED |
-| station.ts         | placeBlock.ts            | fallback placeBlockSafe      | ✓ WIRED |
-| index.ts           | craft.ts                 | skillRegistry/toolRegistry   | ✓ WIRED |
-| equip.ts           | grounding/evaluate.ts    | import evaluateEquip         | ✓ WIRED |
-| dig.ts             | equip.ts                 | import selectToolFor         | ✓ WIRED |
-
-All 9 key links verified via gsd-tools (`all_verified: true` across all 4 plans).
+| From                       | To                                | Via                                          | Status  |
+| -------------------------- | --------------------------------- | -------------------------------------------- | ------- |
+| schemas.ts (action enum)   | nodes.ts actionToCognitiveState   | `case 'craft'/'smelt'/'equip'/'place'`       | ✓ WIRED |
+| nodes.ts execute (building)| skillRegistry.craft/smelt/equip/placeBlock | `skillRegistry[skill!]!(bot, params)` | ✓ WIRED |
+| nodes.ts execute           | grounding/memória (recordEvent)   | result.outcome → MemEvent grounded (reusado) | ✓ WIRED |
+| nodes.test.ts              | skillRegistry                     | monkeypatch pontual + assert params          | ✓ WIRED |
+| shelter.ts / station.ts    | placeBlock.ts                     | placeBlockSafe (regressão)                   | ✓ WIRED |
 
 ### Data-Flow Trace (Level 4)
 
-| Artifact     | Data Variable        | Source                                  | Produces Real Data | Status     |
-| ------------ | -------------------- | --------------------------------------- | ------------------ | ---------- |
-| placeBlock   | outcome/observed     | `bot.blockAt(targetPos)` pós-ação       | Yes (world truth)  | ✓ FLOWING  |
-| craft        | observed             | `inventoryDelta(before, after)`         | Yes (real delta)   | ✓ FLOWING  |
-| smelt        | observed/smeltedName | `furnace.outputItem()` + delta          | Yes (furnace truth)| ✓ FLOWING  |
-| equip        | equipped             | `bot.heldItem` / `inventory.slots`      | Yes (local state)  | ✓ FLOWING  |
-| ensureStation| block                | `bot.findBlock` (re-validado pós-place) | Yes (world truth)  | ✓ FLOWING  |
+| Artifact        | Data Variable        | Source                                  | Produces Real Data | Status     |
+| --------------- | -------------------- | --------------------------------------- | ------------------ | ---------- |
+| nodes.execute   | params (físicos)     | `JSON.parse(target)` do `llmTarget` do LLM | Yes (decisão LLM)  | ✓ FLOWING  |
+| nodes.execute   | MemEvent outcome     | `result.outcome` do SkillResult         | Yes (world/inv truth) | ✓ FLOWING  |
+| craft/smelt     | observed             | `inventoryDelta` / `furnace.outputItem`  | Yes (real delta)   | ✓ FLOWING  |
+| placeBlock      | outcome              | `bot.blockAt(targetPos)` pós-ação       | Yes (world truth)  | ✓ FLOWING  |
 
-No hardcoded/empty data sources. Every grounded outcome derives from world/inventory state, not the Promise resolution — the core anti-"peguei 10 tábuas" guarantee holds.
+A memória continua derivando do estado observado (delta de inventário / blockAt / heldItem), nunca da resolução da Promise — a garantia anti-"peguei 10 tábuas" (D-09 B) é preservada e agora alcançada pelo caminho do agente.
 
 ### Behavioral Spot-Checks
 
 | Behavior                                  | Command                                              | Result                          | Status |
 | ----------------------------------------- | ---------------------------------------------------- | ------------------------------- | ------ |
-| Phase test suites pass                    | `bun test` (9 phase files)                           | 64 pass / 0 fail                | ✓ PASS |
-| No regression in global suite             | `bun test`                                           | 420 pass / 0 fail / 1 skip      | ✓ PASS |
-| 4 skills registered + tools count         | import index.ts runtime check                        | `skills ok: true | tools: 11`   | ✓ PASS |
-| Config validates + loads timeouts         | import config.ts runtime check                       | `6000 12000 15000 0` (no throw) | ✓ PASS |
-| TypeScript compiles                       | `bunx tsc --noEmit`                                  | exit 0                          | ✓ PASS |
+| Dispatch agent-level dos 4 verbos + memória | `bun test src/cognition/nodes.test.ts`              | 8 pass / 0 fail                 | ✓ PASS |
+| Enum estendido + ainda fechado            | `bun test src/llm/schemas.test.ts`                   | 19 pass / 0 fail                | ✓ PASS |
+| No regression na suite global             | `bun test`                                           | 432 pass / 0 fail / 1 skip      | ✓ PASS |
+| TypeScript compila                        | `bunx tsc --noEmit`                                  | exit 0                          | ✓ PASS |
+| Sem lógica tech-tree/needs no dispatch    | grep `needs/tech-tree` no branch building de nodes.ts| 0 ocorrências                   | ✓ PASS |
 
 ### Requirements Coverage
 
-| Requirement | Source Plan(s)     | Description                                                         | Status      | Evidence                                                  |
-| ----------- | ------------------ | ------------------------------------------------------------------ | ----------- | --------------------------------------------------------- |
-| BUILD-01    | 01, 02, 03         | Coloca blocos de forma confiável (placeBlock + verificação/timeout)| ✓ SATISFIED | placeBlockSafe grounded + registrado + consumido por shelter/station |
-| CRAFT-01    | 03                 | Crafta verificando inventário antes/depois (grounded)              | ✓ SATISFIED | craft.ts via captureGroundState + evaluateCraft           |
-| CRAFT-02    | 03                 | Posiciona e usa bancada quando a receita exige (3x3)               | ✓ SATISFIED | ensureStation('crafting_table') + recipesFor(table)       |
-| CRAFT-03    | 03                 | Funde minérios na fornalha e recupera o resultado                  | ✓ SATISFIED | smelt.ts putFuel→putInput→takeOutput + close() finally    |
-| CRAFT-04    | 04                 | Equipa a ferramenta/armadura apropriada do inventário              | ✓ SATISFIED | equip standalone + selectToolFor pré-flight em dig/attack  |
+| Requirement | Source Plan(s)        | Description                                                         | Status      | Evidence                                                  |
+| ----------- | --------------------- | ------------------------------------------------------------------ | ----------- | --------------------------------------------------------- |
+| BUILD-01    | 01, 02, 03, **05**    | Coloca blocos de forma confiável (placeBlock + verificação/timeout)| ✓ SATISFIED | placeBlockSafe grounded + agora alcançável via action='place' → dispatch |
+| CRAFT-01    | 03, **05**            | Crafta verificando inventário antes/depois (grounded)              | ✓ SATISFIED | craft grounded + alcançável via action='craft' → dispatch |
+| CRAFT-02    | 03, **05**            | Posiciona e usa bancada quando a receita exige (3x3)               | ✓ SATISFIED | ensureStation + craft alcançável pelo agente              |
+| CRAFT-03    | 03, **05**            | Funde minérios na fornalha e recupera o resultado                  | ✓ SATISFIED | smelt grounded + alcançável via action='smelt' → dispatch |
+| CRAFT-04    | 04, **05**            | Equipa a ferramenta/armadura apropriada do inventário              | ✓ SATISFIED | equip + selectToolFor; alcançável via action='equip' → dispatch |
 
-All 5 declared requirement IDs accounted for. No ORPHANED requirements — REQUIREMENTS.md maps exactly BUILD-01 + CRAFT-01..04 to Phase 9, all claimed by plans, all marked Complete in REQUIREMENTS.md mapping table.
+Os 5 IDs declarados estão contabilizados em REQUIREMENTS.md (todos `[x]` + tabela de mapeamento Phase 9/Complete). Nenhum ORPHANED. O plano 09-05 reforça os 4 requisitos comportamentais (CRAFT-01/02/03 + BUILD-01) ao nível agente; CRAFT-04 já era alcançável via dig/attack pre-flight e agora também como verbo standalone.
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 | ---- | ---- | ------- | -------- | ------ |
-| (none) | — | No TODO/FIXME/placeholder/stub in any of the 5 new skill files | — | — |
+| (none) | — | Nenhum TODO/FIXME/placeholder/stub nos arquivos do gap-closure (schemas.ts/nodes.ts/nodes.test.ts) | — | — |
 
-**Note (intentional, not a gap):** `config.placeRetries` defaults to 0 and the retry loop body in placeBlockSafe is deliberately NOT implemented (D-04, documented in 09-01-PLAN.md notes and ROADMAP Deferred). This is a tracked gap reserved for a future phase, gated on live testing showing need — the idempotency guard IS present. Not counted against goal achievement.
+**Note (intencional, não-gap):** `config.placeRetries` default 0 e o corpo do retry em placeBlockSafe deliberadamente NÃO implementado (D-04, tracked, gated em teste ao vivo). O guard de idempotência ESTÁ presente. Não conta contra o goal.
 
 ### Human Verification Required
 
-None blocking. The following are inherently runtime/live-server behaviors validated by mocked unit tests but worth a live smoke test when a Minecraft server is available:
+Não-bloqueante (carregado da verificação inicial — comportamento de servidor ao vivo, coberto por mocks):
 
-### 1. Falso-negativo do timeout ao vivo
-**Test:** Em servidor lagado, colocar um bloco e forçar o timeout de blockUpdate.
-**Expected:** placeBlock reporta 'success' (não 'error') quando o bloco realmente apareceu.
-**Why human:** Requer servidor real com lag; unit test cobre o caminho com mock.
-
-### 2. Ciclo completo de smelt ao vivo
-**Test:** Fundir iron_ore com charcoal numa fornalha real.
-**Expected:** iron_ingot no inventário, fornalha fechada, sem travar o loop ~10s.
-**Why human:** Timing assíncrono real da fornalha; unit test usa EventEmitter mock.
+1. **Falso-negativo do timeout ao vivo** — em servidor lagado, forçar timeout de blockUpdate; placeBlock deve reportar 'success' se o bloco apareceu. Requer servidor real.
+2. **Ciclo completo de smelt ao vivo** — fundir iron_ore com charcoal em fornalha real; iron_ingot no inventário, fornalha fechada, sem travar ~10s. Timing assíncrono real.
 
 ### Gaps Summary
 
-**Capability layer: PASS.** All 13 observable truths verified, all 12 artifacts pass levels 1-4 (exist, substantive, wired, data flowing), all 9 key links wired. Full test suite (420 tests) green, TypeScript compiles clean, registry/config load at runtime.
+**Nenhum gap restante.** A camada de capacidade (13 verdades) passou na verificação inicial e não regrediu. O único gap registrado (G-01 — integração comportamental) foi fechado pelo plano 09-05: o enum de ação do LLM foi estendido (mantido FECHADO, LLM-02/D-10), os 4 verbos foram fiados ao dispatch do execute node com montagem de params físicos a partir do target de alto nível, e o caminho de grounding/memória existente foi reusado sem alteração. O teste agent-level (`nodes.test.ts`, 8 testes) prova o despacho correto de cada verbo, a derivação grounded da memória (no_effect→failure) e a degradação segura para sem-ação quando o target é inválido. Boundary da Phase 10 (tech-tree/needs/priorização) respeitado e verificado por grep. Suite global 432 pass / 0 fail / 1 skip; tsc exit 0.
 
-**Behavioral layer: 1 GAP (G-01).** On re-review against the literal requirement text ("**O agente** crafta/funde/coloca…"), the autonomous agent never actually invokes craft/smelt/equip/placeBlock at runtime. The skills are built, tested, grounded, and registered — but they are **not reachable from the decision loop**. CRAFT-01/02/03 and BUILD-01 are true at the *capability* level (skill-when-invoked) but NOT at the *behavioral* level (agent-acts-autonomously).
-
-## Gaps
-
-### G-01: craft/smelt/equip/placeBlock não fiados à decisão do agente (integration gap)
-
-**Status:** failed
-**Requirements affected:** CRAFT-01, CRAFT-02, CRAFT-03, BUILD-01 (behavioral reading)
-**Severity:** integration — capability exists, decision surface does not reach it
-
-**Evidence (code-verified):**
-- `src/llm/schemas.ts:23` — `ActionDecisionSchema.action` is a CLOSED enum: `['gather','explore','navigate','idle','chat']`. There is no `craft`/`smelt`/`equip`/`place` value, so the LLM cannot choose to craft, smelt, equip, or place a block.
-- `src/cognition/nodes.ts:184-225` (`execute` node) maps cognitive state → skill for ONLY `dig` (gathering) and `navigate` (exploring/socializing). No branch dispatches `craft`/`smelt`/`equip`/`placeBlock` from `skillRegistry`.
-- `toolRegistry` (`src/skills/index.ts:71-83`) is consumed by NO runtime code — it is never fed into the LLM prompt. (`placeBlock` runs only indirectly via `shelter` in System 1; `equip`'s `selectToolFor` runs only as a dig/attack pre-flight. The standalone verbs `craft`/`smelt`/`equip`/`placeBlock` are dormant.)
-
-**Required to close (MINIMAL decision-wiring — scope-bounded):**
-1. Open the LLM decision surface so the agent CAN choose the new verbs — extend `ActionDecisionSchema` (e.g. add `craft`/`smelt`/`equip`/`place` to the enum, with `target` carrying item name / count / block) OR feed `toolRegistry` to the prompt. Keep the enum closed/validated (LLM-02 / D-10 still hold — the LLM picks high-level action + target, never raw physical params).
-2. Map those decisions → skill dispatch in `nodes.ts` `execute`, building physical params (item, count, block) from the high-level `target`. Reuse the existing `SkillResult`/grounding/memory path (the execute node already records `outcome`/`observed` — no new grounding needed).
-3. Add coverage proving the agent-level path: given an LLM decision `action: 'craft'`, the execute node dispatches `skillRegistry.craft` with correct params and records grounded memory.
-
-**OUT OF SCOPE (stays Phase 10 — do NOT plan here):** tech-tree DAG, needs-driven prioritization, recursive progression madeira→pedra→ferro. Phase 9 gap-closure only makes the verbs *reachable* when the LLM chooses them; deciding *when/what* to craft intelligently is Phase 10's declared goal. The gap plan must not implement prioritization logic.
-
-**Live verification deferred (non-blocking, carried forward):** timeout false-negative on a lagged server (G truth #1) and full smelt cycle on a real furnace (truth #2) — see "Human Verification Required" above.
+As duas verificações humanas remanescentes são live-server smoke tests (não-bloqueantes), inerentes ao timing de servidor real e já cobertas por unit tests com mock.
 
 ---
 
-_Verified: 2026-06-21 (initial: passed at capability layer)_
-_Re-reviewed: 2026-06-21 — behavioral integration gap G-01 recorded for gap closure_
-_Verifier: Claude (gsd-verifier) / re-review: Claude_
+_Verificação inicial: 2026-06-21 (passed na camada de capacidade)_
+_Re-review: 2026-06-21 — G-01 registrado para gap closure_
+_Re-verificação (pós 09-05): 2026-06-21 — G-01 FECHADO, status: passed_
+_Verifier: Claude (gsd-verifier)_
