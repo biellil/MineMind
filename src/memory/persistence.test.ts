@@ -1,6 +1,6 @@
 // src/memory/persistence.test.ts
 // MEM-02 / D-02/D-03: prova a fundação de persistência —
-//  1) cold start cria o schema versionado (user_version=1 + 5 tabelas)
+//  1) cold start cria o schema versionado (user_version=2 + 5 tabelas)
 //  2) sobrevivência a reabertura (base de MEM-02)
 //  3) recuperação graceful de um arquivo corrompido (D-03 — nunca aborta)
 //  4) dimensão do vec0 = config.embeddingDim (Pitfall 2)
@@ -40,12 +40,12 @@ function safeCleanup(): void {
 safeCleanup()
 afterAll(safeCleanup)
 
-test('cold start: openDb num path inexistente cria o schema (user_version=1 + 5 tabelas)', () => {
+test('cold start: openDb num path inexistente cria o schema (user_version=2 + 5 tabelas)', () => {
   safeCleanup()
   const db = openDb(DB_PATH)
 
   const version = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-  expect(version).toBe(1)
+  expect(version).toBe(2)
 
   const tables = (
     db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table') ORDER BY name").all() as {
