@@ -95,7 +95,7 @@ const recentEvents: MemEvent[] = [
   { type: 'state_transition', from: 'idle', to: 'exploring', timestamp: 1200 },
 ]
 
-test('consolidate: sem LLM/summary promove UM evento episódico CP→LP (events + vec_events), retorna id', () => {
+test('consolidate: sem LLM/summary promove UM evento episódico CP→LP (events), retorna id', () => {
   const db = openDb(DB_PATH)
   const before = (db.prepare('SELECT COUNT(*) AS n FROM events').get() as { n: number }).n
   const id = consolidate(db, recentEvents, 2000, synthEmbedding(3))
@@ -113,9 +113,10 @@ test('consolidate: sem LLM/summary promove UM evento episódico CP→LP (events 
   expect(row.importance).toBeGreaterThanOrEqual(config.ltImportanceFloor)
   expect(row.importance).toBeGreaterThanOrEqual(8)
 
-  // O embedding entrou em vec_events na MESMA transação (mesmo rowid).
+  // Plan 04: o vec0 foi aposentado — consolidate NÃO escreve mais em vec_events; o vetor vai
+  // para o ChromaDB (responsabilidade do caller runReflection, fora desta função síncrona).
   const vecRow = db.prepare('SELECT COUNT(*) AS n FROM vec_events WHERE rowid = ?').get(id) as { n: number }
-  expect(vecRow.n).toBe(1)
+  expect(vecRow.n).toBe(0)
   db.close()
 })
 
@@ -140,7 +141,7 @@ test('consolidate: lista vazia de eventos retorna null (nada a consolidar)', () 
   db.close()
 })
 
-test('consolidate: sem embedding ainda persiste o evento (degradação graciosa — só vec_events fica de fora)', () => {
+test('consolidate: sem embedding ainda persiste o evento (degradação graciosa — vec0 aposentado)', () => {
   const db = openDb(DB_PATH)
   const before = (db.prepare('SELECT COUNT(*) AS n FROM events').get() as { n: number }).n
   const id = consolidate(db, recentEvents, 5000, null)

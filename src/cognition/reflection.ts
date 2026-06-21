@@ -15,7 +15,6 @@ import type { MemEvent } from './types'
 import type { Goal } from '../motivation/types'
 import type { ReflectionOutput } from '../llm/schemas'
 import { importanceOf, summarizeEvent } from '../memory/longTerm'
-import { EMBEDDING_DIM } from '../memory/persistence'
 import { config } from '../config'
 
 /** Estado do gatilho de reflexão (vive no holder/closure — testável por parâmetro). */
@@ -48,11 +47,6 @@ export function shouldReflect(args: {
   return eventDriven || accum || floor
 }
 
-/** Converte um vetor JS para o blob que o vec0 espera: Float32Array direto (D-01). */
-function toVecBlob(v: number[]): Float32Array {
-  return new Float32Array(v)
-}
-
 /**
  * Consolida CP→LP (D-13): promove os eventos recentes de MAIOR importância a UM evento episódico
  * persistido em LP. Roda SEMPRE (mesmo sem LLM). `summary` opcional vem do LLM; sem ele, deriva um
@@ -61,16 +55,20 @@ function toVecBlob(v: number[]): Float32Array {
  *
  * DUPLICAÇÃO INTENCIONAL de persistEvent (longTerm.ts): MemEvent não modela uma variante "reflexão",
  * então NÃO usamos persistEvent (que derivaria uma importância baixa via importanceOf). Em vez disso
- * inserimos DIRETAMENTE em events + vec_events na MESMA transação, com importância FORÇADA alta
- * (CONSOLIDATION_IMPORTANCE). Mantemos o MESMO bind de embedding (Float32Array direto) e o MESMO
- * conjunto/ordem de colunas dos INSERTs de persistEvent (Plan 04-03) e do schema (Plan 04-02).
- * Manter em sincronia com o bind/schema do Plan 04-03/04-02 se eles mudarem.
+ * inserimos DIRETAMENTE em events com importância FORÇADA alta (CONSOLIDATION_IMPORTANCE).
+ *
+ * O VETOR do evento consolidado vai para o ChromaDB (D-07), NÃO mais para o vec0 (aposentado no
+ * Plan 04 — D-01: relacional é a fonte da verdade; o índice é derivado/descartável). A escrita no
+ * Chroma é feita pelo CALLER (runReflection em deliberation.ts) APÓS este INSERT, usando o `id`
+ * retornado, fora da transação SQLite — `consolidate` permanece SÍNCRONO e testável sem Chroma.
+ * O parâmetro `embedding` permanece na assinatura por compatibilidade (não é mais usado aqui; o
+ * caller embeda e grava no Chroma).
  */
 export function consolidate(
   db: Database,
   recent: ReadonlyArray<MemEvent>,
   now: number,
-  embedding: number[] | null,
+  _embedding: number[] | null,
   summary?: string,
 ): number | null {
   if (recent.length === 0) return null
@@ -87,15 +85,7 @@ export function consolidate(
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .run('reflection', now, CONSOLIDATION_IMPORTANCE, detail, payload, null, now)
-    const id = Number(res.lastInsertRowid)
-
-    if (embedding && embedding.length === EMBEDDING_DIM) {
-      db.prepare(
-        `INSERT INTO vec_events (rowid, embedding, ts, importance, event_id)
-         VALUES (?, ?, ?, ?, ?)`,
-      ).run(id, toVecBlob(embedding), now, CONSOLIDATION_IMPORTANCE, id)
-    }
-    return id
+    return Number(res.lastInsertRowid)
   })
 
   return tx() as number
