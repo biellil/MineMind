@@ -67,6 +67,14 @@ function actionToCognitiveState(action: ActionDecision['action']): CognitiveStat
       return 'exploring'
     case 'chat':
       return 'socializing'
+    // G-01: craft/smelt/equip/place agregam no estado 'building' (ações de construção/produção).
+    // O verbo exato é re-resolvido no execute a partir de fresh.decision.action — manter 'building'
+    // agregado mantém a Phase 10 livre para refinar a granularidade de estado sem mexer aqui.
+    case 'craft':
+    case 'smelt':
+    case 'equip':
+    case 'place':
+      return 'building'
     case 'idle':
     default:
       return 'idle'
@@ -222,8 +230,41 @@ export function createNodes(deps: NodeDeps) {
           target = JSON.stringify(player.position)
         }
       }
+    } else if (snap && state === 'building' && fresh) {
+      // G-01: o estado 'building' agrega craft/smelt/equip/place — resolve o VERBO da decisão LLM
+      // (não do state agregado) e monta os params físicos do target de alto nível. target inválido
+      // (item vazio / posição não-parseável) NÃO seta skill → degrada para sem-ação (Core Value).
+      const verb = fresh.decision.action
+      const raw = (llmTarget ?? '').trim()
+      if (verb === 'craft' && raw) {
+        // "item" ou "item:N"
+        const [name, n] = raw.split(':')
+        const count = Math.min(64, Math.max(1, parseInt(n ?? '1', 10) || 1))
+        skill = 'craft'
+        target = JSON.stringify({ itemName: name!.trim(), count })
+      } else if (verb === 'smelt' && raw) {
+        const [name, n] = raw.split(':')
+        const count = Math.min(64, Math.max(1, parseInt(n ?? '1', 10) || 1))
+        skill = 'smelt'
+        target = JSON.stringify({ oreName: name!.trim(), count })
+      } else if (verb === 'equip' && raw) {
+        // "item" ou "item@slot"
+        const [name, slot] = raw.split('@')
+        const dest = slot?.trim()
+        skill = 'equip'
+        target = JSON.stringify(dest ? { itemName: name!.trim(), destination: dest } : { itemName: name!.trim() })
+      } else if (verb === 'place' && raw) {
+        // "nome @ x,y,z" — exige posição; sem ela NÃO dispara (degrada para sem-ação).
+        const [name, posStr] = raw.split('@')
+        const coords = posStr?.split(',').map((c) => parseInt(c.trim(), 10))
+        if (coords && coords.length === 3 && coords.every((c) => Number.isFinite(c))) {
+          // A chave do registry para colocar bloco é 'placeBlock' (não 'place').
+          skill = 'placeBlock'
+          target = JSON.stringify({ target: { x: coords[0], y: coords[1], z: coords[2] }, itemName: name!.trim() })
+        }
+      }
     }
-    // idle / fighting(stub) / building(stub): nenhuma skill (D-06)
+    // idle / fighting(stub): nenhuma skill (D-06)
 
     if (!skill) {
       log(`sem acao (estado=${state})`)
@@ -283,9 +324,13 @@ export function createNodes(deps: NodeDeps) {
     // CRITÉRIO DE ORDEM: emit SEMPRE após holder.lastObservedDelta atribuído (Pitfall 1 da research).
     let skillOutcome: import('../grounding/types').SkillOutcome | null = null
     try {
+      // dig recebe target string cru; navigate recebe {target:{x,y,z}}; os 4 verbos G-01
+      // (craft/smelt/equip/placeBlock) recebem o OBJETO de params completo no topo (spread).
       const params = skill === 'dig'
         ? { target, signal: skillAbort.signal }
-        : { target: JSON.parse(target), signal: skillAbort.signal }
+        : skill === 'navigate'
+          ? { target: JSON.parse(target), signal: skillAbort.signal }
+          : { ...JSON.parse(target), signal: skillAbort.signal } // craft/smelt/equip/placeBlock
       // D-09 B: a memória deriva do SkillResult OBSERVADO (result.outcome), NUNCA do não-throw.
       // Mata o bug histórico "peguei 10 tábuas" (success por Promise resolvida com observed:0).
       const result = await skillRegistry[skill!]!(bot, params)
