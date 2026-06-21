@@ -88,7 +88,10 @@ test('sem blocos colocáveis -> no_effect, observed 0', async () => {
 test('canDig=true (bloco sólido 2 abaixo) -> cava-e-tampa (bot.dig chamado)', async () => {
   const { bot, calls } = makeMockBot({
     items: [cobble],
-    blocks: { '0,62,0': 'stone', '0,63,0': 'stone' }, // 2 abaixo e 1 abaixo sólidos
+    // 2 abaixo e 1 abaixo sólidos; '0,67,0' é vizinho sólido do topo (0,66,0) para o
+    // getRefAndFace do wrapper robusto encontrar uma face — sem ele o placeBlockSafe não seria
+    // chamado e o coverAfter não dispararia (D-05: o abrigo consome placeBlockSafe).
+    blocks: { '0,62,0': 'stone', '0,63,0': 'stone', '0,67,0': 'stone' },
     coverAfter: true,
   })
   const r = await shelter(bot, {})
