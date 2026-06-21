@@ -27,6 +27,33 @@ test('ActionDecisionSchema aceita todas as ações do enum', () => {
   }
 })
 
+// === G-01: enum estendido com craft/smelt/equip/place (continua FECHADO) ===
+
+test('ActionDecisionSchema aceita craft/smelt/equip/place (G-01)', () => {
+  for (const action of ['craft', 'smelt', 'equip', 'place'] as const) {
+    const d = ActionDecisionSchema.parse({ action, target: 'x', reason: 'ok' })
+    expect(d.action).toBe(action)
+  }
+})
+
+test('ActionDecisionSchema aceita craft com target item:N', () => {
+  const d = ActionDecisionSchema.parse({ action: 'craft', target: 'wooden_pickaxe:1', reason: 'preciso de picareta' })
+  expect(d.action).toBe('craft')
+  expect(d.target).toBe('wooden_pickaxe:1')
+})
+
+test('ActionDecisionSchema aceita place com target "nome @ x,y,z"', () => {
+  const d = ActionDecisionSchema.parse({ action: 'place', target: 'crafting_table @ 10,64,-3', reason: 'montar mesa' })
+  expect(d.action).toBe('place')
+  expect(d.target).toBe('crafting_table @ 10,64,-3')
+})
+
+test('ActionDecisionSchema continua FECHADO após estender (rejeita mine_diamonds)', () => {
+  expect(() =>
+    ActionDecisionSchema.parse({ action: 'mine_diamonds', target: 'x', reason: 'cavar' }),
+  ).toThrow()
+})
+
 test('ActionDecisionSchema exige reason', () => {
   expect(() => ActionDecisionSchema.parse({ action: 'idle' })).toThrow()
 })
