@@ -140,7 +140,12 @@ Plans:
   2. O agente crafta itens verificando o inventário antes/depois (grounded) e posiciona+usa a bancada de trabalho quando a receita exige 3x3 (bancada é Block real no mundo, ao alcance)
   3. O agente funde minérios na fornalha (ciclo completo putFuel→putInput→takeOutput assíncrono sem travar) e recupera o resultado
   4. O agente equipa a ferramenta/armadura apropriada do inventário antes de usá-la
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 09-01-PLAN.md — placeBlock robusto (placeBlockSafe + getRefAndFace) + evaluateCraft/Smelt/Equip + PlaceType station + config timeouts (BUILD-01)
+- [ ] 09-02-PLAN.md — Refator do shelter para consumir placeBlockSafe, commit isolado (BUILD-01/D-05)
+- [ ] 09-03-PLAN.md — ensureStation + craft(itemName,count) + smelt por item + registro das 4 skills (CRAFT-01/02/03/BUILD-01)
+- [ ] 09-04-PLAN.md — equip standalone + selectToolFor + pré-flight em dig/attack (CRAFT-04)
 
 ### Phase 10: Tech Tree DAG + Needs
 **Goal**: O agente resolve recursivamente os pré-requisitos de um item-alvo (DAG data-driven via minecraft-data, com memo + limite de profundidade), preenche `Goal.dependsOn`, e progride madeira→pedra→ferro de forma autônoma — com as necessidades internas reordenando dinamicamente a prioridade dos objetivos em runtime (a fusão GITM-estrutura + MineMind-motivação).
