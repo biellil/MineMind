@@ -107,6 +107,24 @@ Plans:
 - [ ] 08-04-PLAN.md — Integração: gatilhos lifeCritical + preempção generalizada (setGoal null) + System 1 no driver + gate D-20 AO VIVO
 **UI hint**: no
 
+### Phase 08.1: Refatorar memória: migrar vetores para ChromaDB (já rodando local), consertar gravação de eventos/lugares, garantir uso real pelo LLM, memória espacial (POIs) e registro de morte (INSERTED)
+
+**Goal:** A memória do bot funciona de verdade — eventos, lugares e perfis são gravados e o LLM realmente os usa para decidir e lembrar entre reinícios. Hoje a persistência está praticamente morta: só o holder (kv) é salvo; `events`/`vec_events`/`players`/`places` estão vazios.
+**Why:** Diagnóstico ao vivo (inspeção do `minemind.sqlite`): `events=0, vec_events=0, players=0, places=0, kv=1`. O bot não acumula histórico, não cria perfis, não lembra lugares — "começa do zero" toda vez. Isso bloqueia a tech-tree (Phase 10) e o aprendizado (Phase 14), que dependem de memória real.
+**How (escopo):**
+  - **Bug de fiação:** `persistEvent` (src/memory/longTerm.ts) NUNCA é chamado em produção (só em testes) — ligar no loop para gravar eventos individuais (mundo/ação/chat). Confirmar/consertar a reflexão (`consolidate`/`shouldReflect`) que também não produz nada ao vivo (Known Gap da Fase 4).
+  - **Vector store → ChromaDB:** migrar a camada vetorial de sqlite-vec para ChromaDB (já rodando localmente no PC do dev) — mais fácil de inspecionar e validar que o LLM usa. Embeddings continuam locais (LM Studio). Decidir se relacional fica em SQLite e só os vetores vão pro Chroma, ou tudo no Chroma.
+  - **Garantir uso pelo LLM:** o contexto enviado ao LLM (serializeContext) passa a incluir memórias recuperadas (KNN) — verificável ao vivo (a recuperação retorna algo e entra no prompt).
+  - **Memória espacial (POIs):** popular/usar `places` com tipos — `base`/`build`, `resource`, `danger`, `village`/`villager`, `landmark` — com busca por proximidade (x,y,z), não só por embedding. O LLM passa a saber "o que tem onde" além do raio de percepção (complementa a Phase 11.1).
+  - **Registro de morte:** quando o bot morre, gravar o evento de morte (local + causa) como memória de alta importância — base para o aprendizado da Phase 14 ("morri aqui sem abrigo → evitar / priorizar abrigo").
+  - **Conhecimento/lições aprendidas (evolutivo):** um lugar dedicado para o bot acumular o que aprendeu a fazer/saber (ex: "tronco no alto de árvore costuma ser inalcançável", "à noite zumbis aparecem perto da água") — entradas com texto + confiança/contador que EVOLUEM com o tempo (reforço quando confirma, decai/corrige quando falha). Distinto de `events` (fato pontual): isto é conhecimento generalizado e durável que o LLM consulta para decidir melhor. Semente do loop de aprendizado da Phase 14.
+**Requirements**: TBD
+**Depends on:** Phase 8
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 08.1 to break down)
+
 ### Phase 9: Placement + Crafting/Smelting Grounded
 **Goal**: O agente posiciona blocos de forma confiável e crafta/funde/equipa itens com verificação grounded — o primitivo `placeBlock` robusto é implementado uma vez (compartilhado por abrigo, building e estações) e a cadeia tábuas→bancada→ferramenta→fornalha→ferro produz resultados verídicos confirmados pelo inventário.
 **Depends on**: Phase 7 (grounding), Phase 8 (abrigo de emergência já usa um placeBlock — aqui ele vira o wrapper robusto definitivo)
@@ -188,7 +206,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 9 → 10 → 11 → 11.1 → 12 → 13 → 14
+Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 8.1 → 9 → 10 → 11 → 11.1 → 12 → 13 → 14
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -196,6 +214,7 @@ Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 9 → 10 → 11 → 1
 | 7. Grounding + SkillResult | v2.0 | 0/4 | Planned | - |
 | 7.1. Loop Agêntico | v2.0 | 0/4 | Planned | - |
 | 8. System 1 — Sobrevivência Reflexa | v2.0 | 0/TBD | Not started | - |
+| 8.1. Refatoração da memória (ChromaDB + fiação + POIs + morte) (INSERTED) | v2.0 | 0/TBD | Not started | - |
 | 9. Placement + Crafting/Smelting Grounded | v2.0 | 0/TBD | Not started | - |
 | 10. Tech Tree DAG + Needs | v2.0 | 0/TBD | Not started | - |
 | 11. Modos Autônomo/Assistente | v2.0 | 0/TBD | Not started | - |
