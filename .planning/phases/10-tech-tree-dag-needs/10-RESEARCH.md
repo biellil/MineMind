@@ -422,22 +422,25 @@ function goalToSkillParams(goal: Goal): { skill: string; params: unknown } | nul
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Representação de sub-goal para ingrediente "qualquer plank"**
    - O que sabemos: `wooden_pickaxe` aceita 12 variantes de plank; `gatheringLadder` tem `oak_log` que produz `oak_planks`
    - O que é indefinido: o ID do sub-goal deve ser `craft:oak_planks` (concreto) ou `craft:planks` (genérico)?
    - Recomendação: usar o ID concreto do item que o agente vai produzir (`craft:oak_planks`), já que o `craft.ts` na execução chama `bot.recipesFor` que escolhe a variante disponível no inventário. A ambiguidade de plank é resolvida na execução, não no planejamento.
+   - RESOLVED: O DAG usa o ID concreto `craft:oak_planks`. O executor (`craft.ts`) chama `bot.recipesFor` com o item concreto e seleciona a receita correta dinamicamente. Os planos 01/02 implementam essa estratégia.
 
 2. **Onde o execute node detecta "sub-goal atual completo → próxima folha"**
    - O que sabemos: `advanceProgress(goal, 1)` marca como completo; `triggerBus.emit('actionFinished')` acorda o observe
    - O que é indefinido: quem chama `advanceProgress` para sub-goals do DAG (hoje não é chamado em nodes.ts)
    - Recomendação: o execute node deve chamar `advanceProgress` no `holder.currentGoal` quando `result.outcome === 'success'` e atualizar `holder.goals` + `holder.currentGoal` no holder. O observe no próximo tick re-roda `selectGoal` com o set de completos atualizado.
+   - RESOLVED: O execute node (nodes.ts) chama `advanceProgress(currentGoal, 1)` após `result.outcome === 'success'` e registra o ID em `holder.completedGoalIds`. O observe usa o set atualizado para selecionar a próxima folha desbloqueada. Implementado no Plano 01 Tarefa 2 e Plano 02 Tarefa 2.
 
 3. **Gatilho de reconstrução do DAG em falha inesperada**
    - O que sabemos: D-03 diz que falha de sub-goal com `no_effect` reconstrói o DAG na próxima tentativa
    - O que é indefinido: onde exatamente (observe? execute?) o holder limpa os sub-goals do DAG atual
    - Recomendação: o execute node, ao receber `outcome: 'no_effect'` num sub-goal do DAG, deve limpar `holder.currentGoal` e os goals filhos do DAG, deixando apenas o goal de alto nível (ex: `need:resources`). O observe no próximo tick regera via `resolveDag`.
+   - RESOLVED: No execute node, quando `result.outcome === 'no_effect'` e `currentGoal.id` começa com prefixo DAG (`gather:`, `craft:`, `smelt:`, `ensure:`), o código limpa `holder.goals` de todos os sub-goals DAG via `holder.goals = holder.goals.filter(g => !DAG_PREFIXES.some(p => g.id.startsWith(p)))`. Isso força `alreadyHasDag = false` e o observe reconstrói o DAG no próximo tick. Implementado no Plano 02 Tarefa 1.
 
 ---
 
