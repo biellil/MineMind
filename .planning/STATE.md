@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
 status: executing
-stopped_at: Completed 08-03-PLAN.md
-last_updated: "2026-06-20T21:48:56.234Z"
+stopped_at: Phase 08.1 context gathered
+last_updated: "2026-06-21T13:42:42.459Z"
 last_activity: 2026-06-20
 progress:
-  total_phases: 11
+  total_phases: 12
   completed_phases: 3
   total_plans: 15
   completed_plans: 14
@@ -115,6 +115,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-20T21:48:43.652Z
-Stopped at: Completed 08-03-PLAN.md
-Resume file: None
+Last session: 2026-06-21T13:42:42.451Z
+Stopped at: Phase 08.1 context gathered
+Resume file: .planning/phases/08.1-refatorar-mem-ria-migrar-vetores-para-chromadb-j-rodando-local-consertar-grava-o-de-eventos-lugares-garantir-uso-real-pelo-llm-mem-ria-espacial-pois-e-registro-de-morte/08.1-CONTEXT.md
