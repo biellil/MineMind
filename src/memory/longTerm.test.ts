@@ -12,9 +12,20 @@ import {
   minMaxNormalizer,
   persistEvent,
   retrieve,
+  type RetrievedEvent,
 } from './longTerm'
 import { config } from '../config'
 import type { MemEvent } from '../cognition/types'
+import type { ChromaMemoryClient } from './chromaClient'
+
+// Stub do ChromaMemoryClient para exercitar o caminho KNN sem servidor. `queryVectors` é
+// reconfigurável por teste via `fakeChroma.queryVectors = ...`. isAvailable sempre true.
+const fakeChroma: ChromaMemoryClient = {
+  health: async () => true,
+  addVector: async () => {},
+  queryVectors: async () => [],
+  isAvailable: () => true,
+}
 
 // ───────────────────────── Task 1: funções puras ─────────────────────────
 
@@ -123,7 +134,7 @@ function synthEmbedding(peak: number): number[] {
   return v
 }
 
-test('persistEvent: importância >= floor insere em events E vec_events (mesmo rowid), retorna id', () => {
+test('persistEvent: importância >= floor insere em events (vec0 aposentado — não escreve), retorna id', () => {
   const db = openDb(DB_PATH)
   const e: MemEvent = { type: 'world', event: 'damage', detail: 'zombie', timestamp: 1000 }
   const id = persistEvent(db, e, synthEmbedding(0), 1000)
@@ -131,8 +142,9 @@ test('persistEvent: importância >= floor insere em events E vec_events (mesmo r
 
   const evRow = db.prepare('SELECT COUNT(*) AS n FROM events WHERE id = ?').get(id) as { n: number }
   expect(evRow.n).toBe(1)
+  // Plan 04 (Warning 2): persistEvent NÃO escreve mais em vec_events — o vetor é exclusivo da reflexão (Chroma).
   const vecRow = db.prepare('SELECT COUNT(*) AS n FROM vec_events WHERE rowid = ?').get(id) as { n: number }
-  expect(vecRow.n).toBe(1)
+  expect(vecRow.n).toBe(0)
   db.close()
 })
 
@@ -149,18 +161,25 @@ test('persistEvent: importância < floor NÃO insere (retorna null) — controla
   db.close()
 })
 
-test('retrieve: o evento com embedding idêntico ao query e recente aparece no topo', () => {
+test('retrieve: o evento relevante (KNN via Chroma) e recente aparece no topo', async () => {
   const db = openDb(DB_PATH)
   const now = 100_000
-  // Alvo: embedding no pico 5, recente.
-  const target = persistEvent(db, { type: 'world', event: 'damage', detail: 'alvo', timestamp: now - 1000 }, synthEmbedding(5), now - 1000)
-  // Distratores: embeddings ortogonais, mais antigos.
-  persistEvent(db, { type: 'world', event: 'hunger', detail: 'd1', timestamp: now - 50_000 }, synthEmbedding(10), now - 50_000)
-  persistEvent(db, { type: 'chat_command', command: '!x', from: 'p', mode: 'autonomous', timestamp: now - 80_000 }, synthEmbedding(20), now - 80_000)
+  // Alvo: recente.
+  const target = persistEvent(db, { type: 'world', event: 'damage', detail: 'alvo', timestamp: now - 1000 }, synthEmbedding(5), now - 1000) as number
+  // Distratores: mais antigos.
+  const d1 = persistEvent(db, { type: 'world', event: 'hunger', detail: 'd1', timestamp: now - 50_000 }, synthEmbedding(10), now - 50_000) as number
+  const d2 = persistEvent(db, { type: 'chat_command', command: '!x', from: 'p', mode: 'autonomous', timestamp: now - 80_000 }, synthEmbedding(20), now - 80_000) as number
 
-  const results = retrieve(db, synthEmbedding(5), now, { limit: 3 })
+  // O Chroma devolve o alvo como o mais próximo (distance 0), distratores mais distantes.
+  fakeChroma.queryVectors = async () => [
+    { id: String(target), distance: 0 },
+    { id: String(d1), distance: 0.8 },
+    { id: String(d2), distance: 0.9 },
+  ]
+
+  const results = await retrieve(db, fakeChroma, synthEmbedding(5), now, { limit: 3 })
   expect(results.length).toBeGreaterThan(0)
-  expect(results[0]!.id).toBe(target as number)
+  expect(results[0]!.id).toBe(target)
   // ordenado desc por score
   for (let i = 1; i < results.length; i++) {
     expect(results[i - 1]!.score).toBeGreaterThanOrEqual(results[i]!.score)
@@ -168,14 +187,15 @@ test('retrieve: o evento com embedding idêntico ao query e recente aparece no t
   db.close()
 })
 
-test('retrieve: renova last_access dos eventos retornados para now', () => {
+test('retrieve: renova last_access dos eventos retornados para now', async () => {
   const db = openDb(DB_PATH)
   const now = 200_000
   const id = persistEvent(db, { type: 'world', event: 'damage', detail: 'renova', timestamp: 1 }, synthEmbedding(7), 1) as number
   const before = (db.prepare('SELECT last_access FROM events WHERE id = ?').get(id) as { last_access: number }).last_access
   expect(before).toBe(1)
 
-  const results = retrieve(db, synthEmbedding(7), now, { limit: 5 })
+  fakeChroma.queryVectors = async () => [{ id: String(id), distance: 0 }]
+  const results = await retrieve(db, fakeChroma, synthEmbedding(7), now, { limit: 5 })
   expect(results.some((r) => r.id === id)).toBe(true)
 
   const after = (db.prepare('SELECT last_access FROM events WHERE id = ?').get(id) as { last_access: number }).last_access
@@ -183,16 +203,18 @@ test('retrieve: renova last_access dos eventos retornados para now', () => {
   db.close()
 })
 
-test('retrieve: embedding null (LLM off) NÃO lança — cai para recência×importância', () => {
+test('retrieve: embedding null (LLM off) + chroma null NÃO lança — cai para recência×importância', async () => {
   const db = openDb(DB_PATH)
   const now = 300_000
   persistEvent(db, { type: 'world', event: 'damage', detail: 'fallback', timestamp: now - 100 }, null, now - 100)
   persistEvent(db, { type: 'world', event: 'hunger', detail: 'fallback2', timestamp: now - 200 }, null, now - 200)
 
-  let results: ReturnType<typeof retrieve> = []
-  expect(() => {
-    results = retrieve(db, null, now, { limit: 5 })
-  }).not.toThrow()
+  let results: RetrievedEvent[] = []
+  await expect(
+    (async () => {
+      results = await retrieve(db, null, null, now, { limit: 5 })
+    })(),
+  ).resolves.toBeUndefined()
   expect(results.length).toBeGreaterThan(0)
   db.close()
 })

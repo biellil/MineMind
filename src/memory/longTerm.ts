@@ -6,14 +6,16 @@
 //  - summarizeEvent(e): texto natural canônico a embeddar (NÃO o JSON cru — Anti-pattern).
 //  - persistEvent(...): escrita ATÔMICA (evento + embedding na mesma transação — D-05/Pattern 3),
 //                       respeitando o piso de importância (Pitfall 6).
-//  - retrieve(...):     KNN no vec0 + scoring de Generative Agents (recência × importância ×
+//  - retrieve(...):     KNN no ChromaDB + scoring de Generative Agents (recência × importância ×
 //                       relevância, min-max [0,1], pesos iguais α=1 — D-07/Pattern 4), renovando
 //                       last_access dos eventos recuperados (fiel ao Park) e degradando gracioso
-//                       sem embedding (LLM off).
+//                       sem embedding (LLM off) OU com o Chroma offline (fallback de recência).
 //
-// Bind de embedding: Float32Array DIRETO (não Buffer.from) — herdado do 04-01-SUMMARY (D-01).
+// Plan 04: o vec0 foi aposentado — a fonte do KNN é o ChromaDB (índice derivado/descartável, D-01);
+// se o Chroma cair, o relacional `events` segue intacto e o retrieve cai no fallback de recência.
 import type { Database } from 'bun:sqlite'
 import type { MemEvent } from '../cognition/types'
+import type { ChromaMemoryClient } from './chromaClient'
 import { config } from '../config'
 import { EMBEDDING_DIM } from './persistence'
 
@@ -83,22 +85,19 @@ export interface RetrievedEvent {
   score: number
 }
 
-/** Converte um vetor JS para o blob que o vec0 espera: Float32Array direto (D-01). */
-function toVecBlob(v: number[]): Float32Array {
-  return new Float32Array(v)
-}
-
 /**
- * Persiste um evento + embedding atomicamente (D-05/Pattern 3). Retorna o id do evento,
- * ou null se a importância estiver abaixo do piso (config.ltImportanceFloor — Pitfall 6).
+ * Persiste um evento em LP (D-05/Pattern 3). Retorna o id do evento, ou null se a importância
+ * estiver abaixo do piso (config.ltImportanceFloor — Pitfall 6).
  *
- * O embedding só é inserido em vec_events se existir e tiver a dimensão correta (EMBEDDING_DIM);
- * caso contrário o evento ainda é persistido em events (degradação graciosa — LLM off).
+ * O vec0 foi APOSENTADO no Plan 04 (Warning 2): persistEvent NÃO escreve mais vetores — o vetor
+ * é responsabilidade EXCLUSIVA da reflexão (consolidate é o único ponto de embed, D-07) e vai
+ * para o ChromaDB. O parâmetro `embedding` PERMANECE na assinatura por compatibilidade com os
+ * call sites existentes (vira no-op aceito).
  */
 export function persistEvent(
   db: Database,
   e: MemEvent,
-  embedding: number[] | null,
+  _embedding: number[] | null,
   now: number,
   player?: string | null,
 ): number | null {
@@ -115,21 +114,13 @@ export function persistEvent(
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(e.type, e.timestamp, importance, summary, payload, player ?? null, now)
-    const id = Number(res.lastInsertRowid)
-
-    if (embedding && embedding.length === EMBEDDING_DIM) {
-      db.prepare(
-        `INSERT INTO vec_events (rowid, embedding, ts, importance, event_id)
-         VALUES (?, ?, ?, ?, ?)`,
-      ).run(id, toVecBlob(embedding), e.timestamp, importance, id)
-    }
-    return id
+    return Number(res.lastInsertRowid)
   })
 
   return tx() as number
 }
 
-/** Candidato bruto (antes do scoring) — colunas vindas do JOIN events↔vec_events. */
+/** Candidato bruto (antes do scoring) — colunas do relacional `events` (+ relevance do KNN Chroma). */
 interface Candidate {
   id: number
   summary: string
@@ -139,87 +130,100 @@ interface Candidate {
   relevance: number // ∈ [0,1] (0 quando não há embedding de query)
 }
 
+/** Fallback de recência (sem embedding OU Chroma offline/sem hits): os mais recentes, relevance=0. */
+function recencyCandidates(db: Database, player?: string): Candidate[] {
+  const rows = db
+    .prepare(
+      `SELECT id, importance, last_access, summary, payload
+       FROM events
+       ${player ? 'WHERE player = ?' : ''}
+       ORDER BY ts DESC
+       LIMIT ?`,
+    )
+    .all(...(player ? [player, config.retrievalK] : [config.retrievalK])) as {
+    id: number
+    importance: number
+    last_access: number
+    summary: string
+    payload: string
+  }[]
+
+  return rows.map((r) => ({
+    id: r.id,
+    summary: r.summary,
+    payload: r.payload,
+    importance: r.importance,
+    last_access: r.last_access,
+    relevance: 0,
+  }))
+}
+
 /**
  * Recupera os top-N eventos por score Generative Agents (D-07/Pattern 4):
  *   score = W_RECENCY·recN + W_IMPORTANCE·impN + W_RELEVANCE·relN  (min-max sobre os candidatos)
  *
  * Passos:
- *  1. Com queryEmbedding válido: KNN no vec_events (MATCH ? AND k = retrievalK), JOIN events;
- *     relevance = clamp(1 - distance, [0,1]). Filtro opcional por player (JOIN — ver SUMMARY).
- *  2. Sem queryEmbedding (LLM off): os retrievalK eventos mais recentes; relevance = 0.
+ *  1. Com queryEmbedding válido E Chroma disponível: KNN no ChromaDB (queryVectors), JOIN com o
+ *     relacional `events` por id; relevance = clamp(1 - distance, [0,1]). Filtro por player via
+ *     o `where` do Chroma (D-04). Sem hits → cai no fallback de recência.
+ *  2. Sem queryEmbedding OU Chroma offline/null: os retrievalK eventos mais recentes; relevance = 0.
  *  3. recency = recencyRaw(now - last_access), importance = events.importance, relevance (1/2).
  *  4. Min-max normaliza cada fator SOBRE os candidatos; soma ponderada; ordena desc; corta no limit.
  *  5. UPDATE events SET last_access = now nos retornados (renova recência).
  *
  * NUNCA lança: qualquer falha degrada para [] e loga (Environment Availability / Core Value).
+ * O índice (Chroma) é derivado/descartável (D-01): Chroma offline → fallback, relacional intacto.
  */
-export function retrieve(
+export async function retrieve(
   db: Database,
+  chroma: ChromaMemoryClient | null,
   queryEmbedding: number[] | null,
   now: number,
   opts?: { player?: string; limit?: number },
-): RetrievedEvent[] {
+): Promise<RetrievedEvent[]> {
   const limit = opts?.limit ?? 5
   const player = opts?.player
 
   try {
     let candidates: Candidate[] = []
 
-    if (queryEmbedding && queryEmbedding.length === EMBEDDING_DIM) {
-      // Passo 1: KNN no índice vetorial + JOIN para os campos relacionais.
-      // O filtro por player é aplicado no JOIN (e.player = ?) — ver SUMMARY (JOIN vs metadata WHERE).
-      const rows = db
-        .prepare(
-          `SELECT v.rowid AS id, v.distance AS distance, e.importance AS importance,
-                  e.last_access AS last_access, e.summary AS summary, e.payload AS payload
-           FROM vec_events v
-           JOIN events e ON e.id = v.rowid
-           WHERE v.embedding MATCH ? AND k = ?${player ? ' AND e.player = ?' : ''}
-           ORDER BY v.distance`,
-        )
-        .all(...(player ? [toVecBlob(queryEmbedding), config.retrievalK, player] : [toVecBlob(queryEmbedding), config.retrievalK])) as {
-        id: number
-        distance: number
-        importance: number
-        last_access: number
-        summary: string
-        payload: string
-      }[]
-
-      candidates = rows.map((r) => ({
-        id: r.id,
-        summary: r.summary,
-        payload: r.payload,
-        importance: r.importance,
-        last_access: r.last_access,
-        relevance: Math.max(0, Math.min(1, 1 - r.distance)), // clamp [0,1]
-      }))
+    if (queryEmbedding && queryEmbedding.length === EMBEDDING_DIM && chroma && chroma.isAvailable()) {
+      // Passo 1: KNN no ChromaDB; ids (= String(events.id)) → JOIN com o relacional `events`.
+      const hits = await chroma.queryVectors({
+        queryEmbedding,
+        nResults: config.retrievalK,
+        player,
+      })
+      if (hits.length > 0) {
+        const ids = hits.map((h) => Number(h.id))
+        const placeholders = ids.map(() => '?').join(', ')
+        const rows = db
+          .prepare(
+            `SELECT id, importance, last_access, summary, payload FROM events WHERE id IN (${placeholders})`,
+          )
+          .all(...ids) as Array<{
+          id: number
+          importance: number
+          last_access: number
+          summary: string
+          payload: string
+        }>
+        const distById = new Map(hits.map((h) => [Number(h.id), h.distance]))
+        candidates = rows.map((r) => ({
+          id: r.id,
+          summary: r.summary,
+          payload: r.payload,
+          importance: r.importance,
+          last_access: r.last_access,
+          relevance: Math.max(0, Math.min(1, 1 - (distById.get(r.id) ?? 1))), // cosine distance → relevance clamp [0,1]
+        }))
+      } else {
+        // Chroma disponível mas sem hits → fallback de recência (igual ao caminho sem embedding).
+        candidates = recencyCandidates(db, player)
+      }
     } else {
-      // Passo 2: fallback gracioso (sem embedding) — os mais recentes, relevance = 0.
-      const rows = db
-        .prepare(
-          `SELECT id, importance, last_access, summary, payload
-           FROM events
-           ${player ? 'WHERE player = ?' : ''}
-           ORDER BY ts DESC
-           LIMIT ?`,
-        )
-        .all(...(player ? [player, config.retrievalK] : [config.retrievalK])) as {
-        id: number
-        importance: number
-        last_access: number
-        summary: string
-        payload: string
-      }[]
-
-      candidates = rows.map((r) => ({
-        id: r.id,
-        summary: r.summary,
-        payload: r.payload,
-        importance: r.importance,
-        last_access: r.last_access,
-        relevance: 0,
-      }))
+      // Passo 2: fallback gracioso (sem embedding OU Chroma offline/null) — os mais recentes, relevance = 0.
+      candidates = recencyCandidates(db, player)
     }
 
     if (candidates.length === 0) return []
