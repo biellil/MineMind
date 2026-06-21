@@ -42,7 +42,9 @@ function makeMockBot(opts: {
       type: 17,
       position: pos,
     }),
-    inventory: { items: () => [] },
+    inventory: { items: () => [{ name: 'wooden_axe', count: 1 }] },
+    heldItem: null,
+    equip: async () => {},
     collectBlock: {
       movements: {},
       collect: async (blocks: MockBlock[]) => {

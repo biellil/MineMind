@@ -3,10 +3,12 @@
 // Prova que, dada uma decisão LLM fresca, o execute node despacha skillRegistry.{craft,smelt,equip,
 // placeBlock} com params físicos montados do target e grava MemEvent grounded (outcome do SkillResult).
 //
+// Fase 10 (10-02): 5 testes unitários do roteador goalToSkillParams (D-09/D-10).
+//
 // Convenção de injeção SEM mock.module (vaza global no bun — ver __craftDeps em craft.ts): o teste
 // monkeypatcha pontualmente as entradas do objeto skillRegistry importado e restaura no afterEach.
-import { test, expect, afterEach } from 'bun:test'
-import { createNodes, type LoopState, type NodeDeps } from './nodes'
+import { test, describe, expect, afterEach } from 'bun:test'
+import { createNodes, goalToSkillParams, type LoopState, type NodeDeps } from './nodes'
 import { createCognitiveStateHolder, type CognitiveStateHolder } from './state'
 import { TriggerBus } from './trigger-bus'
 import { skillRegistry, type SkillFunction } from '../skills/index'
@@ -215,4 +217,44 @@ test('place sem posição não despacha: nenhuma skill chamada, actionFinished c
   expect(finished).toEqual({ skill: null, outcome: null })
   // nenhuma ação gravada na memória (degradou para sem-ação)
   expect(holder.memory.events.filter((e: any) => e.type === 'action').length).toBe(0)
+})
+
+// === Fase 10 (10-02): Testes unitários do roteador goalToSkillParams (D-09/D-10) ===
+
+describe('goalToSkillParams — roteador determinístico DAG (D-09/D-10 Fase 10)', () => {
+  test('Teste 1: gather:oak_log → skill=dig, params={target:"oak_log",count:1}', () => {
+    const result = goalToSkillParams('gather:oak_log')
+    expect(result).not.toBeNull()
+    expect(result!.skill).toBe('dig')
+    expect(JSON.parse(result!.paramsJson)).toEqual({ target: 'oak_log', count: 1 })
+  })
+
+  test('Teste 2: craft:wooden_pickaxe → skill=craft, params={itemName:"wooden_pickaxe",count:1}', () => {
+    const result = goalToSkillParams('craft:wooden_pickaxe')
+    expect(result).not.toBeNull()
+    expect(result!.skill).toBe('craft')
+    expect(JSON.parse(result!.paramsJson)).toEqual({ itemName: 'wooden_pickaxe', count: 1 })
+  })
+
+  test('Teste 3: smelt:iron_ore → skill=smelt, params={oreName:"iron_ore",count:1}', () => {
+    const result = goalToSkillParams('smelt:iron_ore')
+    expect(result).not.toBeNull()
+    expect(result!.skill).toBe('smelt')
+    expect(JSON.parse(result!.paramsJson)).toEqual({ oreName: 'iron_ore', count: 1 })
+  })
+
+  test('Teste 4: ensure:crafting_table → retorna null (no-op, ensureStation é chamado por craft/smelt)', () => {
+    const result = goalToSkillParams('ensure:crafting_table')
+    expect(result).toBeNull()
+  })
+
+  test('Teste 5: need:resources → retorna null (não é sub-goal do DAG)', () => {
+    const result = goalToSkillParams('need:resources')
+    expect(result).toBeNull()
+  })
+
+  test('Teste 6: goalId sem ":" → retorna null (malformado, T-10-08)', () => {
+    const result = goalToSkillParams('gatheroaklog')
+    expect(result).toBeNull()
+  })
 })

@@ -172,6 +172,12 @@ export const config = {
   meleeReactDistance: parseInt(process.env.MELEE_REACT_DISTANCE || '8', 10),
   rangedReactDistance: parseInt(process.env.RANGED_REACT_DISTANCE || '16', 10),
 
+  // === Fase 10: Tech Tree DAG + Needs ===
+  // D-09: quantidade mínima de cada item da gatheringLadder para considerar "satisfeito" (bridge need→DAG).
+  // O agente considera que tem "suficiente" de um item se tiver pelo menos esta quantidade no inventário.
+  // Valor baixo (1) garante que a progressão sempre avance para o próximo tier.
+  resourceMinQuantity: parseInt(process.env.RESOURCE_MIN_QUANTITY || '1', 10),
+
   // === Fase 08.1: ChromaDB (vector store HTTP local — índice derivado descartável, D-01/D-03) ===
   chromaHost: process.env.CHROMA_HOST || 'localhost',
   chromaPort: parseInt(process.env.CHROMA_PORT || '8000', 10),
@@ -330,3 +336,7 @@ if (config.placeTimeoutMs < 1) throw new Error(`PLACE_TIMEOUT_MS inválido: ${co
 if (config.placeRetries < 0) throw new Error(`PLACE_RETRIES inválido: ${config.placeRetries}. Deve ser >= 0.`)
 if (config.smeltUpdateTimeoutMs < 1) throw new Error(`SMELT_UPDATE_TIMEOUT_MS inválido: ${config.smeltUpdateTimeoutMs}. Deve ser >= 1.`)
 if (config.smeltTimeoutMs < 1) throw new Error(`SMELT_TIMEOUT_MS inválido: ${config.smeltTimeoutMs}. Deve ser >= 1.`)
+// Fase 10: validação da quantidade mínima de recursos
+if (config.resourceMinQuantity < 1) {
+  throw new Error(`RESOURCE_MIN_QUANTITY inválido: ${config.resourceMinQuantity}. Deve ser >= 1.`)
+}

@@ -73,7 +73,9 @@ function makeMockBot(opts: { status: string; collectHangs: boolean }) {
       type: 17,
       position: pos,
     }),
-    inventory: { items: () => [] },
+    inventory: { items: () => [{ name: 'wooden_axe', count: 1 }] },
+    heldItem: null,
+    equip: async () => {},
     collectBlock: {
       movements: {},
       collect: (blocks: MockBlock[]) => {

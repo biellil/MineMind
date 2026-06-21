@@ -57,6 +57,10 @@ const log = (msg: string) => console.log(`[loop] ${msg}`)
 // O nó execute registra um listener por gatilho; cada um força setGoal(null) (D-07) ANTES do abort.
 const LIFE_CRITICAL_TRIGGERS = ['hostileNearby', 'healthCritical', 'drowning', 'lavaAhead', 'fallAhead'] as const
 
+// Fase 10 D-09/D-10: prefixos de sub-goals do DAG tech-tree.
+// Constante de módulo reutilizada em observe (ponte need→DAG) e execute (roteador + D-03).
+const DAG_PREFIXES = ['gather:', 'craft:', 'smelt:', 'ensure:'] as const
+
 /** Mapeia a ação do enum LLM (fechado) para um CognitiveState da Fase 2. */
 function actionToCognitiveState(action: ActionDecision['action']): CognitiveState {
   switch (action) {
@@ -78,6 +82,36 @@ function actionToCognitiveState(action: ActionDecision['action']): CognitiveStat
     case 'idle':
     default:
       return 'idle'
+  }
+}
+
+/**
+ * D-09/D-10 Fase 10: Mapeia ID de sub-goal do DAG para (skill, params) sem LLM.
+ * 'gather:X' → dig(X,1); 'craft:X' → craft(X,1); 'smelt:X' → smelt(X,1); 'ensure:X' → null (no-op).
+ * Pitfall 5: iron_ingot como intermediário — 'smelt:iron_ore' roteia para smelt com oreName='iron_ore'.
+ *
+ * Retorna null quando o prefixo é 'ensure:*' (ensureStation é chamado internamente por craft/smelt)
+ * ou quando o goalId não tem prefixo DAG reconhecido.
+ */
+export function goalToSkillParams(goalId: string): { skill: string; paramsJson: string } | null {
+  const colonIdx = goalId.indexOf(':')
+  if (colonIdx === -1) return null
+  const type = goalId.slice(0, colonIdx)
+  const item = goalId.slice(colonIdx + 1)
+  if (!item) return null
+  switch (type) {
+    case 'gather':
+      return { skill: 'dig', paramsJson: JSON.stringify({ target: item, count: 1 }) }
+    case 'craft':
+      return { skill: 'craft', paramsJson: JSON.stringify({ itemName: item, count: 1 }) }
+    case 'smelt':
+      return { skill: 'smelt', paramsJson: JSON.stringify({ oreName: item, count: 1 }) }
+    case 'ensure':
+      // ensure:crafting_table / ensure:furnace → ensureStation é chamado internamente por craft/smelt.
+      // Nenhuma ação direta aqui; o craft/smelt seguinte chama ensureStation automaticamente.
+      return null
+    default:
+      return null
   }
 }
 
@@ -131,6 +165,65 @@ export function createNodes(deps: NodeDeps) {
 
     // consumiu um pedido de jogador → reseta o sinal (Plan 04 volta a setá-lo)
     if (selected?.source === 'player_request') holder.playerRequestPending = false
+
+    // === Fase 10 D-09/D-10: Ponte resources need → resolveDag (determinística, sem LLM) ===
+    // Quando resources está insatisfeita e o goal atual não é um sub-goal de tech-tree:
+    // percorrer gatheringLadder → primeiro item abaixo de resourceMinQuantity → resolveDag.
+    // O LLM pode sobrescrever via preempção ASSISTANT (D-10), mas a ponte nunca usa o LLM.
+    const resourcesNeed = holder.needs.find(n => n.kind === 'resources')
+    const resourcesUrgent = resourcesNeed !== undefined && urgency(resourcesNeed, t, mcfg) > mcfg.goalThreshold
+    const currentIsTechGoal = holder.currentGoal !== null &&
+      DAG_PREFIXES.some(p => holder.currentGoal!.id.startsWith(p))
+
+    if (resourcesUrgent && !currentIsTechGoal) {
+      // pickTechTarget: primeiro item da ladder que falta em quantidade suficiente
+      const invCounts = new Map<string, number>()
+      for (const slot of snapshot.inventory) {
+        invCounts.set(slot.name, (invCounts.get(slot.name) ?? 0) + slot.count)
+      }
+      let techTarget: string | null = null
+      for (const item of config.gatheringLadder) {
+        const have = invCounts.get(item) ?? 0
+        if (have < config.resourceMinQuantity) {
+          techTarget = item
+          break
+        }
+      }
+
+      if (techTarget) {
+        // Reconstruir DAG somente se não há sub-goals DAG no holder (D-03: alreadyHasDag guard)
+        const alreadyHasDag = holder.goals.some(g => DAG_PREFIXES.some(p => g.id.startsWith(p)))
+        if (!alreadyHasDag) {
+          try {
+            const { resolveDag } = await import('../motivation/tech-tree')
+            const dagMemo = new Map()
+            const dagResult = resolveDag(techTarget, bot, dagMemo, 0, resourcesNeed ? urgency(resourcesNeed, t, mcfg) : 0.8, t)
+            if (!('unresolvable' in dagResult)) {
+              // Filtro: não re-inserir goals já completados
+              const completedIds = holder.completedGoalIds
+              const newGoals = dagResult.filter(g => !completedIds.has(g.id))
+              // Substituir sub-goals DAG existentes pelos novos; preservar goals não-DAG
+              holder.goals = [
+                ...holder.goals.filter(g => !DAG_PREFIXES.some(p => g.id.startsWith(p))),
+                ...newGoals,
+              ]
+              // Selecionar a folha executável: o goal sem dependsOn não satisfeito
+              const executableLeaf = newGoals.find(g => g.dependsOn.every(dep => completedIds.has(dep)))
+              if (executableLeaf) {
+                holder.currentGoal = executableLeaf
+              }
+            } else {
+              log(`[tech-tree] ${techTarget} é unresolvable — ignorando`)
+            }
+          } catch (err) {
+            // Bot sem registry (mock/testes) ou erro inesperado: degradar silenciosamente.
+            // O loop cognitivo não pode parar por falha de DAG — Core Value.
+            log(`[tech-tree] resolveDag falhou para ${techTarget}: ${err instanceof Error ? err.message : err}`)
+          }
+        }
+      }
+    }
+    // === Fim da ponte Fase 10 ===
 
     // Fase 07.1 Plan 03: sinais para o driver event-driven.
     // enteredIdle=true quando não há objetivo ativo (sem skill neste tick = idle genuíno).
@@ -198,7 +291,33 @@ export function createNodes(deps: NodeDeps) {
     // mapeia estado -> (skill, target). Apenas estados ativos disparam skill.
     let skill: string | null = null
     let target = ''
-    if (snap && state === 'gathering') {
+
+    // === Fase 10 D-09/D-10: Roteador determinístico de sub-goals do DAG ===
+    // Se o currentGoal é um sub-goal do DAG (prefixo gather:/craft:/smelt:/ensure:),
+    // rotear para a skill correspondente SEM depender do estado cognitivo ou da decisão LLM.
+    // Isso é a ponte determinística: o LLM não precisa conhecer a cadeia de tech-tree.
+    const currentGoal = holder.currentGoal
+    if (snap && currentGoal && DAG_PREFIXES.some(p => currentGoal.id.startsWith(p))) {
+      const routing = goalToSkillParams(currentGoal.id)
+      if (routing) {
+        skill = routing.skill
+        target = routing.paramsJson
+        log(`[tech-tree] roteando ${currentGoal.id} → ${skill}`)
+      } else {
+        // 'ensure:*' ou prefixo desconhecido: marcar como completo automaticamente
+        // (ensureStation é chamado pelas skills de craft/smelt que verificam o estado real)
+        log(`[tech-tree] sub-goal ${currentGoal.id} é no-op (ensure) — avançando automaticamente`)
+        const goalId = currentGoal.id
+        const updated = advanceProgress(currentGoal, 1)
+        holder.goals = holder.goals.map(g => g.id === goalId ? updated : g)
+        holder.currentGoal = updated
+        if (!holder.completedGoalIds) holder.completedGoalIds = new Set()
+        holder.completedGoalIds.add(goalId)
+      }
+    }
+    // === Fim do roteador Fase 10 ===
+
+    if (!skill && snap && state === 'gathering') {
       // alvo do LLM (se for um bloco da escada presente) tem preferência; senão a escada de prioridade.
       const cd = cooledDownTargets(safety, now())
       const llmBlock =
@@ -208,7 +327,8 @@ export function createNodes(deps: NodeDeps) {
         skill = 'dig'
         target = t
       }
-    } else if (snap && state === 'exploring') {
+    }
+    if (!skill && snap && state === 'exploring') {
       // exploring: navega para um ponto deslocado (vaguear visível). Sem alvo de bloco.
       skill = 'navigate'
       const p = snap.status.position
@@ -217,7 +337,8 @@ export function createNodes(deps: NodeDeps) {
         y: Math.round(p.y),
         z: Math.round(p.z + (Math.random() * 16 - 8)),
       })
-    } else if (snap && state === 'socializing') {
+    }
+    if (!skill && snap && state === 'socializing') {
       // standby/jogador próximo: SÓ se aproxima se estiver LONGE. Já dentro de socialArriveRadius
       // => fica parado neste tick. Sem isso, a posição do jogador oscila nos decimais a cada tick,
       // a string-alvo muda, o guard anti-repetição nunca acumula e o bot re-navega pro mesmo ponto
@@ -236,7 +357,8 @@ export function createNodes(deps: NodeDeps) {
           target = JSON.stringify(player.position)
         }
       }
-    } else if (snap && state === 'building' && fresh) {
+    }
+    if (!skill && snap && state === 'building' && fresh) {
       // G-01: o estado 'building' agrega craft/smelt/equip/place — resolve o VERBO da decisão LLM
       // (não do state agregado) e monta os params físicos do target de alto nível. target inválido
       // (item vazio / posição não-parseável) NÃO seta skill → degrada para sem-ação (Core Value).
@@ -406,6 +528,27 @@ export function createNodes(deps: NodeDeps) {
       for (const [trig, fn] of preemptListeners) triggerBus.off(trig, fn)
       skillAbort.abort()  // cleanup idempotente — no-op se já foi abortado
     }
+
+    // === Fase 10 D-03: Reconstrução do DAG em falha de sub-goal ===
+    // Quando resultado é no_effect em sub-goal do DAG, limpar os sub-goals do holder
+    // para forçar reconstrução no próximo tick (alreadyHasDag fica false no observe).
+    if (
+      skillOutcome === 'no_effect' &&
+      currentGoal &&
+      DAG_PREFIXES.some(p => currentGoal.id.startsWith(p))
+    ) {
+      log(`[tech-tree] ${currentGoal.id} retornou no_effect — limpando sub-goals DAG para reconstrução`)
+      // Remove todos os sub-goals do DAG do holder (qualquer goal com prefixo DAG)
+      holder.goals = holder.goals.filter(
+        g => !DAG_PREFIXES.some(p => g.id.startsWith(p))
+      )
+      // Limpar currentGoal DAG para que o observe não tente executar o mesmo sub-goal novamente
+      if (holder.currentGoal && DAG_PREFIXES.some(p => holder.currentGoal!.id.startsWith(p))) {
+        holder.currentGoal = null
+      }
+      // O observe no próximo tick vai verificar alreadyHasDag=false e reconstruir o DAG
+    }
+    // === Fim D-03 ===
 
     // Fase 07.1 Plan 03: emit após try/catch/finally — grounding já gravado (Pitfall 1 / T-07.1-10)
     triggerBus.emit('actionFinished', { skill, outcome: skillOutcome })

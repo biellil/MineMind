@@ -8,7 +8,7 @@ import { executeWithSafety } from './executor'
 import { captureGroundState } from '../grounding/capture'
 import { evaluateDig } from '../grounding/evaluate'
 import type { SkillResult } from '../grounding/types'
-import { selectToolFor } from './equip'
+import { selectToolFor } from './tool-selector'
 import { config } from '../config'
 
 export const DigSchema = z.object({
@@ -41,14 +41,25 @@ export async function dig(bot: Bot, rawParams: unknown): Promise<SkillResult> {
   const { target, count } = DigSchema.parse(rawParams)
   const before = captureGroundState(bot, typeof target === 'string' ? undefined : target)
 
-  // B2/D-16: pré-flight de ferramenta — rede de segurança (o LLM local frequentemente omite equipar).
-  // Binário por categoria (D-17, sem tier). Best-effort: falha de equip NÃO aborta o dig (o grounding
-  // por delta decide o sucesso real).
-  try {
-    const tool = selectToolFor(bot, 'pickaxe')
-    if (tool && bot.heldItem?.name !== tool.name) await bot.equip(tool, 'hand')
-  } catch {
-    /* pré-flight best-effort; o grounding por delta decide o sucesso */
+  // D-13 Fase 10: pré-flight de ferramenta com hard guard.
+  // selectToolFor agora é ranqueado (tool-selector.ts). Se não houver ferramenta
+  // compatível no inventário → retorna no_effect imediatamente (sem cavar a seco).
+  // Aceita blockName diretamente (ex: 'oak_log', 'iron_ore') — tool-selector.ts faz o mapeamento
+  // blockName→toolCategory via BLOCK_TO_TOOL_CATEGORY internamente.
+  const blockNameForTool = typeof target === 'string'
+    ? target
+    : (bot.blockAt({ x: target.x, y: target.y, z: target.z } as Parameters<typeof bot.blockAt>[0])?.name ?? 'unknown')
+  const tool = selectToolFor(bot, blockNameForTool)
+  if (tool === null) {
+    // Sem ferramenta compatível no inventário — retorna no_effect imediatamente (D-13)
+    return { outcome: 'no_effect', observed: 0, expected: count, delta: {}, reason: `no compatible tool for ${blockNameForTool}` }
+  }
+  if (bot.heldItem?.name !== tool.name) {
+    try {
+      await bot.equip(tool, 'hand')
+    } catch {
+      /* equip falhou mas ferramenta existe — continua o dig; o grounding por delta decide */
+    }
   }
 
   // D-17: AbortSignal honrado via bot.pathfinder.stop()
