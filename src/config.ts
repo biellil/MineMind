@@ -166,6 +166,17 @@ export const config = {
   creeperReactDistance: parseInt(process.env.CREEPER_REACT_DISTANCE || '10', 10),
   meleeReactDistance: parseInt(process.env.MELEE_REACT_DISTANCE || '8', 10),
   rangedReactDistance: parseInt(process.env.RANGED_REACT_DISTANCE || '16', 10),
+
+  // === Fase 08.1: ChromaDB (vector store HTTP local — índice derivado descartável, D-01/D-03) ===
+  chromaHost: process.env.CHROMA_HOST || 'localhost',
+  chromaPort: parseInt(process.env.CHROMA_PORT || '8000', 10),
+  chromaSsl: (process.env.CHROMA_SSL || 'false') === 'true',
+  chromaCollection: process.env.CHROMA_COLLECTION || 'events',
+  // Circuit breaker (D-02/D-22) — todos discricionários (timeout curto p/ não pendurar o tick).
+  chromaFetchTimeoutMs: parseInt(process.env.CHROMA_FETCH_TIMEOUT_MS || '2000', 10),
+  chromaFailThreshold: parseInt(process.env.CHROMA_FAIL_THRESHOLD || '3', 10),
+  chromaCooldownMs: parseInt(process.env.CHROMA_COOLDOWN_MS || '30000', 10),
+  chromaWarnDebounceMs: parseInt(process.env.CHROMA_WARN_DEBOUNCE_MS || '60000', 10),
 } as const
 
 // === Fase 3: pesos de necessidade POR DISPOSIÇÃO (D-06/D-10) ===
@@ -306,3 +317,6 @@ if (config.lavaLookahead < 1 || config.lavaLookahead > 8) throw new Error(`LAVA_
 for (const [name, v] of [['CREEPER_REACT_DISTANCE', config.creeperReactDistance], ['MELEE_REACT_DISTANCE', config.meleeReactDistance], ['RANGED_REACT_DISTANCE', config.rangedReactDistance]] as const) {
   if (v < 1 || v > 64) throw new Error(`${name} inválido: ${v}. Deve estar em [1,64].`)
 }
+// Fase 08.1: validação do ChromaDB
+if (config.chromaPort < 1 || config.chromaPort > 65535) throw new Error(`CHROMA_PORT inválido: ${config.chromaPort}.`)
+if (config.chromaFetchTimeoutMs < 1) throw new Error(`CHROMA_FETCH_TIMEOUT_MS inválido: ${config.chromaFetchTimeoutMs}. Deve ser >= 1.`)
