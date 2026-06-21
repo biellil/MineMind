@@ -34,9 +34,9 @@ Escopo comprometido deste milestone. Cada requisito mapeia para uma fase do road
 
 ### Crafting & Smelting (CRAFT)
 
-- [ ] **CRAFT-01**: O agente crafta itens verificando o inventário antes/depois (grounded)
-- [ ] **CRAFT-02**: O agente posiciona e usa a bancada de trabalho quando a receita exige (3x3)
-- [ ] **CRAFT-03**: O agente funde minérios na fornalha (smelting) e recupera o resultado
+- [x] **CRAFT-01**: O agente crafta itens verificando o inventário antes/depois (grounded)
+- [x] **CRAFT-02**: O agente posiciona e usa a bancada de trabalho quando a receita exige (3x3)
+- [x] **CRAFT-03**: O agente funde minérios na fornalha (smelting) e recupera o resultado
 - [x] **CRAFT-04**: O agente equipa a ferramenta/armadura apropriada do inventário
 
 ### Progressão / Tech Tree (TECH)
@@ -121,9 +121,9 @@ Quais fases cobrem quais requisitos. Preenchido durante a criação do roadmap.
 | SURV-04 | Phase 8 | Complete |
 | SURV-05 | Phase 8 | Complete |
 | BUILD-01 | Phase 9 | Complete |
-| CRAFT-01 | Phase 9 | Pending |
-| CRAFT-02 | Phase 9 | Pending |
-| CRAFT-03 | Phase 9 | Pending |
+| CRAFT-01 | Phase 9 | Complete |
+| CRAFT-02 | Phase 9 | Complete |
+| CRAFT-03 | Phase 9 | Complete |
 | CRAFT-04 | Phase 9 | Complete |
 | TECH-01 | Phase 10 | Pending |
 | TECH-02 | Phase 10 | Pending |

@@ -144,7 +144,7 @@ Plans:
 Plans:
 - [x] 09-01-PLAN.md — placeBlock robusto (placeBlockSafe + getRefAndFace) + evaluateCraft/Smelt/Equip + PlaceType station + config timeouts (BUILD-01)
 - [x] 09-02-PLAN.md — Refator do shelter para consumir placeBlockSafe, commit isolado (BUILD-01/D-05)
-- [ ] 09-03-PLAN.md — ensureStation + craft(itemName,count) + smelt por item + registro das 4 skills (CRAFT-01/02/03/BUILD-01)
+- [x] 09-03-PLAN.md — ensureStation + craft(itemName,count) + smelt por item + registro das 4 skills (CRAFT-01/02/03/BUILD-01)
 - [x] 09-04-PLAN.md — equip standalone + selectToolFor + pré-flight em dig/attack (CRAFT-04)
 
 ### Phase 10: Tech Tree DAG + Needs

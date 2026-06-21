@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
 status: executing
-stopped_at: Completed 09-04-PLAN.md
-last_updated: "2026-06-21T20:14:15.806Z"
+stopped_at: Completed 09-03-PLAN.md
+last_updated: "2026-06-21T20:34:04.961Z"
 last_activity: 2026-06-21
 progress:
   total_phases: 13
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 26
-  completed_plans: 24
+  completed_plans: 25
   percent: 95
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 ## Current Position
 
 Phase: 09 (placement-crafting-smelting-grounded) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-06-21
 
@@ -72,6 +72,7 @@ Progress: [█████████░] 95%
 | Phase 09 P01 | 6 | 2 tasks | 6 files |
 | Phase 09 P04 | 4 | 2 tasks | 4 files |
 | Phase 09 P02 | 5 | 1 tasks | 2 files |
+| Phase 09 P03 | 13 | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,7 @@ Recent decisions affecting current work:
 - [Phase 09]: 09-01: placeBlockSafe deriva outcome de bot.blockAt (não da Promise) e engole o timeout do blockUpdate como falso-negativo (D-01/Pitfall 1); getRefAndFace puro prefere face de baixo; evaluateCraft/Smelt por delta do alvo, evaluateEquip LOCAL (D-18/19/20); PlaceType += 'station' (D-14); 4 timeouts de config; placeRetries reservado sem corpo (D-04)
 - [Phase 09]: 09-04: equip vira verbo de 1ª classe grounded por estado LOCAL (heldItem/inventory.slots, não delta — D-19/Pitfall 2); selectToolFor binário por categoria via regex de sufixo SEM ranking por tier (D-17, Fase 10 troca o seletor mantendo o call-site); pré-flight best-effort de pickaxe/arma fiado em dig/attack (B2/D-16) sem alterar o grounding
 - [Phase 09]: 09-02 (D-05/BUILD-01): shelter consome o wrapper único placeBlockSafe/getRefAndFace em vez de bot.placeBlock cru (cavar-e-tampar via getRefAndFace no topo; pilar 1×1 via belowRef+face para cima). Herda o swallow do timeout de blockUpdate e a verificação por blockAt; captura o reason engolido pelo wrapper para manter o diagnóstico de falha. Guarda anti-lava, mecânica do pilar e grounding por cobertura real preservados; 6 testes do shelter verdes
+- [Phase 09]: 09-03 (CRAFT-01..03/BUILD-01): ensureStation (findBlock→navigate→placeBlock fallback + POI station best-effort, re-validado por findBlock — D-12/D-13); craft resolve receita 2x2→bancada com gate de mesa (no_effect SEM deixar bot.craft lançar — Pitfall 4/D-15); smelt funde 1 item/chamada com close() no finally (Pitfall 3) grounded por delta (D-20); 4 skills (placeBlock/craft/smelt/equip) registradas em skillRegistry/toolRegistry; bot.mineMindDb expõe o handle do DB p/ o POI; seam de injeção __deps em vez de mock.module (vaza global no bun)
 
 ### Roadmap Evolution
 
@@ -139,6 +141,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-21T20:14:15.799Z
-Stopped at: Completed 09-04-PLAN.md
+Last session: 2026-06-21T20:34:04.955Z
+Stopped at: Completed 09-03-PLAN.md
 Resume file: None
