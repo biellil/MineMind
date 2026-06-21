@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
-status: verifying
-stopped_at: Completed 08.1-06-PLAN.md
-last_updated: "2026-06-21T15:18:54.833Z"
+status: executing
+stopped_at: Completed 08.1-07-PLAN.md
+last_updated: "2026-06-21T18:08:33.092Z"
 last_activity: 2026-06-21
 progress:
   total_phases: 12
   completed_phases: 4
-  total_plans: 21
-  completed_plans: 20
+  total_plans: 22
+  completed_plans: 21
   percent: 0
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-19)
 
 **Core value:** O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com base em objetivos próprios e memória — sem intervenção humana. Se tudo falhar, o loop cognitivo (perceber → decidir → agir) precisa funcionar.
-**Current focus:** Phase 08.1 — refatorar-memoria-chromadb
+**Current focus:** Phase 08.1 — refatorar-memoria
 
 ## Current Position
 
-Phase: 08.1 (refatorar-memoria-chromadb) — EXECUTING
-Plan: 6 of 6
-Status: Phase complete — ready for verification
-Last activity: 2026-06-21
+Phase: 08.1 (refatorar-memoria) — COMPLETE (7 of 7 plans)
+Plan: 7 of 7
+Status: Phase 08.1 complete — all 7 plans executed
+Last activity: 2026-06-21 -- 08.1-07 (GAP-01) POIs resource/village fiados
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████████░] 95%
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 08.1 P04 | 11 | 3 tasks | 7 files |
 | Phase 08.1 P05 | 7 | 2 tasks | 5 files |
 | Phase 08.1 P06 | 18 | 3 tasks | 10 files |
+| Phase 08.1 P07 | 2 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,7 @@ Recent decisions affecting current work:
 - [Phase 08.1]: 08.1-04: consolidate grava o vetor no ChromaDB (String(id), D-07); retrieve consulta o Chroma (KNN) preservando o scoring Generative Agents; chroma é param OPCIONAL (default null → fallback de recência D-02); vec0 aposentado em consolidate E persistEvent (sem tabela órfã); health-check boot + chromaProbeTimer periódico religam o caminho vetorial (D-22)
 - [Phase 08.1]: 08.1-05: caminho de AÇÃO recupera memórias (top-k=3) por query=embedding(currentGoal) cacheado por hash do goal (D-11, ~1 embed por troca de goal); seção 'Memórias relevantes:' injetada antes do FATO VERIFICADO (D-12); log [recall] por memória torna o uso da memória verificável ao vivo (D-13) — correção central da fase
 - [Phase 08.1]: 08.1-06: memória espacial (POIs) com dedup por bucket espacial (GRID=12, ON CONFLICT) + busca bounding-box/euclidiana injetada como 'POIs próximos:' no prompt (D-14/D-15/D-16); morte grava MemEvent type:'death' imp=10 + danger POI com causa inferida localmente (D-17/D-18/D-21); helpers de lições (reforço/decay aritmético clampado) como gancho durável da Phase 14 dentro da FRONTEIRA (D-19/D-20)
+- [Phase 08.1]: 08.1-07 (GAP-01): POIs de proximidade fiados no nó execute — recordResourcePoi (coleta success → POI resource, só fato verificado D-09 B) e recordVillagePoi (aldeão no snapshot → POI village, exclui zombie_villager); reusam upsertPlace (dedup por bucket) e entram no prompt via nearbyPlacesString já fiado (deliberation.ts intacto). landmark/base e lições FORA do escopo.
 
 ### Roadmap Evolution
 
@@ -129,6 +131,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-21T15:18:41.859Z
-Stopped at: Completed 08.1-06-PLAN.md
+Last session: 2026-06-21T18:08:24.654Z
+Stopped at: Completed 08.1-07-PLAN.md
 Resume file: None
