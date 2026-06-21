@@ -146,7 +146,7 @@ Plans:
 - [x] 09-02-PLAN.md — Refator do shelter para consumir placeBlockSafe, commit isolado (BUILD-01/D-05)
 - [x] 09-03-PLAN.md — ensureStation + craft(itemName,count) + smelt por item + registro das 4 skills (CRAFT-01/02/03/BUILD-01)
 - [x] 09-04-PLAN.md — equip standalone + selectToolFor + pré-flight em dig/attack (CRAFT-04)
-- [ ] 09-05-PLAN.md — [GAP G-01] fiar craft/smelt/equip/place à decisão do agente: enum de ação + dispatch no execute + teste agent-level (BUILD-01, CRAFT-01..04)
+- [x] 09-05-PLAN.md — [GAP G-01] fiar craft/smelt/equip/place à decisão do agente: enum de ação + dispatch no execute + teste agent-level (BUILD-01, CRAFT-01..04)
 
 ### Phase 10: Tech Tree DAG + Needs
 **Goal**: O agente resolve recursivamente os pré-requisitos de um item-alvo (DAG data-driven via minecraft-data, com memo + limite de profundidade), preenche `Goal.dependsOn`, e progride madeira→pedra→ferro de forma autônoma — com as necessidades internas reordenando dinamicamente a prioridade dos objetivos em runtime (a fusão GITM-estrutura + MineMind-motivação).
