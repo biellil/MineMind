@@ -367,46 +367,45 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
           deadTicks = 0
         }
 
-        // COG-03/D-19: dispara a deliberação LLM lenta SEM bloquear o tick (Pattern 3/Pitfall 3).
+        // COG-03/D-19 + IR4: despacha a deliberação LLM lenta SEM bloquear o tick (Pattern 3/Pitfall 3).
+        // IR4: a ORDEM aqui mata a starvation da reflexão. Antes a AÇÃO disparava PRIMEIRO e tomava o
+        // lock single-flight sincronamente todo tick, deixando a reflexão faminta para sempre. Agora:
+        // (a) acumula importância → (b) lê enteredIdle do grafo → (c) computa reflectDue →
+        // (d) pickDispatch escolhe UM dispatch (reflect tem prioridade) → (e) dispara reflect OU ação.
+        // Ação e reflexão são MUTUAMENTE EXCLUSIVAS por tick (D-12 preservado).
         if (lastSnapshot) {
-          const trigger = pickTrigger(holder)
-          void deliberator.maybeDeliberate(
-            deliberator.state,
-            holder,
-            provider,
-            lastSnapshot,
-            trigger,
-            Date.now(),
-          )
-
-          // REFL-01/D-10: acumula a importância dos eventos NOVOS deste tick (ring buffer pode
-          // ter evictado os antigos, então só contamos a cauda além do que já vimos).
+          // (a) REFL-01/D-10: acumula a importância dos eventos NOVOS deste tick ANTES de qualquer
+          // dispatch — o acúmulo não depende de dispatch e precisa estar atualizado antes de avaliar
+          // shouldReflect. O ring buffer pode ter evictado os antigos, então só contamos a cauda
+          // além do que já vimos.
           const events = getEvents(holder.memory)
           if (events.length > seenEvents) {
             for (const e of events.slice(seenEvents)) reflState.importanceAccum += importanceOf(e)
           }
           seenEvents = events.length
 
-          // Gatilho híbrido de reflexão (D-10): event-driven / acúmulo / piso temporal. Dispara via
-          // a deliberação single-flight com trigger 'reflect' (não bloqueia o tick; o lock inFlight
-          // garante que reflexão não sobrepõe ação).
-          const reflectNow = Date.now()
-          // Fase 07.1 Plan 03: enteredIdle lido do sinal REAL do grafo (D-10 — corrige hardcoded false).
+          // (b) Fase 07.1 Plan 03: enteredIdle lido do sinal REAL do grafo (D-10).
           const enteredIdle = result.enteredIdle === true
-          if (
-            shouldReflect({
-              enteredIdle,
-              goalDoneOrFailed: holder.currentGoal == null,
-              importanceAccum: reflState.importanceAccum,
-              lastReflectionAt: reflState.lastReflectionAt,
-              now: reflectNow,
-            })
-          ) {
-            // B1: NÃO rearmar o gatilho aqui. A reflexão pode no-op (uma ação está in-flight —
-            // D-12). Se zerássemos lastReflectionAt/importanceAccum incondicionalmente, o piso/
-            // acúmulo se auto-desarmaria e a reflexão NUNCA rodaria. Só rearmamos quando a
-            // reflexão DE FATO executou (ran === true); caso contrário o gatilho persiste e tenta
-            // de novo num tick posterior (na janela livre de inFlight entre ações).
+
+          // (c) Gatilho híbrido de reflexão (D-10): event-driven / acúmulo / piso temporal.
+          const reflectNow = Date.now()
+          const reflectDue = shouldReflect({
+            enteredIdle,
+            goalDoneOrFailed: holder.currentGoal == null,
+            importanceAccum: reflState.importanceAccum,
+            lastReflectionAt: reflState.lastReflectionAt,
+            now: reflectNow,
+          })
+
+          // (d) IR4: UM único dispatch por tick — reflect tem prioridade quando devido e o lock está livre.
+          const dispatch = pickDispatch({ inFlight: deliberator.state.inFlight, reflectDue })
+
+          if (dispatch === 'reflect') {
+            // Dispara SÓ a reflexão (não a ação). Via deliberação single-flight com trigger 'reflect';
+            // não bloqueia o tick. B1: NÃO rearmar o gatilho incondicionalmente — só quando a reflexão
+            // DE FATO executou (ran === true). Se zerássemos lastReflectionAt/importanceAccum sempre, o
+            // piso/acúmulo se auto-desarmaria. Como reflect ganhou o tick e o lock está livre, ran será
+            // true; mas mantemos a guarda por robustez (orçamento/shouldTrigger).
             void deliberator
               .maybeDeliberate(deliberator.state, holder, provider, lastSnapshot, 'reflect', reflectNow, chroma)
               .then((ran) => {
@@ -416,7 +415,19 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
                   console.log('[reflect] reflexão executada')
                 }
               })
+          } else if (dispatch === 'action') {
+            // Dispara SÓ a ação — caminho de AÇÃO normal (D-07/D-08).
+            const trigger = pickTrigger(holder)
+            void deliberator.maybeDeliberate(
+              deliberator.state,
+              holder,
+              provider,
+              lastSnapshot,
+              trigger,
+              Date.now(),
+            )
           }
+          // dispatch === 'none': algo já está in-flight (D-12) — no-op; o próximo tick reavalia.
         }
 
         // Fase 07.1 Plan 03: atualiza nextWakeMs com o sinal do grafo (D-10).
@@ -464,6 +475,19 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
  * pickTrigger apenas classifica — quem chama maybeDeliberate é o loop;
  * o deliberator usa inFlight para single-flight (D-08: NUNCA await o LLM aqui).
  */
+/** Dispatch a disparar neste tick (D-12 single-flight + D-10 prioridade do reflect). */
+export type Dispatch = 'reflect' | 'action' | 'none'
+
+/**
+ * Decide o ÚNICO dispatch do tick. A reflexão tem PRIORIDADE sobre a ação quando devida e o
+ * lock está livre — corrige a starvation (a ação tomava o lock sincronamente todo tick, deixando
+ * a reflexão faminta para sempre). Single-flight (D-12) preservado: in-flight ⇒ 'none'.
+ */
+export function pickDispatch(args: { inFlight: boolean; reflectDue: boolean }): Dispatch {
+  if (args.inFlight) return 'none'
+  return args.reflectDue ? 'reflect' : 'action'
+}
+
 function pickTrigger(holder: CognitiveStateHolder): DeliberationTrigger {
   const mcfg = motivationConfigFor(holder.disposition)
   const t = Date.now()
