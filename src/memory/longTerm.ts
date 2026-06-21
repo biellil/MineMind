@@ -44,6 +44,8 @@ export function importanceOf(e: MemEvent): number {
     case 'state_transition':
       if (e.to === 'socializing' || e.to === 'fighting') return 5
       return 1
+    case 'death':
+      return 10 // morte é o evento mais importante (acima de damage=9 — D-18); fonte do danger POI/lição
     default:
       return 1
   }
@@ -60,6 +62,8 @@ export function summarizeEvent(e: MemEvent): string {
       return `Mudei de estado: ${e.from} → ${e.to}.`
     case 'chat_command':
       return `Comando de chat de ${e.from}: "${e.command}" (modo ${e.mode}).`
+    case 'death':
+      return `Morri: ${e.cause} em (${Math.round(e.x)},${Math.round(e.y)},${Math.round(e.z)}).`
   }
 }
 

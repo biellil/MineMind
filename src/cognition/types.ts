@@ -31,3 +31,5 @@ export type MemEvent =
     }
   | { type: 'world'; event: 'damage' | 'hunger' | 'player_joined' | 'player_left'; detail: string; timestamp: number }
   | { type: 'chat_command'; command: string; from: string; mode: ControlMode; timestamp: number }
+  // Morte (D-17/D-18): `cause` = string inferida localmente; x/y/z = local da morte. Importância 10.
+  | { type: 'death'; cause: string; x: number; y: number; z: number; timestamp: number }
