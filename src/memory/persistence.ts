@@ -21,8 +21,9 @@ export const EMBEDDING_DIM = config.embeddingDim
 /** Versão do schema. Migrations checam PRAGMA user_version e aplicam migrações por degraus. */
 const SCHEMA_VERSION = 2
 
-/** Tipos de POI (D-14). Enum em TS — NÃO há CHECK no SQLite (places.type é TEXT nullable). */
-export type PlaceType = 'base' | 'resource' | 'danger' | 'village' | 'landmark'
+/** Tipos de POI (D-14). Enum em TS — NÃO há CHECK no SQLite (places.type é TEXT nullable).
+ *  'station' = local de uma estação de crafting/fornalha (Fase 9, D-14). */
+export type PlaceType = 'base' | 'resource' | 'danger' | 'village' | 'landmark' | 'station'
 
 /** Linha da tabela lessons (D-19) — conhecimento durável evolutivo, distinto de events pontuais. */
 export interface LessonRow {

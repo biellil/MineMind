@@ -29,6 +29,11 @@ export const config = {
   // Timeouts de skills em ms (D-13, Claude's discretion: 30s navigate, 10s dig)
   navigateTimeoutMs: parseInt(process.env.NAVIGATE_TIMEOUT_MS || '30000', 10),
   digTimeoutMs: parseInt(process.env.DIG_TIMEOUT_MS || '10000', 10),
+  // Fase 9: timeouts de placement/smelting (D-04/D-10, Claude's discretion sobre valores)
+  placeTimeoutMs: parseInt(process.env.PLACE_TIMEOUT_MS || '6000', 10),       // > os 5000 internos do blockUpdate
+  placeRetries: parseInt(process.env.PLACE_RETRIES || '0', 10),               // D-04: campo RESERVADO p/ fase futura; o CORPO do retry NAO e implementado nesta fase (default off — gap intencional)
+  smeltUpdateTimeoutMs: parseInt(process.env.SMELT_UPDATE_TIMEOUT_MS || '12000', 10), // > 10s/item
+  smeltTimeoutMs: parseInt(process.env.SMELT_TIMEOUT_MS || '15000', 10),      // teto total por item
   // Distância (blocos) a partir da qual o bot PARA de se reaproximar do jogador no estado socializing.
   // Já dentro do raio => fica parado (evita o re-navigate infinito pela jitter da posição do jogador).
   socialArriveRadius: parseInt(process.env.SOCIAL_ARRIVE_RADIUS || '3', 10),
@@ -320,3 +325,8 @@ for (const [name, v] of [['CREEPER_REACT_DISTANCE', config.creeperReactDistance]
 // Fase 08.1: validação do ChromaDB
 if (config.chromaPort < 1 || config.chromaPort > 65535) throw new Error(`CHROMA_PORT inválido: ${config.chromaPort}.`)
 if (config.chromaFetchTimeoutMs < 1) throw new Error(`CHROMA_FETCH_TIMEOUT_MS inválido: ${config.chromaFetchTimeoutMs}. Deve ser >= 1.`)
+// Fase 9: validação dos timeouts de placement/smelting
+if (config.placeTimeoutMs < 1) throw new Error(`PLACE_TIMEOUT_MS inválido: ${config.placeTimeoutMs}. Deve ser >= 1.`)
+if (config.placeRetries < 0) throw new Error(`PLACE_RETRIES inválido: ${config.placeRetries}. Deve ser >= 0.`)
+if (config.smeltUpdateTimeoutMs < 1) throw new Error(`SMELT_UPDATE_TIMEOUT_MS inválido: ${config.smeltUpdateTimeoutMs}. Deve ser >= 1.`)
+if (config.smeltTimeoutMs < 1) throw new Error(`SMELT_TIMEOUT_MS inválido: ${config.smeltTimeoutMs}. Deve ser >= 1.`)
