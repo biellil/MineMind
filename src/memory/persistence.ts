@@ -3,6 +3,10 @@
 // vetorial via sqlite-vec) com schema versionado por PRAGMA user_version, PRAGMAs de
 // durabilidade (WAL) e recuperação graceful contra corrupção (Core Value: o loop NUNCA aborta).
 //
+// Schema atual: v2 (D-14 places.type, D-19 tabela lessons, D-16 idx_places_xz). A migração é
+// INCREMENTAL POR DEGRAUS e idempotente: roda tanto em cold start (user_version=0) quanto em DBs
+// já existentes em v1, levando ambos a v2 sem perder dados (08.1-01).
+//
 // Bind de embedding: Float32Array DIRETO (não Buffer.from) — provado no Wave 0 (04-01-SUMMARY).
 import { Database } from 'bun:sqlite'
 import * as sqliteVec from 'sqlite-vec'
@@ -11,8 +15,22 @@ import { config } from '../config'
 
 /** Dimensão do índice vetorial vec0 — deve casar com o modelo de embedding (Pitfall 2). */
 export const EMBEDDING_DIM = config.embeddingDim
-/** Versão do schema. Migrations futuras checam PRAGMA user_version e aplicam ALTER TABLE. */
-const SCHEMA_VERSION = 1
+/** Versão do schema. Migrations checam PRAGMA user_version e aplicam migrações por degraus. */
+const SCHEMA_VERSION = 2
+
+/** Tipos de POI (D-14). Enum em TS — NÃO há CHECK no SQLite (places.type é TEXT nullable). */
+export type PlaceType = 'base' | 'resource' | 'danger' | 'village' | 'landmark'
+
+/** Linha da tabela lessons (D-19) — conhecimento durável evolutivo, distinto de events pontuais. */
+export interface LessonRow {
+  id: number
+  text: string
+  confidence: number
+  reinforce_count: number
+  contradict_count: number
+  last_seen: number
+  created_at: number
+}
 
 /** DDL relacional (Pattern 2). A virtual table vec0 é criada SEPARADAMENTE (ver applySchema). */
 const RELATIONAL_DDL = `
@@ -49,20 +67,60 @@ function applyPragmas(db: Database): void {
 }
 
 /**
- * Cria o schema do zero se user_version=0 (cold start, D-03). O DDL relacional roda numa
- * transação; a virtual table vec0 é criada FORA da transação (alguns builds do vec0 não
- * suportam CREATE VIRTUAL TABLE dentro de BEGIN). user_version só sobe ao final.
+ * Torna `ALTER TABLE ADD COLUMN` idempotente (SQLite não tem `ADD COLUMN IF NOT EXISTS`).
+ * Lê PRAGMA table_info e só executa o ALTER se a coluna ainda não existir.
+ * NOTA: PRAGMA table_info não aceita placeholder `?` para o nome da tabela — interpolar direto
+ * (os valores são literais do código, não input externo).
  */
-function applySchema(db: Database): void {
+function addColumnIfMissing(db: Database, table: string, column: string, typeDdl: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+  if (cols.some((c) => c.name === column)) return
+  db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${typeDdl}`)
+}
+
+/**
+ * Aplica o schema POR DEGRAUS, idempotente, até SCHEMA_VERSION (D-03). Cobre dois casos com o
+ * mesmo caminho: cold start (user_version=0 — cria o schema base v1) e DB já em v1 (só migra).
+ *
+ * - version < 1 (cold start): cria RELATIONAL_DDL (transação) + vec0 (FORA da transação — alguns
+ *   builds do vec0 não suportam CREATE VIRTUAL TABLE dentro de BEGIN). NÃO seta user_version aqui;
+ *   a sequência de migração abaixo leva o DB recém-criado de v1 → v2 no mesmo boot.
+ * - version < 2 (cold start recém-criado OU DB existente em v1): migração 1→2 (D-14/D-19/D-16).
+ *
+ * Exportado para teste de migração de v1 (08.1-01 Task 2).
+ */
+export function applySchema(db: Database): void {
   const version = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
   if (version >= SCHEMA_VERSION) return
 
-  const createRelational = db.transaction(() => {
-    db.run(RELATIONAL_DDL)
-  })
-  createRelational()
-  // vec0 fora da transação (ver nota acima).
-  db.run(vecDdl())
+  if (version < 1) {
+    // Cold start: schema base v1 (contém as colunas/tabelas da v1).
+    const createRelational = db.transaction(() => {
+      db.run(RELATIONAL_DDL)
+    })
+    createRelational()
+    // vec0 fora da transação (ver nota acima). A TABELA vec_events permanece nesta fase como
+    // artefato (a escrita/leitura vetorial migra p/ ChromaDB no Plan 04 — D-01).
+    db.run(vecDdl())
+  }
+
+  if (version < 2) {
+    // Migração 1→2. Roda tanto no cold start (acabamos de criar a v1 acima) quanto num DB já em v1.
+    // D-14: coluna type nullable (ALTER ADD COLUMN no SQLite NÃO pode ser NOT NULL sem default).
+    addColumnIfMissing(db, 'places', 'type', 'TEXT')
+    // D-19: tabela de lições duráveis (conhecimento generalizado, distinto de events).
+    db.run(`CREATE TABLE IF NOT EXISTS lessons (
+      id INTEGER PRIMARY KEY,
+      text TEXT NOT NULL,
+      confidence REAL NOT NULL DEFAULT 0.5,
+      reinforce_count INTEGER NOT NULL DEFAULT 0,
+      contradict_count INTEGER NOT NULL DEFAULT 0,
+      last_seen INTEGER NOT NULL,
+      created_at INTEGER NOT NULL )`)
+    // D-16: índice para a busca por bounding-box (WHERE x BETWEEN .. AND z BETWEEN ..).
+    db.run(`CREATE INDEX IF NOT EXISTS idx_places_xz ON places(x, z)`)
+  }
+
   db.run(`PRAGMA user_version = ${SCHEMA_VERSION}`)
 }
 
