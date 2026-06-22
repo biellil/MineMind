@@ -207,7 +207,11 @@ Plans:
   1. O agente constrói um abrigo funcional via estado `building` real — fecha de verdade (sem buracos, sem auto-sufocar), validado por `blockAt` ao redor
   2. O agente constrói estruturas simples (parede / torre / posicionar estação) de forma autônoma
   3. A navegação do building (buscar referência, posicionar-se) herda os bounds do pathfinder do 999.1 e respeita o pacing anti-cheat (colocar blocos em rajada é flagável); sem OOM em soak
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 12-01-PLAN.md — Núcleo determinístico: geradores de blueprint (shelter full-seal/wall/tower) + builder genérico idempotente (loop ordenado + retry ligado + grounding por cobertura) + config (BUILD-02, BUILD-03)
+- [ ] 12-02-PLAN.md — Integração no loop: registra skill build + roteador build:* paralelo ao DAG (G-01 intacto) + remove building de STUB_STATES (BUILD-02, BUILD-03)
+- [ ] 12-03-PLAN.md — Ativação: ponte de abrigo no observe (noite+exposto→build:shelter) + kind build no canal de pedido do jogador (BUILD-02, BUILD-03)
 **UI hint**: no
 
 ### Phase 13: Combate Completo
@@ -248,7 +252,7 @@ Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 8.1 → 9 → 10 → 
 | 10.1. Paralelismo no processamento do LLM (deliberação concorrente) (INSERTED) | v2.0 | 2/2 | Complete    | 2026-06-22 |
 | 11. Modos Autônomo/Assistente | v2.0 | 0/TBD | Not started | - |
 | 11.1. Percepção espacial no contexto do LLM (INSERTED) | v2.0 | 1/1 | Complete    | 2026-06-22 |
-| 12. Building Deliberado | v2.0 | 0/TBD | Not started | - |
+| 12. Building Deliberado | v2.0 | 0/3 | Planned | - |
 | 13. Combate Completo | v2.0 | 0/TBD | Not started | - |
 | 14. Aprendizado por Reflexão | v2.0 | 0/TBD | Not started | - |
 
