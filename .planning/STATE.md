@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
 status: executing
-stopped_at: Completed 12-01-PLAN.md
-last_updated: "2026-06-22T20:53:51.343Z"
+stopped_at: Completed 12-02-PLAN.md
+last_updated: "2026-06-22T21:03:12.611Z"
 last_activity: 2026-06-22
 progress:
   total_phases: 13
   completed_phases: 9
   total_plans: 35
-  completed_plans: 33
+  completed_plans: 34
   percent: 95
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 ## Current Position
 
 Phase: 12 (building-deliberado) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-06-22
 
@@ -78,6 +78,7 @@ Progress: [█████████░] 95%
 | Phase 10.1 P02 | 18 | 2 tasks | 8 files |
 | Phase 11.1 P01 | 18 | 2 tasks | 2 files |
 | Phase 12 P01 | 7 | 3 tasks | 6 files |
+| Phase 12 P02 | 6 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -121,6 +122,7 @@ Recent decisions affecting current work:
 - [Phase 10.1]: 10.1-02: holder.goals protegido do clobber por commit síncrono merge-by-id na runReflection (re-lê holder.goals no write; goal de player empurrado durante o await sobrevive — D-04/D-05/D-06/Pitfall 2); reflexão nunca recebe signal (D-13)
 - [Phase 11.1]: 11.1-01: serializeContext expõe percepção espacial híbrida próx(x,y,z) Nm Δy±k para blocos/entidades/jogadores; Δy cru sem veredito (D-02); teto global BLOCK_COORD_BUDGET=18 vira único gate priorizado (troncos>pedra>minério>lixo, count de todos os tipos preservado, .slice(0,8) removido — D-03); jogador position null degrada para sem-pos sem lançar (D-04a); assinatura/call-sites/types/snapshot intactos
 - [Phase 12]: 12-01: núcleo determinístico de building — geradores puros (genShelter casca-oca 6 lados/genWall/genTower) + runBlueprint idempotente (orderForReach bot-cell-last/baixo→cima/fora→dentro D-05; placeOneWithRetry liga placeRetries 0→2 D-02; grounding por cobertura real D-03/D-10); skill build resolve shelter/wall/tower/station/custom; isFilled exportado; shelter.ts/nodes.ts intactos
+- [Phase 12]: 12-02: skill build registrada (skillRegistry/toolRegistry) + roteador determinístico build:* no execute (espelha goalToSkillParams/DAG_PREFIXES, D-13): build:shelter/wall/tower/station → build({tipo}) sem LLM, em canal PARALELO ao DAG e SEPARADO do dispatch G-01 (D-14, intocado); 'building' fora de STUB_STATES (só 'fighting' resta, Fase 13)
 
 ### Roadmap Evolution
 
@@ -156,6 +158,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-22T20:53:51.336Z
-Stopped at: Completed 12-01-PLAN.md
+Last session: 2026-06-22T21:03:05.158Z
+Stopped at: Completed 12-02-PLAN.md
 Resume file: None

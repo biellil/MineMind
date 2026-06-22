@@ -210,7 +210,7 @@ Plans:
 **Plans**: 3 plans
 Plans:
 - [x] 12-01-PLAN.md — Núcleo determinístico: geradores de blueprint (shelter full-seal/wall/tower) + builder genérico idempotente (loop ordenado + retry ligado + grounding por cobertura) + config (BUILD-02, BUILD-03)
-- [ ] 12-02-PLAN.md — Integração no loop: registra skill build + roteador build:* paralelo ao DAG (G-01 intacto) + remove building de STUB_STATES (BUILD-02, BUILD-03)
+- [x] 12-02-PLAN.md — Integração no loop: registra skill build + roteador build:* paralelo ao DAG (G-01 intacto) + remove building de STUB_STATES (BUILD-02, BUILD-03)
 - [ ] 12-03-PLAN.md — Ativação: ponte de abrigo no observe (noite+exposto→build:shelter) + kind build no canal de pedido do jogador (BUILD-02, BUILD-03)
 **UI hint**: no
 
@@ -252,7 +252,7 @@ Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 8.1 → 9 → 10 → 
 | 10.1. Paralelismo no processamento do LLM (deliberação concorrente) (INSERTED) | v2.0 | 2/2 | Complete    | 2026-06-22 |
 | 11. Modos Autônomo/Assistente | v2.0 | 0/TBD | Not started | - |
 | 11.1. Percepção espacial no contexto do LLM (INSERTED) | v2.0 | 1/1 | Complete    | 2026-06-22 |
-| 12. Building Deliberado | v2.0 | 1/3 | In Progress|  |
+| 12. Building Deliberado | v2.0 | 2/3 | In Progress|  |
 | 13. Combate Completo | v2.0 | 0/TBD | Not started | - |
 | 14. Aprendizado por Reflexão | v2.0 | 0/TBD | Not started | - |
 
