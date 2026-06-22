@@ -35,7 +35,7 @@ Continuação numérica do v1.0 (que terminou na Phase 5; 999.1 foi backlog/park
 
 - [ ] **Phase 6: LLM Provider Factory** - GPT-4.1-mini + LM Studio atrás da mesma interface, com teto de custo e paridade de structured-output
 - [ ] **Phase 7: Grounding + SkillResult** - Relato = mundo real verificado; mata o bug "peguei 10 tábuas"
-- [ ] **Phase 8: System 1 — Sobrevivência Reflexa** - Comer/fugir/abrigar/evitar perigo em sub-segundo, por preempção sem travar o LLM
+- [x] **Phase 8: System 1 — Sobrevivência Reflexa** - Comer/fugir/abrigar/evitar perigo em sub-segundo, por preempção sem travar o LLM (completa 2026-06-22)
 - [ ] **Phase 9: Placement + Crafting/Smelting Grounded** - placeBlock robusto + craft/smelt/equip verificados (bancada/fornalha)
 - [ ] **Phase 10: Tech Tree DAG + Needs** - Progressão recursiva madeira→pedra→ferro priorizada por necessidade interna
 - [ ] **Phase 11: Modos Autônomo/Assistente** - Self-prompting default + assistente temporário que volta sozinho (mata o "grude")
@@ -104,7 +104,7 @@ Plans:
 - [x] 08-01-PLAN.md — Fundação: limiares de sobrevivência (config) + arbitrateReflex pura (tabela-verdade)
 - [x] 08-02-PLAN.md — Skills reflexas eat (D-05) + attack 1-shot real (D-15)
 - [x] 08-03-PLAN.md — Skills reflexas flee (GoalInvert+sprint, D-06) + shelter cavar-vs-pilar (D-08)
-- [ ] 08-04-PLAN.md — Integração: gatilhos lifeCritical + preempção generalizada (setGoal null) + System 1 no driver + gate D-20 AO VIVO
+- [x] 08-04-PLAN.md — Integração: gatilhos lifeCritical + preempção generalizada (setGoal null) + System 1 no driver + gate D-20 AO VIVO
 **UI hint**: no
 
 ### Phase 08.1: Refatorar memória: migrar vetores para ChromaDB (já rodando local), consertar gravação de eventos/lugares, garantir uso real pelo LLM, memória espacial (POIs) e registro de morte (INSERTED)
@@ -240,7 +240,7 @@ Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 8.1 → 9 → 10 → 
 | 6. LLM Provider Factory | v2.0 | 0/3 | Planned | - |
 | 7. Grounding + SkillResult | v2.0 | 0/4 | Planned | - |
 | 7.1. Loop Agêntico | v2.0 | 0/4 | Planned | - |
-| 8. System 1 — Sobrevivência Reflexa | v2.0 | 0/TBD | Not started | - |
+| 8. System 1 — Sobrevivência Reflexa | v2.0 | 4/4 | Complete | 2026-06-22 |
 | 8.1. Refatoração da memória (ChromaDB + fiação + POIs + morte) (INSERTED) | v2.0 | 0/6 | Planned | - |
 | 9. Placement + Crafting/Smelting Grounded | v2.0 | 0/TBD | Not started | - |
 | 10. Tech Tree DAG + Needs | v2.0 | 0/2 | Planned | - |
