@@ -76,7 +76,7 @@ export async function computeGoalQueryEmbedding(
 
 /**
  * Estado da deliberação (vive no closure do deliberator — testável/sem global).
- * 10.1-02 (D-01): o controle de sobreposição NÃO mora mais aqui (foi o `inFlight` booleano único) —
+ * 10.1-02 (D-01): o controle de sobreposição NÃO mora mais aqui (era o lock booleano único) —
  * agora é o `gate` por tipo + o `semaphore` global, injetados em maybeDeliberate. Resta só o
  * orçamento de replan de AÇÃO (`lastRunAt`).
  */

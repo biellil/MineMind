@@ -12,6 +12,7 @@ import { parseDisposition } from '../control/disposition'
 import { shouldRespond, handleConversation } from '../chat/conversation'
 import type { CognitiveStateHolder } from './state'
 import { createDeliberator, type DeliberationTrigger } from './deliberation'
+import { Semaphore, createTaskGate } from './concurrency'
 import { createProvider } from '../llm/provider'
 import { urgency } from '../motivation/needs'
 import { motivationConfigFor } from '../config'
@@ -156,6 +157,15 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
   const provider = createProvider({ db: holder.db })
   const deliberator = createDeliberator()
 
+  // Fase 10.1-02 (D-01/D-07): semáforo global dimensionado pela capacidade do provider + gate por tipo,
+  // instanciados POR SESSÃO. permits=1 ⇒ single-flight priorizado + preempção (D-03); >1 ⇒ tarefas
+  // distintas (ação/reflexão/player) sobrepõem de verdade (LM Studio batching / cloud).
+  const llmSemaphore = new Semaphore(provider.maxConcurrency)
+  const taskGate = createTaskGate()
+  // D-12: AbortController da AÇÃO em voo — recriado a cada dispatch de ação; o player o aborta para
+  // liberar o slot. A REFLEXÃO nunca tem AbortController (D-13).
+  let actionAbort: AbortController | null = null
+
   // Plan 04 (D-22 / Pattern 4): cliente Chroma 1x por sessão — índice vetorial DERIVADO/descartável
   // (D-01). Toda chamada passa por breaker+timeout e degrada gracioso (o loop nunca aborta por causa
   // do Chroma). Health-check no boot (não bloqueia) + re-sondagem periódica (chromaProbeTimer) fazem
@@ -215,8 +225,12 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
       return
     }
     // 3) conversa — única chamada com LLM; não bloqueia o tick reativo (void).
+    // Fase 10.1-02 (D-08): o turno conversacional atravessa o MESMO gate/semáforo (prioridade player=0),
+    // preemptando a AÇÃO em voo (D-12) — fecha a brecha do chat-sem-coordenação.
     if (shouldRespond(holder.disposition, config.proactivity, username, bot.username)) {
-      void handleConversation(provider, holder, bot, username, message, Date.now())
+      void routePlayerTurn(llmSemaphore, taskGate, () => actionAbort?.abort(), () =>
+        handleConversation(provider, holder, bot, username, message, Date.now()),
+      )
     }
   })
 
@@ -367,12 +381,12 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
           deadTicks = 0
         }
 
-        // COG-03/D-19 + IR4: despacha a deliberação LLM lenta SEM bloquear o tick (Pattern 3/Pitfall 3).
-        // IR4: a ORDEM aqui mata a starvation da reflexão. Antes a AÇÃO disparava PRIMEIRO e tomava o
-        // lock single-flight sincronamente todo tick, deixando a reflexão faminta para sempre. Agora:
+        // COG-03/D-19 + IR4 + 10.1-02: despacha a deliberação LLM lenta SEM bloquear o tick (Pattern 3).
+        // 10.1-02 (Pitfall 6): ação e reflexão DEIXAM de ser mutuamente exclusivas por tick — o gate
+        // por tipo + o semáforo coordenam (com permits>=2 coexistem; com permits=1 serializam por
+        // prioridade na fila, reflect=2 < action=1 na urgência). Fluxo:
         // (a) acumula importância → (b) lê enteredIdle do grafo → (c) computa reflectDue →
-        // (d) pickDispatch escolhe UM dispatch (reflect tem prioridade) → (e) dispara reflect OU ação.
-        // Ação e reflexão são MUTUAMENTE EXCLUSIVAS por tick (D-12 preservado).
+        // (d) pickDispatch (hint, não-XOR) diz O QUE despachar → (e) despacha reflect E/OU ação.
         if (lastSnapshot) {
           // (a) REFL-01/D-10: acumula a importância dos eventos NOVOS deste tick ANTES de qualquer
           // dispatch — o acúmulo não depende de dispatch e precisa estar atualizado antes de avaliar
@@ -397,17 +411,21 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
             now: reflectNow,
           })
 
-          // (d) IR4: UM único dispatch por tick — reflect tem prioridade quando devido e o lock está livre.
-          const dispatch = pickDispatch({ inFlight: deliberator.state.inFlight, reflectDue })
+          // (d) 10.1-02 (Pitfall 6): hint NÃO-XOR. Consulta o gate por tipo (não o inFlight único).
+          const dispatch = pickDispatch({
+            reflectDue,
+            reflectionBusy: taskGate.isBusy('reflection'),
+            actionBusy: taskGate.isBusy('action'),
+          })
 
-          if (dispatch === 'reflect') {
-            // Dispara SÓ a reflexão (não a ação). Via deliberação single-flight com trigger 'reflect';
-            // não bloqueia o tick. B1: NÃO rearmar o gatilho incondicionalmente — só quando a reflexão
-            // DE FATO executou (ran === true). Se zerássemos lastReflectionAt/importanceAccum sempre, o
-            // piso/acúmulo se auto-desarmaria. Como reflect ganhou o tick e o lock está livre, ran será
-            // true; mas mantemos a guarda por robustez (orçamento/shouldTrigger).
+          if (dispatch.reflect) {
+            // REFLEXÃO (D-13): SEM AbortController/signal — roda até o flush B2, nunca abortada pelo player.
+            // B1: só rearma o gatilho quando a reflexão DE FATO executou (ran === true).
             void deliberator
-              .maybeDeliberate(deliberator.state, holder, provider, lastSnapshot, 'reflect', reflectNow, chroma)
+              .maybeDeliberate(
+                deliberator.state, holder, provider, lastSnapshot, 'reflect', reflectNow, chroma,
+                taskGate, llmSemaphore, // sem signal (D-13)
+              )
               .then((ran) => {
                 if (ran) {
                   reflState.lastReflectionAt = reflectNow
@@ -415,19 +433,24 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
                   console.log('[reflect] reflexão executada')
                 }
               })
-          } else if (dispatch === 'action') {
-            // Dispara SÓ a ação — caminho de AÇÃO normal (D-07/D-08).
-            const trigger = pickTrigger(holder)
-            void deliberator.maybeDeliberate(
-              deliberator.state,
-              holder,
-              provider,
-              lastSnapshot,
-              trigger,
-              Date.now(),
-            )
           }
-          // dispatch === 'none': algo já está in-flight (D-12) — no-op; o próximo tick reavalia.
+          if (dispatch.action) {
+            // AÇÃO (D-12): cria um AbortController por dispatch — o player o aborta para liberar o slot.
+            // O signal é propagado a maybeDeliberate → decideAction → provider.decide. Ao terminar,
+            // limpa actionAbort (só limpa o controller que ESTE dispatch criou — evita corrida com um
+            // novo dispatch que sobrescreveu actionAbort).
+            const trigger = pickTrigger(holder)
+            const ctrl = new AbortController()
+            actionAbort = ctrl
+            void deliberator
+              .maybeDeliberate(
+                deliberator.state, holder, provider, lastSnapshot, trigger, Date.now(), chroma,
+                taskGate, llmSemaphore, ctrl.signal, // D-12: signal de preempção
+              )
+              .finally(() => {
+                if (actionAbort === ctrl) actionAbort = null
+              })
+          }
         }
 
         // Fase 07.1 Plan 03: atualiza nextWakeMs com o sinal do grafo (D-10).
@@ -475,17 +498,67 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
  * pickTrigger apenas classifica — quem chama maybeDeliberate é o loop;
  * o deliberator usa inFlight para single-flight (D-08: NUNCA await o LLM aqui).
  */
-/** Dispatch a disparar neste tick (D-12 single-flight + D-10 prioridade do reflect). */
-export type Dispatch = 'reflect' | 'action' | 'none'
+/** O que despachar neste tick — 10.1-02 (Pitfall 6): NÃO mais XOR; reflect e action coexistem. */
+export type Dispatch = { reflect: boolean; action: boolean }
 
 /**
- * Decide o ÚNICO dispatch do tick. A reflexão tem PRIORIDADE sobre a ação quando devida e o
- * lock está livre — corrige a starvation (a ação tomava o lock sincronamente todo tick, deixando
- * a reflexão faminta para sempre). Single-flight (D-12) preservado: in-flight ⇒ 'none'.
+ * Decide O QUE despachar neste tick — HINT, não exclusão mútua (10.1-02/Pitfall 6).
+ *
+ * Antes (IR4) pickDispatch retornava UM dispatch por tick (reflect XOR action) usando o `inFlight`
+ * único: a ação tomava o lock e a reflexão starvava. Agora o gate por tipo + o semáforo coordenam:
+ *  - reflect é despachado quando DEVIDO e o gate 'reflection' está livre (não sobrepõe outra reflexão);
+ *  - action é despachada quando o gate 'action' está livre (não sobrepõe outra ação);
+ *  - ambos podem ser true no MESMO tick — o semáforo (permits) decide se de fato coexistem ou
+ *    serializam por prioridade (reflect=2 menos urgente que action=1 na fila).
+ *
+ * A garantia anti-starvation IR4 migra para a fila do semáforo (prioridade) + o piso shouldReflect;
+ * a ação NÃO é mais bloqueada por uma reflexão devida (Pitfall 6).
  */
-export function pickDispatch(args: { inFlight: boolean; reflectDue: boolean }): Dispatch {
-  if (args.inFlight) return 'none'
-  return args.reflectDue ? 'reflect' : 'action'
+export function pickDispatch(args: {
+  reflectDue: boolean
+  reflectionBusy: boolean
+  actionBusy: boolean
+}): Dispatch {
+  return {
+    reflect: args.reflectDue && !args.reflectionBusy,
+    action: !args.actionBusy,
+  }
+}
+
+/**
+ * 10.1-02 (D-08/D-11/D-12): roteia UM turno conversacional pelo gate/semáforo (prioridade player=0).
+ *
+ * - Se o gate 'player' já estiver ocupado, DESCARTA o turno (não enfileira chat duplicado — o jogador
+ *   re-fala). Isto evita acumular respostas redundantes sob rajada de chat.
+ * - ANTES de adquirir o semáforo, PREEMPTA a AÇÃO em voo (D-12) — o player tem prioridade máxima e
+ *   abortar a ação libera o slot via finally para o player adquirir à frente da fila.
+ * - release()/leave() SEMPRE no finally (Pitfall 3) — mesmo quando `run` lança.
+ *
+ * Helper PURO (sem dependência do bot/provider) p/ testabilidade direta.
+ */
+export async function routePlayerTurn(
+  semaphore: Semaphore,
+  gate: ReturnType<typeof createTaskGate>,
+  preemptAction: () => void,
+  run: () => Promise<void>,
+): Promise<void> {
+  if (!gate.tryEnter('player')) return // já há um turno de player em voo → descarta
+  preemptAction() // D-12: aborta a AÇÃO em voo para liberar o slot
+  await semaphore.acquire(0) // prioridade máxima (fura ação=1 e reflexão=2 na fila)
+  try {
+    await run()
+  } finally {
+    semaphore.release()
+    gate.leave('player')
+  }
+}
+
+/**
+ * 10.1-02 (D-12): o player só preempta a AÇÃO quando há um turno de player A despachar E uma ação
+ * de fato em voo (não há o que abortar se nenhuma ação roda). Função pura.
+ */
+export function shouldPreemptAction(hasPlayerTurn: boolean, actionInFlight: boolean): boolean {
+  return hasPlayerTurn && actionInFlight
 }
 
 function pickTrigger(holder: CognitiveStateHolder): DeliberationTrigger {
