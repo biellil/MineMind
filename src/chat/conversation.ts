@@ -46,12 +46,13 @@ function detectRequestKind(message: string): SupportedRequestKind | null {
 }
 
 /**
- * Decide se o agente deve responder a uma mensagem de jogador (D-07/D-12).
- * - Ignora a própria mensagem do bot (username === botUsername).
- * - AUTONOMOUS reactive => false (D-07: conversa essencialmente desligada).
- * - AUTONOMOUS proactive => false aqui também (mantemos simples nesta fase — proatividade
- *   ativa de conversa fica para iteração futura; D-07 prioriza silêncio em autônomo).
- * - ASSISTANT => true para qualquer jogador próximo (D-12: lê todo chat próximo).
+ * Decide se o agente deve responder a uma mensagem de jogador.
+ * - Ignora a própria mensagem do bot (username === botUsername) — guard de auto-mensagem (Pitfall 5).
+ * - Caso contrário, responde a qualquer jogador próximo em AMBOS os modos (AUTONOMOUS e ASSISTANT).
+ *
+ * Reverte D-07: AUTONOMOUS agora também responde — comportamento de chat uniforme entre os dois
+ * modos (a IA conversa enquanto continua executando seu objetivo). O guard de auto-mensagem
+ * (Pitfall 5) permanece. `_proactivity` segue não-usado (prefixo `_`); a assinatura é preservada.
  */
 export function shouldRespond(
   disposition: Disposition,
@@ -60,8 +61,7 @@ export function shouldRespond(
   botUsername: string,
 ): boolean {
   if (username === botUsername) return false // Pitfall 5: nunca responde a si mesmo
-  if (disposition === 'ASSISTANT') return true // D-12
-  return false // AUTONOMOUS: conversa mínima (D-07)
+  return true // reverte D-07: responde em AUTONOMOUS e ASSISTANT (chat uniforme)
 }
 
 /** Cria um Goal candidato source:'player_request' (priority alta, progress 0). */
