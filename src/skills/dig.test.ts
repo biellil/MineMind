@@ -27,7 +27,11 @@ function makeMockBot(opts: {
   positions: Array<{ x: number; y: number; z: number }>
   statusFor: (index: number) => string
   collectImpl?: (blocks: MockBlock[]) => Promise<void>
+  blockName?: string            // nome do bloco que blockAt reporta (default 'oak_log')
+  inventoryItems?: string[]     // ferramentas no inventário (default ['wooden_axe'])
 }) {
+  const blockName = opts.blockName ?? 'oak_log'
+  const inventoryItems = opts.inventoryItems ?? ['wooden_axe']
   const collectCalls: MockBlock[][] = []
   // ordem em que blockAt foi chamado define o índice -> status do getPathTo
   const posToIndex = new Map<string, number>()
@@ -38,11 +42,11 @@ function makeMockBot(opts: {
     entity: { position: { x: 0, y: 64, z: 0 } },
     findBlocks: () => opts.positions,
     blockAt: (pos: { x: number; y: number; z: number }) => ({
-      name: 'oak_log',
+      name: blockName,
       type: 17,
       position: pos,
     }),
-    inventory: { items: () => [{ name: 'wooden_axe', count: 1 }] },
+    inventory: { items: () => inventoryItems.map((name) => ({ name, count: 1 })) },
     heldItem: null,
     equip: async () => {},
     collectBlock: {
@@ -108,5 +112,52 @@ test('caso 3: nenhum candidato -> no_effect com reason "não encontrado" (D-12)'
   expect(r.outcome).toBe('no_effect')
   expect(r.observed).toBe(0)
   expect(r.reason).toMatch(/não encontrado/)
+  expect(collectCalls.length).toBe(0)
+}, 8000)
+
+// fix bootstrap: o hard-gate de ferramenta só deve valer p/ blocos pickaxe.
+// oak_log (axe) e dirt (shovel) são quebráveis À MÃO — devem cavar mesmo SEM ferramenta.
+
+test('caso 4: oak_log SEM axe no inventário -> NÃO hard-gate; cava à mão (collect chamado)', async () => {
+  const { bot, collectCalls } = makeMockBot({
+    positions: [{ x: 1, y: 64, z: 1 }],
+    statusFor: () => 'success',
+    blockName: 'oak_log',
+    inventoryItems: [],  // inventário vazio — deadlock de bootstrap se hard-gate
+    collectImpl: async () => {},
+  })
+
+  const r = await dig(bot, { target: 'oak_log', count: 1 })
+  // não deve retornar o no_effect "no compatible tool"
+  expect(r.reason ?? '').not.toMatch(/no compatible tool/)
+  expect(collectCalls.length).toBe(1)
+}, 8000)
+
+test('caso 5: dirt (shovel) SEM shovel no inventário -> cava à mão (collect chamado)', async () => {
+  const { bot, collectCalls } = makeMockBot({
+    positions: [{ x: 1, y: 64, z: 1 }],
+    statusFor: () => 'success',
+    blockName: 'dirt',
+    inventoryItems: [],
+    collectImpl: async () => {},
+  })
+
+  const r = await dig(bot, { target: 'dirt', count: 1 })
+  expect(r.reason ?? '').not.toMatch(/no compatible tool/)
+  expect(collectCalls.length).toBe(1)
+}, 8000)
+
+test('caso 6: iron_ore (pickaxe) SEM picareta -> hard-gate no_effect "no compatible tool"; NÃO chama collect', async () => {
+  const { bot, collectCalls } = makeMockBot({
+    positions: [{ x: 1, y: 64, z: 1 }],
+    statusFor: () => 'success',
+    blockName: 'iron_ore',
+    inventoryItems: [],
+  })
+
+  const r = await dig(bot, { target: 'iron_ore', count: 1 })
+  expect(r.outcome).toBe('no_effect')
+  expect(r.observed).toBe(0)
+  expect(r.reason).toMatch(/no compatible tool/)
   expect(collectCalls.length).toBe(0)
 }, 8000)

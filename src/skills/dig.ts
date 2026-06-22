@@ -8,7 +8,7 @@ import { executeWithSafety } from './executor'
 import { captureGroundState } from '../grounding/capture'
 import { evaluateDig } from '../grounding/evaluate'
 import type { SkillResult } from '../grounding/types'
-import { selectToolFor } from './tool-selector'
+import { selectToolFor, toolRequiredForDrop } from './tool-selector'
 import { config } from '../config'
 
 export const DigSchema = z.object({
@@ -41,20 +41,22 @@ export async function dig(bot: Bot, rawParams: unknown): Promise<SkillResult> {
   const { target, count } = DigSchema.parse(rawParams)
   const before = captureGroundState(bot, typeof target === 'string' ? undefined : target)
 
-  // D-13 Fase 10: pré-flight de ferramenta com hard guard.
-  // selectToolFor agora é ranqueado (tool-selector.ts). Se não houver ferramenta
-  // compatível no inventário → retorna no_effect imediatamente (sem cavar a seco).
-  // Aceita blockName diretamente (ex: 'oak_log', 'iron_ore') — tool-selector.ts faz o mapeamento
-  // blockName→toolCategory via BLOCK_TO_TOOL_CATEGORY internamente.
+  // D-13 Fase 10 (+ fix bootstrap): pré-flight de ferramenta.
+  // selectToolFor é ranqueado (tool-selector.ts). O hard-gate de "sem ferramenta → no_effect"
+  // só vale p/ blocos que NÃO dropam nada à mão (categoria 'pickaxe': pedra/minérios — toolRequiredForDrop).
+  // Madeira ('axe') e terra/areia/cascalho ('shovel') são quebráveis À MÃO (a ferramenta só acelera):
+  // sem ferramenta a gente CAVA mesmo assim — conserta o deadlock de bootstrap (axe p/ coletar a
+  // madeira que crafta o axe). Aceita blockName diretamente; tool-selector.ts mapeia internamente.
   const blockNameForTool = typeof target === 'string'
     ? target
     : (bot.blockAt({ x: target.x, y: target.y, z: target.z } as Parameters<typeof bot.blockAt>[0])?.name ?? 'unknown')
   const tool = selectToolFor(bot, blockNameForTool)
-  if (tool === null) {
-    // Sem ferramenta compatível no inventário — retorna no_effect imediatamente (D-13)
+  if (tool === null && toolRequiredForDrop(blockNameForTool)) {
+    // Bloco exige ferramenta p/ qualquer drop (picareta) e não há nenhuma — no_effect imediato (D-13)
     return { outcome: 'no_effect', observed: 0, expected: count, delta: {}, reason: `no compatible tool for ${blockNameForTool}` }
   }
-  if (bot.heldItem?.name !== tool.name) {
+  // Equipa a melhor ferramenta SE houver (acelera); sem ferramenta cava à mão (tool === null).
+  if (tool !== null && bot.heldItem?.name !== tool.name) {
     try {
       await bot.equip(tool, 'hand')
     } catch {

@@ -2,7 +2,7 @@
 // Testes unitários do selectToolFor ranqueado por tier (D-12 Fase 10).
 // Verifica que a função retorna a ferramenta de maior tier e null quando inventário vazio.
 import { describe, test, expect } from 'bun:test'
-import { selectToolFor, TOOL_TIER } from './tool-selector'
+import { selectToolFor, TOOL_TIER, toolRequiredForDrop } from './tool-selector'
 
 // Mock mínimo de Bot.inventory para testes unitários
 function makeMockBot(itemNames: string[]) {
@@ -50,5 +50,31 @@ describe('selectToolFor — ranking por tier (D-12 Fase 10)', () => {
     expect(TOOL_TIER['wooden_pickaxe']).toBe(1)
     expect(TOOL_TIER['diamond_pickaxe']).toBe(4)
     expect(TOOL_TIER['netherite_pickaxe']).toBe(5)
+  })
+})
+
+describe('toolRequiredForDrop — só blocos pickaxe exigem ferramenta p/ dropar (fix bootstrap)', () => {
+  test('blocos pickaxe (pedra/minério) → true (não dropam nada à mão)', () => {
+    expect(toolRequiredForDrop('stone')).toBe(true)
+    expect(toolRequiredForDrop('iron_ore')).toBe(true)
+    expect(toolRequiredForDrop('deepslate_diamond_ore')).toBe(true)
+    expect(toolRequiredForDrop('cobblestone')).toBe(true)
+  })
+
+  test('blocos axe (madeira) → false (quebráveis à mão, axe só acelera)', () => {
+    expect(toolRequiredForDrop('oak_log')).toBe(false)
+    expect(toolRequiredForDrop('birch_log')).toBe(false)
+    expect(toolRequiredForDrop('crafting_table')).toBe(false)
+  })
+
+  test('blocos shovel (terra/areia/cascalho) → false (quebráveis à mão)', () => {
+    expect(toolRequiredForDrop('dirt')).toBe(false)
+    expect(toolRequiredForDrop('sand')).toBe(false)
+    expect(toolRequiredForDrop('gravel')).toBe(false)
+  })
+
+  test('bloco desconhecido (sem categoria) → false (não hard-gate o desconhecido)', () => {
+    expect(toolRequiredForDrop('short_grass')).toBe(false)
+    expect(toolRequiredForDrop('unknown')).toBe(false)
   })
 })

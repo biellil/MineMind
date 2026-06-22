@@ -69,6 +69,23 @@ export function blockToolCategory(blockName: string): string | null {
 }
 
 /**
+ * True SOMENTE quando o bloco não dropa NADA sem a ferramenta correta — ou seja,
+ * blocos de categoria 'pickaxe' (pedra, minérios, deepslate, etc.).
+ *
+ * Em Minecraft, madeira ('axe') e terra/areia/cascalho ('shovel') são quebráveis À MÃO
+ * (a ferramenta só acelera). Apenas blocos de picareta exigem a ferramenta p/ dropar.
+ *
+ * Usado pelo guard de dig.ts: o hard-gate de "sem ferramenta → no_effect" só vale aqui.
+ * Conserta o deadlock de bootstrap (precisar de axe p/ coletar a madeira que CRAFTA o axe).
+ *
+ * @param blockName nome do bloco (ex: 'oak_log', 'iron_ore')
+ * @returns true se o bloco exige ferramenta p/ qualquer drop; false caso contrário (inclui desconhecidos)
+ */
+export function toolRequiredForDrop(blockName: string): boolean {
+  return BLOCK_TO_TOOL_CATEGORY[blockName] === 'pickaxe'
+}
+
+/**
  * Seleciona a ferramenta de MAIOR tier disponível no inventário para a categoria dada (D-12 Fase 10).
  *
  * Aceita como `category` tanto uma categoria de ferramenta (ex: 'pickaxe', 'axe') quanto um nome
