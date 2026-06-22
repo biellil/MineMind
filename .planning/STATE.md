@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 Phase: 12
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-06-22
+Last activity: 2026-06-22 - Completed quick task 260622-nif: AUTONOMOUS responde sem abortar a tarefa em voo (reverte D-07/D-12)
 
 Progress: [█████████░] 95%
 
@@ -150,6 +150,7 @@ Recent decisions affecting current work:
 | 260621-ir4 | Consertar starvation da reflexão no loop — pickDispatch puro dá prioridade ao reflect; ação não rouba mais o lock single-flight todo tick (reflexão nunca rodava ao vivo) | 2026-06-21 | 87ccfc2 | [260621-ir4-consertar-starvation-da-reflexao-no-loop](./quick/260621-ir4-consertar-starvation-da-reflexao-no-loop/) |
 | 260621-jhi | Parse lenient do priority na reflexão (schema sem .min/.max) + clamp [0,1] na aplicação — destrava embedding/addVector no Chroma que o modelo local quebrava ao emitir priority 10/12/8 | 2026-06-21 | 9ca318d | [260621-jhi-consertar-parse-lenient-do-priority-na-r](./quick/260621-jhi-consertar-parse-lenient-do-priority-na-r/) |
 | 260621-lj3 | Aposentar de vez a vec_events e a dependência sqlite-vec — openDb deixa de carregar o sqlite-vec e de criar a virtual table vec0; dependência removida de package.json/bun.lock (SQLite vira só relacional; memória vetorial 100% no ChromaDB); órfã antiga deixada inerte | 2026-06-21 | 541cd16 | [260621-lj3-aposentar-de-vez-a-vec-events-e-a-depend](./quick/260621-lj3-aposentar-de-vez-a-vec-events-e-a-depend/) |
+| 260622-nif | No modo autonomous a IA responde ao jogador sem abortar a tarefa em voo (resposta em paralelo); aplicado também ao ASSISTANT — reverte D-07 (shouldRespond responde nos 2 modos) e D-12 (routePlayerTurn não preempta mais a ação) | 2026-06-22 | 356372d | [260622-nif-no-modo-autonomous-a-ia-responde-ao-joga](./quick/260622-nif-no-modo-autonomous-a-ia-responde-ao-joga/) |
 
 ## Session Continuity
 
