@@ -88,6 +88,25 @@ test('snapshot continua congelado (Object.freeze) com os campos novos', () => {
   }).toThrow()
 })
 
+test('item dropado no chão -> name resolvido para "<item> xN (no chão)"', () => {
+  const bot = makeMockBot()
+  // Entidade de item dropado: name genérico 'item' + metadata com o slot do item.
+  bot.entities = {
+    7: {
+      id: 7,
+      type: 'object',
+      name: 'item',
+      position: makePos(2, 64, 0),
+      metadata: [, , , , , , , , { itemId: 17, itemCount: 5 }], // slot 8
+    },
+  }
+  bot.registry = { items: { 17: { name: 'oak_log' } } }
+  const snap = buildWorldSnapshot(bot)
+  expect(snap).not.toBeNull()
+  const drop = snap!.entities.find((e) => e.id === 7)
+  expect(drop?.name).toBe('oak_log x5 (no chão)')
+})
+
 // CR#1: na morte/void o Mineflayer zera bot.entity — buildWorldSnapshot deve retornar null (sem throw).
 test('bot.entity === undefined (morte/void) -> retorna null sem lançar', () => {
   const bot = makeMockBot({ entity: undefined })

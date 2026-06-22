@@ -13,6 +13,32 @@ import type {
 import { config } from '../config'
 
 /**
+ * Itens dropados no chão são entidades genéricas (name === 'item'). Resolve o item real
+ * (nome + quantidade) a partir do metadata, para o bot saber O QUE está caído no chão.
+ * Retorna null quando a entidade não é um drop ou o item não pôde ser resolvido (fallback ao name genérico).
+ */
+function describeDroppedItem(
+  bot: Bot,
+  e: { name?: string; metadata?: unknown },
+): string | null {
+  if (e.name !== 'item') return null
+  const meta = Array.isArray(e.metadata) ? e.metadata : []
+  // O slot do item aparece no metadata como objeto com itemId (1.13+) ou blockId (legado).
+  const slot = meta.find(
+    (m: unknown) =>
+      m != null &&
+      (typeof (m as { itemId?: unknown }).itemId === 'number' ||
+        typeof (m as { blockId?: unknown }).blockId === 'number'),
+  ) as { itemId?: number; blockId?: number; itemCount?: number } | undefined
+  if (!slot) return null
+  const id = slot.itemId ?? slot.blockId
+  const registry = (bot as unknown as { registry?: { items?: Record<number, { name?: string }> } }).registry
+  const itemName = (id != null && registry?.items?.[id]?.name) || 'item'
+  const count = slot.itemCount ?? 1
+  return count > 1 ? `${itemName} x${count} (no chão)` : `${itemName} (no chão)`
+}
+
+/**
  * Captura um snapshot imutável do estado atual do mundo.
  * PERC-04: retorna um objeto plain sem nenhuma referência ao objeto bot.
  *
@@ -45,7 +71,7 @@ export function buildWorldSnapshot(bot: Bot): WorldSnapshot | null {
         id: e.id,
         type: e.type,
         kind: (e as unknown as Record<string, string>).kind ?? 'UNKNOWN',
-        name: (e as unknown as Record<string, string>).username ?? (e as unknown as Record<string, string>).name ?? e.type,
+        name: (e as unknown as Record<string, string>).username ?? describeDroppedItem(bot, e) ?? (e as unknown as Record<string, string>).name ?? e.type,
         position: { x: e.position.x, y: e.position.y, z: e.position.z },
         distance,
         health: (e as unknown as Record<string, number | null>).health ?? null,
