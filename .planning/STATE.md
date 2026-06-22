@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
-status: executing
-stopped_at: Completed 12-02-PLAN.md
-last_updated: "2026-06-22T21:03:12.611Z"
+status: verifying
+stopped_at: Completed 12-03-PLAN.md (Phase 12 complete — ready for verification)
+last_updated: "2026-06-22T21:12:20.510Z"
 last_activity: 2026-06-22
 progress:
   total_phases: 13
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 35
-  completed_plans: 34
+  completed_plans: 35
   percent: 95
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 
 Phase: 12 (building-deliberado) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-22
 
 Progress: [█████████░] 95%
@@ -79,6 +79,7 @@ Progress: [█████████░] 95%
 | Phase 11.1 P01 | 18 | 2 tasks | 2 files |
 | Phase 12 P01 | 7 | 3 tasks | 6 files |
 | Phase 12 P02 | 6 | 2 tasks | 4 files |
+| Phase 12 P03 | 6 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -123,6 +124,7 @@ Recent decisions affecting current work:
 - [Phase 11.1]: 11.1-01: serializeContext expõe percepção espacial híbrida próx(x,y,z) Nm Δy±k para blocos/entidades/jogadores; Δy cru sem veredito (D-02); teto global BLOCK_COORD_BUDGET=18 vira único gate priorizado (troncos>pedra>minério>lixo, count de todos os tipos preservado, .slice(0,8) removido — D-03); jogador position null degrada para sem-pos sem lançar (D-04a); assinatura/call-sites/types/snapshot intactos
 - [Phase 12]: 12-01: núcleo determinístico de building — geradores puros (genShelter casca-oca 6 lados/genWall/genTower) + runBlueprint idempotente (orderForReach bot-cell-last/baixo→cima/fora→dentro D-05; placeOneWithRetry liga placeRetries 0→2 D-02; grounding por cobertura real D-03/D-10); skill build resolve shelter/wall/tower/station/custom; isFilled exportado; shelter.ts/nodes.ts intactos
 - [Phase 12]: 12-02: skill build registrada (skillRegistry/toolRegistry) + roteador determinístico build:* no execute (espelha goalToSkillParams/DAG_PREFIXES, D-13): build:shelter/wall/tower/station → build({tipo}) sem LLM, em canal PARALELO ao DAG e SEPARADO do dispatch G-01 (D-14, intocado); 'building' fora de STUB_STATES (só 'fighting' resta, Fase 13)
+- [Phase 12]: 12-03: building deliberado ATIVADO por 2 produtores de goal build:*: (1) ponte de abrigo isolada no observe (noite=!snapshot.status.isDay + exposto via bot.blockAt + seguro → holder.currentGoal=build:shelter), sem tocar o need stub do módulo motivation (Open Question 1 → bridge); (2) kind 'build' no canal conversacional (detectRequestKind exportada + detectBuildSub → makePlayerRequestGoal emite build:<sub> roteável) gated em ASSISTANT (Open Question 2). Precedência do reflexo Fase 8 mantida (não ativa sob survivalCritical, D-15); shelter.ts/needs/goals/types intactos
 
 ### Roadmap Evolution
 
@@ -158,6 +160,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-22T21:03:05.158Z
-Stopped at: Completed 12-02-PLAN.md
+Last session: 2026-06-22T21:12:20.501Z
+Stopped at: Completed 12-03-PLAN.md (Phase 12 complete — ready for verification)
 Resume file: None

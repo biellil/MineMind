@@ -39,7 +39,7 @@ Continuação numérica do v1.0 (que terminou na Phase 5; 999.1 foi backlog/park
 - [ ] **Phase 9: Placement + Crafting/Smelting Grounded** - placeBlock robusto + craft/smelt/equip verificados (bancada/fornalha)
 - [ ] **Phase 10: Tech Tree DAG + Needs** - Progressão recursiva madeira→pedra→ferro priorizada por necessidade interna
 - [ ] **Phase 11: Modos Autônomo/Assistente** - Self-prompting default + assistente temporário que volta sozinho (mata o "grude")
-- [ ] **Phase 12: Building Deliberado** - Estado building real: abrigo funcional + estruturas simples
+- [x] **Phase 12: Building Deliberado** - Estado building real: abrigo funcional + estruturas simples (completed 2026-06-22)
 - [ ] **Phase 13: Combate Completo** - Estado fighting real: atacar/recuar com arma+armadura, sem kiting suicida
 - [ ] **Phase 14: Aprendizado por Reflexão (loop fechado)** - Mortes/falhas grounded ajustam objetivos futuros; live-verify da Fase 4 como gate
 
@@ -211,7 +211,7 @@ Plans:
 Plans:
 - [x] 12-01-PLAN.md — Núcleo determinístico: geradores de blueprint (shelter full-seal/wall/tower) + builder genérico idempotente (loop ordenado + retry ligado + grounding por cobertura) + config (BUILD-02, BUILD-03)
 - [x] 12-02-PLAN.md — Integração no loop: registra skill build + roteador build:* paralelo ao DAG (G-01 intacto) + remove building de STUB_STATES (BUILD-02, BUILD-03)
-- [ ] 12-03-PLAN.md — Ativação: ponte de abrigo no observe (noite+exposto→build:shelter) + kind build no canal de pedido do jogador (BUILD-02, BUILD-03)
+- [x] 12-03-PLAN.md — Ativação: ponte de abrigo no observe (noite+exposto→build:shelter) + kind build no canal de pedido do jogador (BUILD-02, BUILD-03)
 **UI hint**: no
 
 ### Phase 13: Combate Completo
@@ -252,7 +252,7 @@ Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 8.1 → 9 → 10 → 
 | 10.1. Paralelismo no processamento do LLM (deliberação concorrente) (INSERTED) | v2.0 | 2/2 | Complete    | 2026-06-22 |
 | 11. Modos Autônomo/Assistente | v2.0 | 0/TBD | Not started | - |
 | 11.1. Percepção espacial no contexto do LLM (INSERTED) | v2.0 | 1/1 | Complete    | 2026-06-22 |
-| 12. Building Deliberado | v2.0 | 2/3 | In Progress|  |
+| 12. Building Deliberado | v2.0 | 3/3 | Complete   | 2026-06-22 |
 | 13. Combate Completo | v2.0 | 0/TBD | Not started | - |
 | 14. Aprendizado por Reflexão | v2.0 | 0/TBD | Not started | - |
 
