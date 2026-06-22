@@ -194,6 +194,25 @@ export function pickTechTarget(
   return null
 }
 
+/**
+ * Fase 12 D-12: condição PURA da ponte de abrigo (need de abrigo → goal build:shelter).
+ * Recebe `isNight` JÁ DERIVADO do booleano normalizado do snapshot (`!snapshot.status.isDay`) —
+ * NUNCA o campo bruto `timeOfDay` (que é 0.0–1.0, não o tick Minecraft 0–24000). Isto mantém o
+ * teste alinhado à escala normalizada e impede o anti-padrão de comparar o snapshot contra 13000–23000.
+ *
+ * Ativa o abrigo deliberado quando: é noite + o bot está exposto (sem teto sólido) + NÃO há
+ * sobrevivência crítica em curso (o reflexo de emergência da Fase 8 mantém precedência, D-15) +
+ * o goal atual ainda não é um build:* (evita re-commit/duplicação a cada tick).
+ */
+export function shouldBuildShelter(
+  isNight: boolean,
+  exposed: boolean,
+  survivalCritical: boolean,
+  currentGoalId: string | null,
+): boolean {
+  return isNight && exposed && !survivalCritical && !(currentGoalId?.startsWith('build:') ?? false)
+}
+
 export function createNodes(deps: NodeDeps) {
   const { bot, holder, triggerBus } = deps
   const control = holder.control
@@ -323,6 +342,53 @@ export function createNodes(deps: NodeDeps) {
       }
     }
     // === Fim da ponte Fase 10 ===
+
+    // === Fase 12 D-12: Ponte de abrigo (noite + exposto → goal build:shelter) ===
+    // Bridge ISOLADO no observe (Pitfall 5 / Open Question 1) — NÃO promove o need stub `shelter`
+    // do módulo motivation; define o goal direto no holder. O roteador build:* do Plan 02 consome
+    // esse goal no execute (build:shelter → build({tipo:'shelter'})).
+    //
+    // "Noite" vem do booleano PRONTO do snapshot — `!snapshot.status.isDay`. CRÍTICO: `timeOfDay` é
+    // NORMALIZADO 0.0–1.0 (NÃO é o tick Minecraft 0–24000), então a ponte nunca compara o snapshot
+    // contra 13000–23000 (seria sempre falso → a ponte não dispararia e SC1 falharia em silêncio).
+    //
+    // "Exposto" = sem bloco sólido numa coluna de ~5 blocos acima da cabeça do bot (via bot.blockAt).
+    //
+    // Retomada por idempotência (D-03): sem subsistema de pendência — se o build for preemptado por
+    // vida-crítica, no próximo tick ainda-noite+exposto a ponte re-seleciona build:shelter e o builder
+    // (Plan 01) pula os blocos já colocados (runBlueprint é idempotente via isFilled).
+    const isNight = !snapshot.status.isDay
+    let exposed = false
+    if (isNight && !survivalCritical) {
+      // Só sondamos o teto quando a noite (sinal barato) já está confirmada — evita bot.blockAt à toa.
+      try {
+        const bp = bot.entity.position
+        let hasRoof = false
+        for (let dy = 2; dy <= 6; dy++) {
+          const b = bot.blockAt(bp.offset(0, dy, 0) as Parameters<typeof bot.blockAt>[0])
+          if (b != null && b.name !== 'air' && b.name !== 'cave_air') { hasRoof = true; break }
+        }
+        exposed = !hasRoof
+      } catch {
+        // bot/entidade sem corpo (mock/morte): degrada para não-exposto (não força o abrigo). Core Value.
+        exposed = false
+      }
+    }
+    if (shouldBuildShelter(isNight, exposed, survivalCritical, holder.currentGoal?.id ?? null)) {
+      const shelterGoal: Goal = {
+        id: 'build:shelter',
+        kind: 'shelter',
+        priority: 0.9, // alto, mas abaixo de player_request(1) e survivalCritical
+        progress: 0,
+        dependsOn: [],
+        source: 'need',
+        committedAt: t,
+      }
+      if (!holder.goals.some((g) => g.id === 'build:shelter')) holder.goals.push(shelterGoal)
+      holder.currentGoal = shelterGoal
+      log('[build] noite + exposto → goal build:shelter (abrigo deliberado)')
+    }
+    // === Fim da ponte de abrigo Fase 12 ===
 
     // Fase 07.1 Plan 03: sinais para o driver event-driven.
     // enteredIdle=true quando não há objetivo ativo (sem skill neste tick = idle genuíno).
