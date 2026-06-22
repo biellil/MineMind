@@ -254,7 +254,27 @@ export function createNodes(deps: NodeDeps) {
     const currentIsTechGoal = holder.currentGoal !== null &&
       DAG_PREFIXES.some(p => holder.currentGoal!.id.startsWith(p))
 
-    if (resourcesUrgent && !currentIsTechGoal) {
+    // FIX C (dag-router-ignores-explore): uma decisão LLM FRESCA action=explore/navigate é um pedido
+    // explícito de SAIR do canal DAG. Mesma janela de frescor (2x replan) e mesma fonte (holder.llmDecision)
+    // que analyze/execute usam. Quando fresca, ela (1) impede a ponte de (re)construir um DAG e (2) limpa
+    // um currentGoal DAG existente — liberando o canal 'exploring' para o execute. Sem isto, a ponte
+    // re-fixa o alvo a cada tick e o explore do LLM nunca tem efeito real (loop sem escape).
+    const llmEsc = holder.llmDecision
+    const llmWantsEscape =
+      llmEsc !== undefined && llmEsc !== null &&
+      now() - llmEsc.at < config.replanMinIntervalMs * 2 &&
+      (llmEsc.decision.action === 'explore' || llmEsc.decision.action === 'navigate')
+
+    // Escape fresco com currentGoal DAG: limpar o DAG ANTES da ponte (e mesmo quando a ponte é pulada),
+    // para o canal 'exploring' assumir no execute e a ponte não reconstruir a rota neste tick.
+    if (llmWantsEscape && currentIsTechGoal) {
+      holder.goals = holder.goals.filter(g => !DAG_PREFIXES.some(p => g.id.startsWith(p)))
+      if (holder.currentGoal && DAG_PREFIXES.some(p => holder.currentGoal!.id.startsWith(p))) {
+        holder.currentGoal = null
+      }
+    }
+
+    if (resourcesUrgent && !currentIsTechGoal && !llmWantsEscape) {
       // ROOT CAUSE (b) fix (OPÇÃO 2): primeiro item da ladder insatisfeito E não-resfriado
       // (pickTechTarget escalona para o próximo quando o atual está em cooldown). Reusa a infra
       // de cooldown de safety sem tocar o módulo puro tech-tree.ts.
@@ -376,22 +396,20 @@ export function createNodes(deps: NodeDeps) {
     // rotear para a skill correspondente SEM depender do estado cognitivo ou da decisão LLM.
     // Isso é a ponte determinística: o LLM não precisa conhecer a cadeia de tech-tree.
     const currentGoal = holder.currentGoal
-    // ROOT CAUSE (b) fix (OPÇÃO 1 reduzida — escape final): quando o sub-goal DAG atual JÁ está
-    // em cooldown (escalonamento da ladder esgotado: o alvo é inalcançável e voltou a ser
-    // selecionado), uma decisão FRESCA action=explore/navigate do LLM pode redirecionar o canal
-    // para o ramo 'exploring' em vez do roteador forçar dig no mesmo alvo travado. Sem isto, o
-    // roteador DAG vence o llmDecision sempre, e explore nunca vira navigate (loop sem escape).
-    const dagRouting = currentGoal ? goalToSkillParams(currentGoal.id) : null
-    const dagTargetCooledDown =
-      dagRouting !== null && cooledDownTargets(safety, now()).has(dagRouting.paramsJson)
+    // ROOT CAUSE (b) fix + FIX C (dag-router-ignores-explore): uma decisão FRESCA action=explore/navigate
+    // do LLM redireciona o canal para o ramo 'exploring' em vez do roteador forçar dig no sub-goal DAG.
+    // ANTES o escape exigia AMBOS dagTargetCooledDown E llmWantsEscape — mas pickTechTarget só seleciona
+    // um alvo NÃO-resfriado, então o currentGoal DAG quase nunca estava em cooldown e o escape jamais
+    // disparava (precondições contraditórias). Agora o escape honra llmWantsEscape SOZINHO: explore fresco
+    // do LLM tem poder real sobre o roteador DAG. Sem isto, o roteador vence o llmDecision sempre.
     const llmWantsEscape =
       fresh !== undefined &&
       fresh !== null &&
       now() - fresh.at < config.replanMinIntervalMs * 2 &&
       (fresh.decision.action === 'explore' || fresh.decision.action === 'navigate')
-    const dagRouterYieldsToExplore = dagTargetCooledDown && llmWantsEscape
-    if (dagRouterYieldsToExplore) {
-      log(`[tech-tree] ${currentGoal!.id} em cooldown — cedendo ao explore do LLM (escape final)`)
+    const dagRouterYieldsToExplore = llmWantsEscape
+    if (dagRouterYieldsToExplore && currentGoal) {
+      log(`[tech-tree] ${currentGoal.id} — cedendo ao explore/navigate fresco do LLM (escape)`)
     }
     if (
       snap &&
@@ -532,6 +550,19 @@ export function createNodes(deps: NodeDeps) {
         reason: 'anti-repeat',
         timestamp: now(),
       }, now())
+      // FIX A (dag-router-ignores-explore): replicar a limpeza D-03 ANTES deste return precoce.
+      // Sem isto, o abandono retorna SEM nunca limpar o sub-goal DAG do holder (o bloco D-03 fica
+      // depois deste return e nunca roda). Resultado: currentIsTechGoal permanece true no observe,
+      // a ponte need→DAG é pulada (guard `!currentIsTechGoal`) e o MESMO alvo inalcançável é
+      // re-selecionado e re-abandonado a cada tick — para sempre (bot parado ~1h). Pior: recordFailure
+      // a cada tick reseta lastFailureAt=now, então decayBackoff nunca recupera. Limpar o currentGoal
+      // DAG aqui devolve o canal ao observe para re-escalonar (pickTechTarget) ou ceder ao explore.
+      if (currentGoal && DAG_PREFIXES.some(p => currentGoal.id.startsWith(p))) {
+        holder.goals = holder.goals.filter(g => !DAG_PREFIXES.some(p => g.id.startsWith(p)))
+        if (holder.currentGoal && DAG_PREFIXES.some(p => holder.currentGoal!.id.startsWith(p))) {
+          holder.currentGoal = null
+        }
+      }
       // Fase 07.1 Plan 03: emit após grounding do abandon (holder.lastObservedDelta não é atualizado
       // aqui mas não há lastObservedDelta a ler — o driver apenas acorda para o próximo tick).
       triggerBus.emit('actionFinished', { skill, outcome: 'no_effect' })
