@@ -31,7 +31,7 @@ export const config = {
   digTimeoutMs: parseInt(process.env.DIG_TIMEOUT_MS || '10000', 10),
   // Fase 9: timeouts de placement/smelting (D-04/D-10, Claude's discretion sobre valores)
   placeTimeoutMs: parseInt(process.env.PLACE_TIMEOUT_MS || '6000', 10),       // > os 5000 internos do blockUpdate
-  placeRetries: parseInt(process.env.PLACE_RETRIES || '0', 10),               // D-04: campo RESERVADO p/ fase futura; o CORPO do retry NAO e implementado nesta fase (default off — gap intencional)
+  placeRetries: parseInt(process.env.PLACE_RETRIES || '2', 10),               // D-02 Fase 12: corpo do retry LIGADO (builder.ts placeOneWithRetry) — re-tenta idempotente checando isFilled antes (race do blockUpdate)
   smeltUpdateTimeoutMs: parseInt(process.env.SMELT_UPDATE_TIMEOUT_MS || '12000', 10), // > 10s/item
   smeltTimeoutMs: parseInt(process.env.SMELT_TIMEOUT_MS || '15000', 10),      // teto total por item
   // Distância (blocos) a partir da qual o bot PARA de se reaproximar do jogador no estado socializing.
@@ -184,6 +184,17 @@ export const config = {
   // O agente considera que tem "suficiente" de um item se tiver pelo menos esta quantidade no inventário.
   // Valor baixo (1) garante que a progressão sempre avance para o próximo tier.
   resourceMinQuantity: parseInt(process.env.RESOURCE_MIN_QUANTITY || '1', 10),
+
+  // === Fase 12: Building Deliberado ===
+  // Delay gaussiano (ms) entre colocar cada bloco — pacing anti-cheat D-01/D-16 (rajada é flagável).
+  buildBlockDelayMeanMs: parseInt(process.env.BUILD_BLOCK_DELAY_MEAN_MS || '350', 10),
+  buildBlockDelayStdMs: parseInt(process.env.BUILD_BLOCK_DELAY_STD_MS || '120', 10),
+  // Teto total (ms) de um skill-run de build inteiro (executeWithSafety) — generoso (muitos blocos).
+  buildTimeoutMs: parseInt(process.env.BUILD_TIMEOUT_MS || '120000', 10),
+  // Dims default por estrutura quando o caminho autônomo não fornece (Open Question 3: dims default + origin=bot).
+  buildShelterDims: { w: 3, h: 3, d: 3 } as { w: number; h: number; d: number }, // abrigo 3x3x3 oco — fecha os 6 lados ao redor do bot
+  buildWallDims: { w: 5, h: 3, d: 1 } as { w: number; h: number; d: number },     // parede 5 de largura x 3 de altura
+  buildTowerDims: { w: 1, h: 4, d: 1 } as { w: number; h: number; d: number },    // torre 1x1 x 4 de altura
 
   // === Fase 08.1: ChromaDB (vector store HTTP local — índice derivado descartável, D-01/D-03) ===
   chromaHost: process.env.CHROMA_HOST || 'localhost',
@@ -350,3 +361,7 @@ if (config.smeltTimeoutMs < 1) throw new Error(`SMELT_TIMEOUT_MS inválido: ${co
 if (config.resourceMinQuantity < 1) {
   throw new Error(`RESOURCE_MIN_QUANTITY inválido: ${config.resourceMinQuantity}. Deve ser >= 1.`)
 }
+// Fase 12: validação dos parâmetros de building
+if (config.buildBlockDelayMeanMs < 0) throw new Error(`BUILD_BLOCK_DELAY_MEAN_MS inválido: ${config.buildBlockDelayMeanMs}. Deve ser >= 0.`)
+if (config.buildBlockDelayStdMs < 0) throw new Error(`BUILD_BLOCK_DELAY_STD_MS inválido: ${config.buildBlockDelayStdMs}. Deve ser >= 0.`)
+if (config.buildTimeoutMs < 1) throw new Error(`BUILD_TIMEOUT_MS inválido: ${config.buildTimeoutMs}. Deve ser >= 1.`)
