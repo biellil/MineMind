@@ -1,26 +1,47 @@
 // src/cognition/loop.reflect-priority.test.ts
-// IR4: regressão da starvation da reflexão. pickDispatch dá PRIORIDADE ao reflect quando devido
-// e o lock está livre, preservando o single-flight (D-12). Antes do fix a ação tomava o lock
-// sincronamente todo tick e a reflexão nunca rodava (events type='reflection' = 0 ao vivo).
+// Phase 10.1-02 (D-01/Pitfall 6): pickDispatch DEIXA DE SER XOR. Com gate por tipo + semáforo,
+// reflexão e ação podem ser despachadas no MESMO tick (o gate por tipo + o semáforo coordenam,
+// não a exclusão mútua do pickDispatch antigo). pickDispatch vira um HINT: diz O QUE despachar
+// (reflect quando devido e o gate reflection livre; ação quando o gate action livre), sem mais
+// bloquear a ação por causa de uma reflexão devida.
+//
+// Mantém a garantia IR4: reflect ainda tem PRIORIDADE de permit quando o semáforo é escasso
+// (prioridade 2 vs 1 na fila — testado em deliberation/concurrency), mas a AÇÃO não é mais
+// bloqueada por reflect quando há gate/permit livre.
 import { test, expect } from 'bun:test'
 import { pickDispatch } from './loop'
 import { shouldReflect } from './reflection'
 import { config } from '../config'
 
-test('pickDispatch: reflect tem prioridade quando devido e nada in-flight (mata a starvation)', () => {
-  expect(pickDispatch({ inFlight: false, reflectDue: true })).toBe('reflect')
+test('pickDispatch: reflect devido + gate reflection livre ⇒ despacha reflect', () => {
+  const d = pickDispatch({ reflectDue: true, reflectionBusy: false, actionBusy: false })
+  expect(d.reflect).toBe(true)
 })
 
-test('pickDispatch: cai na ação quando reflect não é devido', () => {
-  expect(pickDispatch({ inFlight: false, reflectDue: false })).toBe('action')
+test('pickDispatch: ação NÃO é bloqueada por reflect devido (deixa de ser XOR — Pitfall 6)', () => {
+  // antes: reflectDue ⇒ dispatch 'reflect' e a ação NÃO rodava. Agora ambos podem.
+  const d = pickDispatch({ reflectDue: true, reflectionBusy: false, actionBusy: false })
+  expect(d.reflect).toBe(true)
+  expect(d.action).toBe(true) // a ação coexiste — o gate/semáforo é quem coordena
 })
 
-test('pickDispatch: in-flight ⇒ none (single-flight D-12 preservado)', () => {
-  expect(pickDispatch({ inFlight: true, reflectDue: true })).toBe('none')
-  expect(pickDispatch({ inFlight: true, reflectDue: false })).toBe('none')
+test('pickDispatch: reflect não devido ⇒ só ação', () => {
+  const d = pickDispatch({ reflectDue: false, reflectionBusy: false, actionBusy: false })
+  expect(d.reflect).toBe(false)
+  expect(d.action).toBe(true)
 })
 
-test('cenário ao vivo: acúmulo > limiar com lock livre ⇒ reflect (não action)', () => {
+test('pickDispatch: gate action ocupado ⇒ não redispacha ação (não sobrepõe o mesmo tipo)', () => {
+  const d = pickDispatch({ reflectDue: false, reflectionBusy: false, actionBusy: true })
+  expect(d.action).toBe(false)
+})
+
+test('pickDispatch: gate reflection ocupado ⇒ não redispacha reflect mesmo se devido', () => {
+  const d = pickDispatch({ reflectDue: true, reflectionBusy: true, actionBusy: false })
+  expect(d.reflect).toBe(false)
+})
+
+test('cenário ao vivo: acúmulo > limiar ⇒ reflect devido (e a ação ainda pode rodar)', () => {
   // Reproduz o estado do minemind.sqlite ao vivo: importância 85 vs limiar 50.
   const reflectDue = shouldReflect({
     enteredIdle: false,
@@ -30,6 +51,7 @@ test('cenário ao vivo: acúmulo > limiar com lock livre ⇒ reflect (não actio
     now: 1, // dentro do piso temporal → só o acúmulo decide
   })
   expect(reflectDue).toBe(true)
-  // Com o lock livre, o dispatch DEVE ser reflect — antes do fix a ação tomava o lock e isto seria 'action'.
-  expect(pickDispatch({ inFlight: false, reflectDue })).toBe('reflect')
+  const d = pickDispatch({ reflectDue, reflectionBusy: false, actionBusy: false })
+  expect(d.reflect).toBe(true) // a reflexão NÃO starva — é despachada (e priorizada no semáforo)
+  expect(d.action).toBe(true) // mas a ação não é mais bloqueada por ela (Pitfall 6)
 })

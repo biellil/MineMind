@@ -6,14 +6,15 @@
 //      consolida CP→LP (UM evento episódico em `events`) e faz flush da mente (kv['holder']).
 //   B) com provider OFF (available:false), runReflection AINDA consolida deterministicamente
 //      (sem lançar) e os goals ficam inalterados (fallback no-op).
-//   C) single-flight: duas chamadas concorrentes de maybeDeliberate('reflect') NÃO rodam duas
-//      reflexões simultâneas (a 2ª retorna cedo por inFlight).
+//   C) gate por tipo: duas chamadas concorrentes de maybeDeliberate('reflect') NÃO rodam duas
+//      reflexões simultâneas (a 2ª retorna cedo pelo gate 'reflection' — 10.1-02 substitui o inFlight).
 import { test, expect, afterAll } from 'bun:test'
 import { unlinkSync, existsSync, readdirSync } from 'node:fs'
 import { openDb, kvGet } from '../memory/persistence'
 import { push } from '../memory/shortTerm'
 import { createCognitiveStateHolder } from './state'
 import { createDeliberator, runReflection } from './deliberation'
+import { Semaphore, createTaskGate } from './concurrency'
 import type { LlmProvider } from '../llm/provider'
 import type { WorldSnapshot } from '../perception/types'
 import type { MemEvent } from './types'
@@ -151,14 +152,14 @@ test('B) runReflection com LLM off: ainda consolida (determinístico) e não mut
 // ---------------------------------------------------------------------------
 // C) single-flight: 2 chamadas concorrentes de maybeDeliberate('reflect') não sobrepõem.
 // ---------------------------------------------------------------------------
-test('C) maybeDeliberate("reflect") single-flight: 2ª chamada concorrente retorna cedo por inFlight', async () => {
+test('C) maybeDeliberate("reflect") gate por tipo: 2ª chamada concorrente retorna cedo (gate reflection)', async () => {
   const db = openDb(dbPathFor('c'))
   const holder = holderWithEvents(db)
 
-  // provider com decide PRESO num gate: a reflexão fica pendente até liberarmos.
+  // provider com decide PRESO numa promise: a reflexão fica pendente até liberarmos.
   let decideCalls = 0
   let releaseDecide!: () => void
-  const gate = new Promise<void>((r) => {
+  const decideHold = new Promise<void>((r) => {
     releaseDecide = r
   })
   const slowProvider: LlmProvider = {
@@ -166,7 +167,7 @@ test('C) maybeDeliberate("reflect") single-flight: 2ª chamada concorrente retor
     available: async () => true,
     decide: async () => {
       decideCalls++
-      await gate
+      await decideHold
       return { summary: 'lenta', goalUpdates: [] } as never
     },
     chat: async () => '',
@@ -174,48 +175,44 @@ test('C) maybeDeliberate("reflect") single-flight: 2ª chamada concorrente retor
   }
 
   const deliberator = createDeliberator()
+  // 10.1-02: gate por tipo + semáforo externos (substituem o inFlight). gate 'reflection' busy =
+  // reflexão em voo.
+  const taskGate = createTaskGate()
+  const semaphore = new Semaphore(1)
 
-  // 1ª chamada (void): fica presa no gate -> inFlight true.
+  // 1ª chamada (void): fica presa no decideHold -> gate 'reflection' busy.
   const p1 = deliberator.maybeDeliberate(
-    deliberator.state,
-    holder,
-    slowProvider,
-    snapshot,
-    'reflect',
-    Date.now(),
+    deliberator.state, holder, slowProvider, snapshot, 'reflect', Date.now(), null, taskGate, semaphore,
   )
-  expect(deliberator.state.inFlight).toBe(true)
+  expect(taskGate.isBusy('reflection')).toBe(true)
 
-  // 2ª chamada concorrente: deve retornar CEDO por inFlight (não chama decide de novo).
+  // 2ª chamada concorrente DO MESMO TIPO: retorna CEDO pelo gate 'reflection' (não chama decide de novo).
   await deliberator.maybeDeliberate(
-    deliberator.state,
-    holder,
-    slowProvider,
-    snapshot,
-    'reflect',
-    Date.now(),
+    deliberator.state, holder, slowProvider, snapshot, 'reflect', Date.now(), null, taskGate, semaphore,
   )
   // Plan 04: runReflection ganhou um await extra (retrieve agora é async — KNN no Chroma) ANTES de
   // decide; drena microtasks para que a 1ª reflexão alcance provider.decide antes do assert.
   for (let i = 0; i < 5; i++) await Promise.resolve()
   expect(decideCalls).toBe(1)
 
-  // libera o gate: a 1ª reflexão conclui.
+  // libera: a 1ª reflexão conclui.
   releaseDecide()
   await p1
-  expect(deliberator.state.inFlight).toBe(false)
+  expect(taskGate.isBusy('reflection')).toBe(false)
   expect(decideCalls).toBe(1)
 
   db.close()
 })
 
 // ===========================================================================
-// REGRESSÃO B1 — contenção ação×reflexão no loop vivo (FALHAVA antes do fix):
-// ação e reflexão compartilham o MESMO DeliberationState (um lock inFlight + um
-// orçamento lastRunAt/replanMinIntervalMs). Estes testes provam:
-//   D) maybeDeliberate retorna false no no-op e true quando roda.
+// REGRESSÃO B1 + 10.1-02 — contenção ação×reflexão no loop vivo. Sob o novo modelo
+// (gate por tipo + semáforo, substituindo o inFlight único), ação e reflexão NÃO se
+// excluem mais por tipo (Pitfall 6); o semáforo (permits) é quem decide se coexistem
+// ou serializam. Estes testes provam:
+//   D) maybeDeliberate retorna false no no-op (gate do tipo ocupado / budget de ação) e true quando roda.
 //   E) reflect NÃO é gated pelo orçamento de replan de AÇÃO (não fica faminta).
-//   F) reflect ainda respeita D-12 (não sobrepõe ação in-flight).
+//   F) ação e reflexão usam gates de tipo INDEPENDENTES (deixa de ser XOR — Pitfall 6); com
+//      semáforo permits=1 a 2ª tarefa serializa (aguarda o slot) em vez de no-op.
 // ===========================================================================
 
 // snapshot mínimo para o caminho de AÇÃO (decideAction lê via serializeContext).
@@ -233,49 +230,37 @@ function fakeActionProvider(): LlmProvider {
 }
 
 // ---------------------------------------------------------------------------
-// D) contrato booleano: true quando roda; false no no-op (inFlight / budget de ação).
+// D) contrato booleano: true quando roda; false no no-op (gate do tipo ocupado / budget de ação).
 // ---------------------------------------------------------------------------
-test('D) maybeDeliberate retorna true quando executa e false no no-op (inFlight / budget de ação)', async () => {
+test('D) maybeDeliberate retorna true quando executa e false no no-op (gate do tipo / budget de ação)', async () => {
   const db = openDb(dbPathFor('d'))
   const holder = holderWithEvents(db)
   const deliberator = createDeliberator()
+  const gate = createTaskGate()
+  const semaphore = new Semaphore(1)
   const t0 = 100_000
 
   // 1) Uma AÇÃO roda (estado fresco, dentro do trigger) -> true e consome lastRunAt.
   const ranAction = await deliberator.maybeDeliberate(
-    deliberator.state,
-    holder,
-    fakeActionProvider(),
-    actionSnapshot,
-    'periodic',
-    t0,
+    deliberator.state, holder, fakeActionProvider(), actionSnapshot, 'periodic', t0, null, gate, semaphore,
   )
   expect(ranAction).toBe(true)
   expect(deliberator.state.lastRunAt).toBe(t0)
 
   // 2) Uma 2ª AÇÃO imediata (mesmo instante) cai no orçamento de replan -> no-op -> false.
   const ranAction2 = await deliberator.maybeDeliberate(
-    deliberator.state,
-    holder,
-    fakeActionProvider(),
-    actionSnapshot,
-    'periodic',
-    t0,
+    deliberator.state, holder, fakeActionProvider(), actionSnapshot, 'periodic', t0, null, gate, semaphore,
   )
   expect(ranAction2).toBe(false)
 
-  // 3) Com inFlight forçado true, qualquer chamada faz no-op -> false (single-flight).
-  deliberator.state.inFlight = true
+  // 3) Com o gate 'reflection' já ocupado, uma chamada de REFLECT faz no-op -> false (não sobrepõe o tipo).
+  // Bem além do budget — prova que o false veio do GATE do tipo, não do orçamento de ação.
+  gate.tryEnter('reflection')
   const ranWhileBusy = await deliberator.maybeDeliberate(
-    deliberator.state,
-    holder,
-    fakeActionProvider(),
-    actionSnapshot,
-    'reflect',
-    t0 + 1_000_000, // bem além do budget — prova que o false veio do inFlight, não do orçamento
+    deliberator.state, holder, fakeActionProvider(), actionSnapshot, 'reflect', t0 + 1_000_000, null, gate, semaphore,
   )
   expect(ranWhileBusy).toBe(false)
-  deliberator.state.inFlight = false
+  gate.leave('reflection')
 
   db.close()
 })
@@ -324,18 +309,22 @@ test('E) reflect NÃO é gated pelo budget de ação: roda mesmo logo após uma 
 })
 
 // ---------------------------------------------------------------------------
-// F) D-12 preservado: enquanto uma AÇÃO está in-flight, reflect retorna false e
-//    NÃO inicia uma 2ª inferência (nenhuma sobreposição ação×reflexão).
+// F) 10.1-02 (Pitfall 6): ação e reflexão usam gates de tipo INDEPENDENTES — a reflexão NÃO é mais
+//    bloqueada por uma ação em voo (deixa de ser XOR). Mas com o semáforo permits=1, a 2ª tarefa
+//    SERIALIZA (aguarda o slot da 1ª) em vez de fazer no-op. Quando a ação libera o slot, a reflexão
+//    adquire e roda — coordenação por RECURSO (semáforo), não por exclusão de tipo.
 // ---------------------------------------------------------------------------
-test('F) reflect respeita D-12: não sobrepõe uma ação in-flight (retorna false, sem 2ª inferência)', async () => {
+test('F) ação e reflexão coexistem por tipo (Pitfall 6); semáforo permits=1 serializa o slot', async () => {
   const db = openDb(dbPathFor('f'))
   const holder = holderWithEvents(db)
   const deliberator = createDeliberator()
+  const gate = createTaskGate()
+  const semaphore = new Semaphore(1) // permits=1 → serialização (D-03)
 
-  // provider de AÇÃO preso num gate: a ação fica in-flight até liberarmos.
+  // provider de AÇÃO preso num gate de teste: a ação segura o ÚNICO permit até liberarmos.
   let actionDecideCalls = 0
   let releaseAction!: () => void
-  const gate = new Promise<void>((r) => {
+  const actionGate = new Promise<void>((r) => {
     releaseAction = r
   })
   const slowActionProvider: LlmProvider = {
@@ -343,59 +332,51 @@ test('F) reflect respeita D-12: não sobrepõe uma ação in-flight (retorna fal
     available: async () => true,
     decide: async () => {
       actionDecideCalls++
-      await gate
+      await actionGate
       return { action: 'idle', reason: 'lenta' } as never
     },
     chat: async () => '',
     embed: async () => [],
   }
 
-  // reflect provider que conta se foi chamado (não deveria, enquanto a ação está presa).
+  // reflect provider que conta quando é chamado (só DEPOIS que a ação liberar o permit).
   let reflectDecideCalls = 0
   const reflectProvider: LlmProvider = {
     maxConcurrency: 1,
     available: async () => true,
     decide: async () => {
       reflectDecideCalls++
-      return { summary: 'reflexão indevida', goalUpdates: [] } as never
+      return { summary: 'reflexão válida', goalUpdates: [] } as never
     },
     chat: async () => '',
     embed: async () => [],
   }
 
-  // 1) AÇÃO (void): fica presa no gate -> inFlight true.
+  // 1) AÇÃO (void): adquire o permit e fica presa no gate de teste -> gate 'action' busy.
   const pAction = deliberator.maybeDeliberate(
-    deliberator.state,
-    holder,
-    slowActionProvider,
-    actionSnapshot,
-    'periodic',
-    Date.now(),
+    deliberator.state, holder, slowActionProvider, actionSnapshot, 'periodic', Date.now(), null, gate, semaphore,
   )
-  expect(deliberator.state.inFlight).toBe(true)
-
-  // 2) REFLECT concorrente: deve fazer no-op por inFlight (D-12) -> false, sem chamar decide.
-  const ranReflect = await deliberator.maybeDeliberate(
-    deliberator.state,
-    holder,
-    reflectProvider,
-    actionSnapshot,
-    'reflect',
-    Date.now(),
-  )
-  expect(ranReflect).toBe(false)
-  expect(reflectDecideCalls).toBe(0) // nenhuma 2ª inferência iniciada
-  // O caminho de AÇÃO agora faz recall async (retrieve) ANTES de decideAction (Plan 08.1-05);
-  // drena microtasks p/ a ação chegar de fato a decideAction antes de asserir o contador.
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
+  // drena microtasks p/ a ação adquirir o permit e chegar a provider.decide.
+  for (let i = 0; i < 6; i++) await Promise.resolve()
+  expect(gate.isBusy('action')).toBe(true)
   expect(actionDecideCalls).toBe(1)
 
-  // libera a ação e conclui.
+  // 2) REFLECT concorrente: passa pelo gate 'reflection' (TIPO INDEPENDENTE — não bloqueia), mas
+  // PENDURA no semáforo (permit esgotado pela ação). NÃO faz no-op; aguarda o slot.
+  const pReflect = deliberator.maybeDeliberate(
+    deliberator.state, holder, reflectProvider, actionSnapshot, 'reflect', Date.now(), null, gate, semaphore,
+  )
+  for (let i = 0; i < 4; i++) await Promise.resolve()
+  expect(gate.isBusy('reflection')).toBe(true) // a reflexão ENTROU no gate (tipo independente)
+  expect(reflectDecideCalls).toBe(0) // mas ainda não rodou — pendurada no semáforo (serialização)
+
+  // libera a ação → solta o permit → a reflexão adquire e roda.
   releaseAction()
   expect(await pAction).toBe(true)
-  expect(deliberator.state.inFlight).toBe(false)
+  expect(await pReflect).toBe(true)
+  expect(reflectDecideCalls).toBe(1) // a reflexão rodou DEPOIS, ao adquirir o slot liberado
+  expect(gate.isBusy('action')).toBe(false)
+  expect(gate.isBusy('reflection')).toBe(false)
 
   db.close()
 })

@@ -15,6 +15,7 @@ import { buildGraph } from './graph'
 import { createCognitiveStateHolder } from './state'
 import { TriggerBus } from './trigger-bus'
 import { createDeliberator } from './deliberation'
+import { Semaphore, createTaskGate } from './concurrency'
 import { generateGoals } from '../motivation/goals'
 import { motivationConfigFor } from '../config'
 import type { LlmProvider } from '../llm/provider'
@@ -167,42 +168,37 @@ test('C) tick reativo nao bloqueia na deliberacao lenta; segunda chamada concorr
   // 'periodic' sempre dispara (shouldTrigger -> true); o teto de frequencia e controlado abaixo.
   const trigger = 'periodic' as const
 
+  // 10.1-02: gate por tipo + semáforo externos (substituem o inFlight único). permits=1 emula o
+  // single-flight de hoje; o gate 'action' busy = deliberação de AÇÃO em voo.
+  const gate = createTaskGate()
+  const semaphore = new Semaphore(1)
+
   // Dispara a deliberacao LENTA SEM aguardar (void), exatamente como o loop real (Pattern 3).
   const slowPromise = deliberator.maybeDeliberate(
-    deliberator.state,
-    holder,
-    slowProvider,
-    snapshot,
-    trigger,
-    Date.now(),
+    deliberator.state, holder, slowProvider, snapshot, trigger, Date.now(), null, gate, semaphore,
   )
 
   // ENQUANTO a deliberacao esta presa no gate (pendente), multiplos ticks do grafo devem COMPLETAR.
-  // (se o tick aguardasse a inferencia, isto travaria/serializaria.) O gate garante que a
+  // (se o tick aguardasse a inferencia, isto travaria/serializaria.) O gate 'action' garante que a
   // deliberacao NAO resolve antes de nos liberarmos — prova robusta de nao-bloqueio (sem timing).
-  expect(deliberator.state.inFlight).toBe(true)
+  expect(gate.isBusy('action')).toBe(true)
   for (let i = 0; i < 5; i++) {
     const r = await graph.invoke({}, cfg('phase3-nonblock'))
     expect(r.snapshot).toBeDefined()
     // cada tick completou COM a deliberacao lenta ainda pendente (nao bloqueou).
-    expect(deliberator.state.inFlight).toBe(true)
+    expect(gate.isBusy('action')).toBe(true)
   }
 
-  // single-flight: uma SEGUNDA chamada concorrente NAO dispara uma nova inferencia.
+  // gate por tipo: uma SEGUNDA chamada de AÇÃO concorrente NAO dispara nova inferencia (gate 'action' busy).
   await deliberator.maybeDeliberate(
-    deliberator.state,
-    holder,
-    slowProvider,
-    snapshot,
-    trigger,
-    Date.now(),
+    deliberator.state, holder, slowProvider, snapshot, trigger, Date.now(), null, gate, semaphore,
   )
-  expect(decideCalls).toBe(1) // a 2a chamada retornou cedo por inFlight (nao chamou decide de novo)
+  expect(decideCalls).toBe(1) // a 2a chamada retornou cedo pelo gate 'action' (nao chamou decide de novo)
 
   // agora liberamos o gate: a deliberacao lenta conclui e escreve a decisao no holder.
   releaseDecide()
   await slowPromise
-  expect(deliberator.state.inFlight).toBe(false)
+  expect(gate.isBusy('action')).toBe(false)
   expect(decideCalls).toBe(1)
   expect(holder.llmDecision).not.toBeNull()
   expect(holder.llmDecision!.decision.action).toBe('idle')
