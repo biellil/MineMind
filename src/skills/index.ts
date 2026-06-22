@@ -14,6 +14,7 @@ import { placeBlock, placeBlockTool } from './placeBlock'
 import { craft, craftTool } from './craft'
 import { smelt, smeltTool } from './smelt'
 import { equip, equipTool } from './equip'
+import { build, buildTool } from './builder'
 
 // Re-exportar individualmente para uso direto
 export { navigate, NavigateSchema, navigateTool } from './navigate'
@@ -28,6 +29,8 @@ export { placeBlock, PlaceBlockSchema, placeBlockTool } from './placeBlock'
 export { craft, CraftSchema, craftTool } from './craft'
 export { smelt, SmeltSchema, smeltTool } from './smelt'
 export { equip, EquipSchema, equipTool, selectToolFor } from './equip'
+// Fase 12: skill de building deliberado (geradores + runBlueprint do Plan 01) registrada aqui.
+export { build, BuildSchema, buildTool, runBlueprint } from './builder'
 export { ensureStation } from './station'
 export { executeWithSafety, gaussianDelay, SkillTimeoutError, SkillStuckError } from './executor'
 // Fase 7: contrato de retorno das skills, re-exportado para conveniência dos consumidores.
@@ -61,6 +64,7 @@ export const skillRegistry: Record<string, SkillFunction> = {
   craft,
   smelt,
   equip,
+  build,
 }
 
 /**
@@ -80,4 +84,5 @@ export const toolRegistry: SkillTool[] = [
   craftTool,
   smeltTool,
   equipTool,
+  buildTool,
 ]
