@@ -26,6 +26,7 @@ function mockSnapshot(): WorldSnapshot {
 // Provider que sempre devolve uma decisão fixa via decide (e available=true).
 function okProvider(decision: ActionDecision): LlmProvider {
   return {
+    maxConcurrency: 1,
     decide: mock(async () => decision as never),
     chat: mock(async () => ''),
     available: mock(async () => true),
@@ -94,6 +95,7 @@ test('inFlight é resetado após disparar (finally)', async () => {
 test('fallback ao arbiter: LLM off (available=false) ainda grava uma decisão', async () => {
   const holder = createCognitiveStateHolder()
   const provider: LlmProvider = {
+    maxConcurrency: 1,
     decide: mock(async () => ({}) as never),
     chat: mock(async () => ''),
     embed: mock(async () => []),
@@ -124,6 +126,7 @@ test('single-flight concorrente: segunda chamada durante a primeira não redispa
   const holder = createCognitiveStateHolder()
   let resolveDecide!: (v: ActionDecision) => void
   const provider: LlmProvider = {
+    maxConcurrency: 1,
     decide: mock(() => new Promise<never>((res) => { resolveDecide = res as never })),
     chat: mock(async () => ''),
     embed: mock(async () => []),

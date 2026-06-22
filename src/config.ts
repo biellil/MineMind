@@ -143,6 +143,13 @@ export const config = {
   // D-08: ação ao estourar o teto — única suportada nesta fase é cair para o LM Studio local
   cloudCapAction: (process.env.LLM_CLOUD_CAP_ACTION || 'fallback-local') as 'fallback-local',
 
+  // === Fase 10.1: Paralelismo (semáforo de concorrência LLM) ===
+  // D-07/D-09: teto de inferências LLM concorrentes lido pelo semáforo do driver.
+  // Local ~4 espelha o Max Concurrent Predictions default do LM Studio 0.4.0 (continuous batching).
+  llmMaxConcurrencyLocal: parseInt(process.env.LLM_MAX_CONCURRENCY_LOCAL || '4', 10),
+  // Cloud modesto: o withSpendCap é o teto ECONÔMICO real; o semáforo só suaviza burst (D-10).
+  llmMaxConcurrencyCloud: parseInt(process.env.LLM_MAX_CONCURRENCY_CLOUD || '3', 10),
+
   // === Fase 07.1: Loop Agêntico — TriggerBus ===
   // D-14: raio (blocos) para detectar mob hostil no TriggerBus
   hostileRadius: parseInt(process.env.HOSTILE_RADIUS || '16', 10),
@@ -316,6 +323,9 @@ if (config.cloudMaxCallsPerWindow < 1) {
 if (config.cloudWindowMs < 1) {
   throw new Error(`LLM_CLOUD_WINDOW_MS inválido: ${config.cloudWindowMs}. Deve ser >= 1.`)
 }
+// Fase 10.1: validação do teto de concorrência LLM (o semáforo precisa de permits >= 1)
+if (config.llmMaxConcurrencyLocal < 1) throw new Error(`LLM_MAX_CONCURRENCY_LOCAL inválido: ${config.llmMaxConcurrencyLocal}. Deve ser >= 1.`)
+if (config.llmMaxConcurrencyCloud < 1) throw new Error(`LLM_MAX_CONCURRENCY_CLOUD inválido: ${config.llmMaxConcurrencyCloud}. Deve ser >= 1.`)
 // Fase 8: validação dos limiares reflexos
 if (config.hungryThreshold < 0 || config.hungryThreshold > 20) throw new Error(`HUNGRY_THRESHOLD inválido: ${config.hungryThreshold}. Deve estar em [0,20].`)
 if (config.hungerExitThreshold <= config.hungryThreshold || config.hungerExitThreshold > 20) throw new Error(`HUNGER_EXIT_THRESHOLD (${config.hungerExitThreshold}) deve ser > hungryThreshold e <= 20 (histerese).`)

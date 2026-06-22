@@ -59,6 +59,7 @@ function embeddingVec(seed: number): number[] {
 function spyProvider(): { provider: LlmProvider; embedCalls: () => number } {
   let calls = 0
   const provider: LlmProvider = {
+    maxConcurrency: 1,
     available: async () => true,
     decide: async () => ({ action: 'idle', reason: 'fallback:test' }) as never,
     chat: async () => '',

@@ -20,6 +20,7 @@ import type { LlmProvider } from '../llm/provider'
 
 // provider stub — execute não o usa.
 const stubProvider: LlmProvider = {
+  maxConcurrency: 1,
   decide: async () => ({}) as never,
   chat: async () => '',
   available: async () => false,

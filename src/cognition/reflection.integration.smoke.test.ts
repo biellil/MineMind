@@ -81,6 +81,7 @@ function holderWithEvents(db: Database | null): ReturnType<typeof createCognitiv
 // FAKE provider: available true, decide devolve um ReflectionOutput válido, embed devolve [] (sem vec).
 function fakeOnProvider(): LlmProvider {
   return {
+    maxConcurrency: 1,
     available: async () => true,
     decide: async () => ({ summary: 'Refleti sobre coleta e dano.', goalUpdates: [] }) as never,
     chat: async () => '',
@@ -89,6 +90,7 @@ function fakeOnProvider(): LlmProvider {
 }
 
 const offProvider: LlmProvider = {
+  maxConcurrency: 1,
   available: async () => false,
   decide: async () => {
     throw new Error('LLM off — decide não deveria ser chamado')
@@ -160,6 +162,7 @@ test('C) maybeDeliberate("reflect") single-flight: 2ª chamada concorrente retor
     releaseDecide = r
   })
   const slowProvider: LlmProvider = {
+    maxConcurrency: 1,
     available: async () => true,
     decide: async () => {
       decideCalls++
@@ -221,6 +224,7 @@ const actionSnapshot: WorldSnapshot = { ...snapshot }
 // provider de AÇÃO: available true; decide devolve uma ActionDecision válida (idle).
 function fakeActionProvider(): LlmProvider {
   return {
+    maxConcurrency: 1,
     available: async () => true,
     decide: async () => ({ action: 'idle', reason: 'teste' }) as never,
     chat: async () => '',
@@ -335,6 +339,7 @@ test('F) reflect respeita D-12: não sobrepõe uma ação in-flight (retorna fal
     releaseAction = r
   })
   const slowActionProvider: LlmProvider = {
+    maxConcurrency: 1,
     available: async () => true,
     decide: async () => {
       actionDecideCalls++
@@ -348,6 +353,7 @@ test('F) reflect respeita D-12: não sobrepõe uma ação in-flight (retorna fal
   // reflect provider que conta se foi chamado (não deveria, enquanto a ação está presa).
   let reflectDecideCalls = 0
   const reflectProvider: LlmProvider = {
+    maxConcurrency: 1,
     available: async () => true,
     decide: async () => {
       reflectDecideCalls++

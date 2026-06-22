@@ -15,6 +15,7 @@ const schema = z.object({ action: z.string() }) as unknown as ZodType<{ action: 
 /** Mock de LlmProvider rotulado (`tag`) para asserir QUAL provider foi roteado. */
 function mockProvider(tag: 'cloud' | 'local', calls: Record<string, number>): LlmProvider {
   return {
+    maxConcurrency: 1,
     decide: (async () => {
       calls[`${tag}.decide`] = (calls[`${tag}.decide`] ?? 0) + 1
       return { action: tag } as unknown

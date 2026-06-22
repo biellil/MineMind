@@ -11,6 +11,7 @@ import type { LlmProvider } from '../llm/provider'
 
 // O grafo NÃO chama o LLM no tick (a deliberação é fora do grafo) — provider stub que nunca é usado.
 const stubProvider: LlmProvider = {
+  maxConcurrency: 1,
   decide: async () => ({}) as never,
   chat: async () => '',
   available: async () => false,

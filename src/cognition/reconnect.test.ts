@@ -19,6 +19,7 @@ import type { Goal } from '../motivation/types'
 
 // provider stub — o grafo nao chama o LLM no tick (a deliberacao e fora do grafo).
 const stubProvider: LlmProvider = {
+  maxConcurrency: 1,
   available: async () => false,
   decide: async () => ({}) as never,
   chat: async () => '',

@@ -9,6 +9,7 @@ import type { LlmProvider } from '../llm/provider'
 // --- helpers de mock ---
 function mockProvider(reply: string | Error): LlmProvider {
   return {
+    maxConcurrency: 1,
     decide: async () => ({}) as never,
     chat: async () => {
       if (reply instanceof Error) throw reply

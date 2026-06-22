@@ -7,6 +7,7 @@ for (const k of [
   'SURVIVAL_CRITICAL_THRESHOLD', 'HUNGRY_THRESHOLD', 'HEALTH_CRITICAL_THRESHOLD',
   'OXYGEN_EMERGE_THRESHOLD', 'FALL_DANGER_BLOCKS', 'LAVA_LOOKAHEAD',
   'CREEPER_REACT_DISTANCE', 'RANGED_REACT_DISTANCE',
+  'LLM_MAX_CONCURRENCY_LOCAL', 'LLM_MAX_CONCURRENCY_CLOUD',
 ]) delete process.env[k]
 
 describe('config', () => {
@@ -39,5 +40,13 @@ describe('config — limiares reflexos Fase 8', () => {
     expect(config.lavaLookahead).toBe(2)
     expect(config.creeperReactDistance).toBe(10)
     expect(config.rangedReactDistance).toBe(16)
+  })
+})
+
+describe('config — concorrência LLM Fase 10.1', () => {
+  it('defaults do teto de concorrência (D-07/D-09): local=4, cloud=3', async () => {
+    const { config } = await import('./config')
+    expect(config.llmMaxConcurrencyLocal).toBe(4)
+    expect(config.llmMaxConcurrencyCloud).toBe(3)
   })
 })

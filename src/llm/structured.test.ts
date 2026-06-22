@@ -21,6 +21,7 @@ function mockProvider(opts: {
   decide?: () => Promise<unknown>
 }): LlmProvider {
   return {
+    maxConcurrency: 1,
     available: async () => opts.available,
     chat: async () => 'noop',
     embed: async () => [],

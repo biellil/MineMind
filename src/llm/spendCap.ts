@@ -46,18 +46,21 @@ export function withSpendCap(
   const route = (): LlmProvider => (store.getCallCount(Date.now()) >= cfg.maxCalls ? local : cloud)
 
   return {
-    async decide<T>(schema: ZodType<T>, messages: BaseMessage[]): Promise<T> {
+    // O cap envolve o provider cloud; expõe a capacidade do provider efetivo (D-07).
+    maxConcurrency: cloud.maxConcurrency,
+
+    async decide<T>(schema: ZodType<T>, messages: BaseMessage[], opts?: { signal?: AbortSignal }): Promise<T> {
       const p = route()
       // Só conta quando realmente vai à cloud (o fallback-to-local é custo-zero, não conta — D-08).
       // tokens=0: o gate é por CHAMADAS (D-07); tokens via usage_metadata fica como métrica futura.
       if (p === cloud) store.incrementCall(Date.now())
-      return p.decide(schema, messages)
+      return p.decide(schema, messages, opts)
     },
 
-    async chat(messages: BaseMessage[]): Promise<string> {
+    async chat(messages: BaseMessage[], opts?: { signal?: AbortSignal }): Promise<string> {
       const p = route()
       if (p === cloud) store.incrementCall(Date.now())
-      return p.chat(messages)
+      return p.chat(messages, opts)
     },
 
     async available(): Promise<boolean> {

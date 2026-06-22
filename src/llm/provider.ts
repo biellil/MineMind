@@ -18,10 +18,19 @@ import { withSpendCap, sqliteSpendStore } from './spendCap'
  *  - available: probe leve de disponibilidade para degradar graciosamente (D-17).
  */
 export interface LlmProvider {
-  /** Retorna um objeto que satisfaz `schema`, via structured output do modelo. */
-  decide<T>(schema: ZodType<T>, messages: BaseMessage[]): Promise<T>
-  /** Retorna texto livre do modelo (caminho conversacional). */
-  chat(messages: BaseMessage[]): Promise<string>
+  /**
+   * D-07/D-09: teto de inferências LLM concorrentes que o semáforo do driver (Plan 02) usa para
+   * dimensionar `new Semaphore(provider.maxConcurrency)`. Local ~4 (continuous batching do LM Studio),
+   * cloud ~3 (o withSpendCap é o teto econômico real; o semáforo só suaviza burst).
+   */
+  readonly maxConcurrency: number
+  /**
+   * Retorna um objeto que satisfaz `schema`, via structured output do modelo.
+   * D-14: `opts.signal` é propagado a `RunnableConfig.signal` (preempção da AÇÃO via AbortSignal).
+   */
+  decide<T>(schema: ZodType<T>, messages: BaseMessage[], opts?: { signal?: AbortSignal }): Promise<T>
+  /** Retorna texto livre do modelo (caminho conversacional). D-14: `opts.signal` propagado ao invoke. */
+  chat(messages: BaseMessage[], opts?: { signal?: AbortSignal }): Promise<string>
   /** True se o servidor LLM responde; nunca lança (timeout/erro -> false). */
   available(): Promise<boolean>
   /** Retorna o vetor de embedding de um texto via /v1/embeddings. Lança em erro de rede/HTTP. */
@@ -73,18 +82,20 @@ async function decideWithFallback<T>(
   model: ChatOpenAI,
   schema: ZodType<T>,
   messages: BaseMessage[],
+  signal?: AbortSignal,
 ): Promise<T> {
   try {
     const structured = model.withStructuredOutput(
       schema as ZodType<Record<string, unknown>>,
       { name: 'decide', method: 'jsonSchema' },
     )
-    return (await structured.invoke(messages)) as T
+    // D-14: signal repassado a RunnableConfig.signal (composto com o timeout interno do ChatOpenAI).
+    return (await structured.invoke(messages, { signal })) as T
   } catch {
     // D-16: caveat zod v4 (langchainjs #8357, sintoma type:'None'). Fallback: JSON Schema cru.
     const rawSchema = z.toJSONSchema(schema as ZodType<Record<string, unknown>>)
     const structured = model.withStructuredOutput(rawSchema as Record<string, unknown>, { name: 'decide' })
-    return (await structured.invoke(messages)) as T
+    return (await structured.invoke(messages, { signal })) as T
   }
 }
 
@@ -112,14 +123,17 @@ export function createLmStudioProvider(): LlmProvider {
   const embedder = createLocalEmbedder(baseURL)
 
   return {
-    async decide<T>(schema: ZodType<T>, messages: BaseMessage[]): Promise<T> {
+    // D-07/D-09: teto de concorrência local lido da config (continuous batching do LM Studio).
+    maxConcurrency: config.llmMaxConcurrencyLocal,
+
+    async decide<T>(schema: ZodType<T>, messages: BaseMessage[], opts?: { signal?: AbortSignal }): Promise<T> {
       // method:'jsonSchema' -> response_format { type:'json_schema', json_schema:{...} }
       // O fallback D-16 fica encapsulado em decideWithFallback (compartilhado com o caminho cloud).
-      return decideWithFallback(model, schema, messages)
+      return decideWithFallback(model, schema, messages, opts?.signal)
     },
 
-    async chat(messages: BaseMessage[]): Promise<string> {
-      const res = await model.invoke(messages)
+    async chat(messages: BaseMessage[], opts?: { signal?: AbortSignal }): Promise<string> {
+      const res = await model.invoke(messages, { signal: opts?.signal })
       return String(res.content)
     },
 
@@ -177,12 +191,15 @@ export function createOpenAiProvider(): LlmProvider {
   const embedder = createLocalEmbedder()
 
   return {
-    async decide<T>(schema: ZodType<T>, messages: BaseMessage[]): Promise<T> {
-      return decideWithFallback(model, schema, messages)
+    // D-07/D-09: teto de concorrência cloud (modesto; o teto econômico real é o withSpendCap).
+    maxConcurrency: config.llmMaxConcurrencyCloud,
+
+    async decide<T>(schema: ZodType<T>, messages: BaseMessage[], opts?: { signal?: AbortSignal }): Promise<T> {
+      return decideWithFallback(model, schema, messages, opts?.signal)
     },
 
-    async chat(messages: BaseMessage[]): Promise<string> {
-      return String((await model.invoke(messages)).content)
+    async chat(messages: BaseMessage[], opts?: { signal?: AbortSignal }): Promise<string> {
+      return String((await model.invoke(messages, { signal: opts?.signal })).content)
     },
 
     async available(): Promise<boolean> {
