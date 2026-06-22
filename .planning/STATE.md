@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
-status: executing
-stopped_at: Completed 10.1-01-PLAN.md
-last_updated: "2026-06-22T17:46:54.914Z"
+status: verifying
+stopped_at: Completed 10.1-02-PLAN.md
+last_updated: "2026-06-22T18:10:02.041Z"
 last_activity: 2026-06-22
 progress:
   total_phases: 13
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 31
-  completed_plans: 30
+  completed_plans: 31
   percent: 95
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 
 Phase: 10.1 (paralelismo-no-processamento-do-llm-deliberacao-concorrente) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-22
 
 Progress: [█████████░] 95%
@@ -75,6 +75,7 @@ Progress: [█████████░] 95%
 | Phase 09 P03 | 13 | 3 tasks | 9 files |
 | Phase 09 P05 | 5 | 3 tasks | 4 files |
 | Phase 10.1 P01 | 26 | 3 tasks | 6 files |
+| Phase 10.1 P02 | 18 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -113,6 +114,9 @@ Recent decisions affecting current work:
 - [Phase 10.1]: 10.1-01: Semaphore zero-dep (acquire por prioridade via findIndex + FIFO no desempate; release passa permit direto) + createTaskGate (3 flags independentes) — fundação que substitui o inFlight único; loop ainda intacto (fiação é o Plan 02)
 - [Phase 10.1]: 10.1-01: LlmProvider ganha readonly maxConcurrency (local=4/cloud=3) + opts?.signal propagado a RunnableConfig.signal nos 3 providers e no withSpendCap (LangChain compõe com o timeout interno, sem AbortSignal.any manual)
 - [Phase 10.1]: 10.1-01: TOCTOU do withSpendCap fechado com reserveCall (INSERT...ON CONFLICT RETURNING, increment-then-check atômico) + releaseCall (MAX(0,calls-1)); decide/chat reservam antes de disparar e estornam no fallback-to-local E no erro real; incrementCall vira métrica legada (D-10)
+- [Phase 10.1]: 10.1-02: inFlight único substituído por gate-por-tipo + semáforo(provider.maxConcurrency) no loop; pickDispatch vira hint NÃO-XOR { reflect, action } — ação e reflexão coexistem (Pitfall 6), coordenadas pelo gate por tipo + semáforo
+- [Phase 10.1]: 10.1-02: handleConversation roteado por routePlayerTurn (gate player, prioridade 0, preempta a AÇÃO via actionAbort.abort(), release/leave no finally) — fecha a brecha do chat-sem-coordenação (D-08)
+- [Phase 10.1]: 10.1-02: holder.goals protegido do clobber por commit síncrono merge-by-id na runReflection (re-lê holder.goals no write; goal de player empurrado durante o await sobrevive — D-04/D-05/D-06/Pitfall 2); reflexão nunca recebe signal (D-13)
 
 ### Roadmap Evolution
 
@@ -147,6 +151,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-22T17:46:37.173Z
-Stopped at: Completed 10.1-01-PLAN.md
+Last session: 2026-06-22T18:09:43.669Z
+Stopped at: Completed 10.1-02-PLAN.md
 Resume file: None
