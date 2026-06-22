@@ -8,12 +8,13 @@
 // Convenção de injeção SEM mock.module (vaza global no bun — ver __craftDeps em craft.ts): o teste
 // monkeypatcha pontualmente as entradas do objeto skillRegistry importado e restaura no afterEach.
 import { test, describe, expect, afterEach } from 'bun:test'
-import { createNodes, goalToSkillParams, parseDigTarget, type LoopState, type NodeDeps } from './nodes'
+import { createNodes, goalToSkillParams, parseDigTarget, pickTechTarget, type LoopState, type NodeDeps } from './nodes'
 import type { Goal } from '../motivation/types'
 import { createCognitiveStateHolder, type CognitiveStateHolder } from './state'
 import { TriggerBus } from './trigger-bus'
 import { skillRegistry, type SkillFunction } from '../skills/index'
 import { createMemory } from '../memory/shortTerm'
+import { recordFailure } from './safety'
 import type { SkillResult, SkillOutcome } from '../grounding/types'
 import type { WorldSnapshot } from '../perception/types'
 import type { ActionDecision } from '../llm/schemas'
@@ -104,6 +105,7 @@ const original: Record<string, SkillFunction> = {
   equip: skillRegistry.equip!,
   placeBlock: skillRegistry.placeBlock!,
   dig: skillRegistry.dig!,
+  navigate: skillRegistry.navigate!,
 }
 afterEach(() => {
   skillRegistry.craft = original.craft
@@ -111,6 +113,7 @@ afterEach(() => {
   skillRegistry.equip = original.equip
   skillRegistry.placeBlock = original.placeBlock
   skillRegistry.dig = original.dig
+  skillRegistry.navigate = original.navigate
 })
 
 // Última ação gravada na memória de curto prazo do holder.
@@ -313,5 +316,111 @@ describe('roteador DAG → dig recebe nome de bloco, NÃO o paramsJson inteiro (
     // O bug: dig recebia target = '{"target":"oak_log","count":1}' (JSON inteiro como nome de bloco).
     expect(cap.calledWith.target).toBe('oak_log')
     expect(cap.calledWith.count).toBe(1)
+  })
+})
+
+// === Fix dag-router-ignores-explore (ROOT CAUSE b) ===
+
+// (1) OPÇÃO 2 — escalonar na ladder: pickTechTarget pula alvo em cooldown.
+describe('pickTechTarget — escalona na ladder pulando alvos em cooldown (ROOT CAUSE b, OPÇÃO 2)', () => {
+  // Mesma ladder real do config (subset suficiente para os casos).
+  const ladder = ['oak_log', 'birch_log', 'cobblestone', 'stone'] as const
+
+  test('inventário vazio, nada em cooldown → 1º item da ladder (oak_log)', () => {
+    expect(pickTechTarget(ladder, new Map(), 1, new Set())).toBe('oak_log')
+  })
+
+  test('oak_log em cooldown (nome cru) → escala para birch_log', () => {
+    const cd = new Set<string>(['oak_log'])
+    expect(pickTechTarget(ladder, new Map(), 1, cd)).toBe('birch_log')
+  })
+
+  test('oak_log em cooldown na forma paramsJson do DAG → escala para birch_log', () => {
+    // O execute, num gather DAG, registra cooldown com o paramsJson (não o nome cru).
+    const cd = new Set<string>([JSON.stringify({ target: 'oak_log', count: 1 })])
+    expect(pickTechTarget(ladder, new Map(), 1, cd)).toBe('birch_log')
+  })
+
+  test('oak_log + birch_log em cooldown → escala para cobblestone', () => {
+    const cd = new Set<string>(['oak_log', JSON.stringify({ target: 'birch_log', count: 1 })])
+    expect(pickTechTarget(ladder, new Map(), 1, cd)).toBe('cobblestone')
+  })
+
+  test('item já satisfeito (have >= minQuantity) é pulado mesmo sem cooldown', () => {
+    const inv = new Map<string, number>([['oak_log', 5]])
+    expect(pickTechTarget(ladder, inv, 1, new Set())).toBe('birch_log')
+  })
+
+  test('TODOS os itens insatisfeitos em cooldown → null (escalonamento esgotado)', () => {
+    const cd = new Set<string>(['oak_log', 'birch_log', 'cobblestone', 'stone'])
+    expect(pickTechTarget(ladder, new Map(), 1, cd)).toBeNull()
+  })
+})
+
+// (2) OPÇÃO 1 reduzida — explore como escape final: com o sub-goal DAG em cooldown, uma decisão
+// fresca action=explore do LLM redireciona o canal para 'exploring' (navigate), em vez do roteador
+// DAG forçar dig no alvo travado.
+describe('roteador DAG cede ao explore do LLM quando o alvo está em cooldown (ROOT CAUSE b, OPÇÃO 1)', () => {
+  function dagGoal(id: string): Goal {
+    return { id, kind: 'resources', priority: 1, progress: 0, dependsOn: [], source: 'need', committedAt: 0 }
+  }
+
+  test('gather:oak_log em cooldown + LLM action=explore (state=exploring) → navigate, NÃO dig', async () => {
+    const holder = makeHolder({ action: 'explore', target: '', reason: 'coleta inviável, explorar' })
+    holder.currentGoal = dagGoal('gather:oak_log')
+    holder.goals = [holder.currentGoal]
+    // O execute registra cooldown com o paramsJson; replicamos o mesmo key aqui.
+    recordFailure(holder.safety, JSON.stringify({ target: 'oak_log', count: 1 }), Date.now())
+
+    const digCap = patchSkill('dig', fixed('success'))
+    const navCap = patchSkill('navigate', fixed('success'))
+    const { execute } = createNodes(makeDeps(holder, new TriggerBus()))
+
+    // analyze (não exercido aqui) mapearia explore → 'exploring'; setamos o cogState diretamente.
+    const s = buildingState()
+    s.cogState = 'exploring'
+    await execute(s)
+
+    expect(digCap.calledWith).toBeNull() // roteador DAG NÃO forçou dig
+    expect(navCap.calledWith).not.toBeNull() // ramo exploring assumiu (escape final)
+    expect(lastActionEvent(holder).skill).toBe('navigate')
+  })
+
+  test('gather:oak_log SEM cooldown + LLM action=explore → roteador DAG vence (dig, comportamento padrão)', async () => {
+    // Sem cooldown, o escape NÃO dispara: a progressão determinística do DAG tem precedência.
+    const holder = makeHolder({ action: 'explore', target: '', reason: 'x' })
+    holder.currentGoal = dagGoal('gather:oak_log')
+    holder.goals = [holder.currentGoal]
+
+    const digCap = patchSkill('dig', fixed('success'))
+    const navCap = patchSkill('navigate', fixed('success'))
+    const { execute } = createNodes(makeDeps(holder, new TriggerBus()))
+
+    const s = buildingState()
+    s.cogState = 'exploring'
+    await execute(s)
+
+    expect(digCap.calledWith).not.toBeNull() // roteador DAG roteou dig
+    expect(digCap.calledWith.target).toBe('oak_log')
+    expect(navCap.calledWith).toBeNull()
+  })
+
+  test('gather:oak_log em cooldown + LLM action=gather (não-escape) → roteador DAG ainda vence (dig)', async () => {
+    // O escape SÓ honra explore/navigate. Uma decisão gather não redireciona o canal.
+    const holder = makeHolder({ action: 'gather', target: 'oak_log', reason: 'x' })
+    holder.currentGoal = dagGoal('gather:oak_log')
+    holder.goals = [holder.currentGoal]
+    recordFailure(holder.safety, JSON.stringify({ target: 'oak_log', count: 1 }), Date.now())
+
+    const digCap = patchSkill('dig', fixed('success'))
+    const navCap = patchSkill('navigate', fixed('success'))
+    const { execute } = createNodes(makeDeps(holder, new TriggerBus()))
+
+    const s = buildingState()
+    s.cogState = 'gathering'
+    await execute(s)
+
+    expect(digCap.calledWith).not.toBeNull()
+    expect(navCap.calledWith).toBeNull()
   })
 })

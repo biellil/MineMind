@@ -146,6 +146,37 @@ export function parseDigTarget(raw: string): { target: string | { x: number; y: 
   return { target: raw }
 }
 
+/**
+ * ROOT CAUSE (b) fix (OPÇÃO 2 — escalonar na ladder): seleciona o primeiro item da
+ * gatheringLadder que falta no inventário (have < minQuantity) E cujo alvo NÃO esteja em
+ * cooldown, ESCALONANDO para o próximo item insatisfeito quando o atual está resfriado.
+ *
+ * Antes, a ponte need→DAG fixava o 1º item insatisfeito (ex: oak_log) mesmo inalcançável —
+ * o no_effect punha o alvo em cooldown via recordFailure, mas a ponte ignorava o cooldown e
+ * re-selecionava o MESMO item indefinidamente. Aqui pulamos itens resfriados, reusando a infra
+ * de cooldown que já existe (safety) sem tocar o módulo puro tech-tree.ts.
+ *
+ * O cooldown indexa pelo `target` que o execute passou: para um gather DAG é o paramsJson
+ * ('{"target":"oak_log","count":1}'); para o ramo gathering não-DAG é o nome cru ('oak_log').
+ * Checamos AMBAS as formas. Função PURA (sem bot/Date.now) — testável diretamente.
+ *
+ * @returns o nome do item a coletar, ou null se TODOS os itens insatisfeitos estão em cooldown.
+ */
+export function pickTechTarget(
+  ladder: ReadonlyArray<string>,
+  invCounts: Map<string, number>,
+  minQuantity: number,
+  cooledDown: Set<string>,
+): string | null {
+  const isCooledDown = (item: string): boolean =>
+    cooledDown.has(item) || cooledDown.has(JSON.stringify({ target: item, count: 1 }))
+  for (const item of ladder) {
+    const have = invCounts.get(item) ?? 0
+    if (have < minQuantity && !isCooledDown(item)) return item
+  }
+  return null
+}
+
 export function createNodes(deps: NodeDeps) {
   const { bot, holder, triggerBus } = deps
   const control = holder.control
@@ -207,19 +238,19 @@ export function createNodes(deps: NodeDeps) {
       DAG_PREFIXES.some(p => holder.currentGoal!.id.startsWith(p))
 
     if (resourcesUrgent && !currentIsTechGoal) {
-      // pickTechTarget: primeiro item da ladder que falta em quantidade suficiente
+      // ROOT CAUSE (b) fix (OPÇÃO 2): primeiro item da ladder insatisfeito E não-resfriado
+      // (pickTechTarget escalona para o próximo quando o atual está em cooldown). Reusa a infra
+      // de cooldown de safety sem tocar o módulo puro tech-tree.ts.
       const invCounts = new Map<string, number>()
       for (const slot of snapshot.inventory) {
         invCounts.set(slot.name, (invCounts.get(slot.name) ?? 0) + slot.count)
       }
-      let techTarget: string | null = null
-      for (const item of config.gatheringLadder) {
-        const have = invCounts.get(item) ?? 0
-        if (have < config.resourceMinQuantity) {
-          techTarget = item
-          break
-        }
-      }
+      const techTarget = pickTechTarget(
+        config.gatheringLadder,
+        invCounts,
+        config.resourceMinQuantity,
+        cooledDownTargets(safety, t),
+      )
 
       if (techTarget) {
         // Reconstruir DAG somente se não há sub-goals DAG no holder (D-03: alreadyHasDag guard)
@@ -328,7 +359,29 @@ export function createNodes(deps: NodeDeps) {
     // rotear para a skill correspondente SEM depender do estado cognitivo ou da decisão LLM.
     // Isso é a ponte determinística: o LLM não precisa conhecer a cadeia de tech-tree.
     const currentGoal = holder.currentGoal
-    if (snap && currentGoal && DAG_PREFIXES.some(p => currentGoal.id.startsWith(p))) {
+    // ROOT CAUSE (b) fix (OPÇÃO 1 reduzida — escape final): quando o sub-goal DAG atual JÁ está
+    // em cooldown (escalonamento da ladder esgotado: o alvo é inalcançável e voltou a ser
+    // selecionado), uma decisão FRESCA action=explore/navigate do LLM pode redirecionar o canal
+    // para o ramo 'exploring' em vez do roteador forçar dig no mesmo alvo travado. Sem isto, o
+    // roteador DAG vence o llmDecision sempre, e explore nunca vira navigate (loop sem escape).
+    const dagRouting = currentGoal ? goalToSkillParams(currentGoal.id) : null
+    const dagTargetCooledDown =
+      dagRouting !== null && cooledDownTargets(safety, now()).has(dagRouting.paramsJson)
+    const llmWantsEscape =
+      fresh !== undefined &&
+      fresh !== null &&
+      now() - fresh.at < config.replanMinIntervalMs * 2 &&
+      (fresh.decision.action === 'explore' || fresh.decision.action === 'navigate')
+    const dagRouterYieldsToExplore = dagTargetCooledDown && llmWantsEscape
+    if (dagRouterYieldsToExplore) {
+      log(`[tech-tree] ${currentGoal!.id} em cooldown — cedendo ao explore do LLM (escape final)`)
+    }
+    if (
+      snap &&
+      currentGoal &&
+      DAG_PREFIXES.some(p => currentGoal.id.startsWith(p)) &&
+      !dagRouterYieldsToExplore
+    ) {
       const routing = goalToSkillParams(currentGoal.id)
       if (routing) {
         skill = routing.skill
