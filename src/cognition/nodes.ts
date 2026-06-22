@@ -115,6 +115,23 @@ export function goalToSkillParams(goalId: string): { skill: string; paramsJson: 
   }
 }
 
+// Fase 12 D-13: prefixo de sub-goals de building deliberado. Caminho SEPARADO do G-01 (D-14)
+// e do DAG (Fase 10) — espelha goalToSkillParams.
+const BUILD_PREFIXES = ['build:'] as const
+
+/**
+ * Fase 12 D-13: Mapeia ID de goal build:* para (skill, params) SEM LLM.
+ * 'build:shelter' → build({tipo:'shelter'}); idem wall/tower/station.
+ * dims/origin ficam undefined aqui — a skill build preenche com config defaults + origin=posição do bot
+ * no momento da execução (Open Question 3 da RESEARCH).
+ */
+export function buildGoalToSkillParams(goalId: string): { skill: string; paramsJson: string } | null {
+  if (!goalId.startsWith('build:')) return null
+  const sub = goalId.slice('build:'.length) // 'shelter' | 'wall' | 'tower' | 'station'
+  if (!sub) return null
+  return { skill: 'build', paramsJson: JSON.stringify({ tipo: sub }) }
+}
+
 /**
  * Normaliza o `target` que o nó execute monta para a skill `dig`, que chega em DUAS formas:
  *   - roteador DAG (goalToSkillParams): JSON string de params completos, ex '{"target":"oak_log","count":1}'
@@ -400,6 +417,19 @@ export function createNodes(deps: NodeDeps) {
       }
     }
     // === Fim do roteador Fase 10 ===
+
+    // === Fase 12 D-13: Roteador determinístico de goals build:* (caminho separado do G-01) ===
+    // Se o currentGoal é um goal de building deliberado (prefixo build:), roteia para a skill build.
+    // Paralelo ao roteador DAG; NÃO toca o dispatch G-01 (state==='building' && fresh, abaixo).
+    if (!skill && snap && currentGoal && BUILD_PREFIXES.some(p => currentGoal.id.startsWith(p))) {
+      const routing = buildGoalToSkillParams(currentGoal.id)
+      if (routing) {
+        skill = routing.skill
+        target = routing.paramsJson
+        log(`[build] roteando ${currentGoal.id} → ${skill}`)
+      }
+    }
+    // === Fim do roteador Fase 12 ===
 
     if (!skill && snap && state === 'gathering') {
       // alvo do LLM (se for um bloco da escada presente) tem preferência; senão a escada de prioridade.
