@@ -501,7 +501,11 @@ export function createNodes(deps: NodeDeps) {
       // GAP-01: coleta/mineração com SUCESSO → POI resource no local do recurso (replica o padrão
       // death→danger de loop.ts:267). recordResourcePoi filtra outcome !== 'success' internamente.
       if (snap && holder.db) recordResourcePoi(holder.db, snap, target, result.outcome, now())
-      log(`${result.outcome.toUpperCase()} ${skill} ${target} (${result.observed}/${result.expected})`)
+      // Observabilidade: em outcome não-sucesso, anexar result.reason ao log para revelar
+      // POR QUE a skill não progrediu (ex: NO_EFFECT dig oak_log (0/1) — <reason>). Sem isto
+      // o loop fica cego à causa real de um no_effect/partial. Sucesso mantém log limpo.
+      const reasonSuffix = result.outcome !== 'success' && result.reason ? ` — ${result.reason}` : ''
+      log(`${result.outcome.toUpperCase()} ${skill} ${target} (${result.observed}/${result.expected})${reasonSuffix}`)
       skillOutcome = result.outcome
     } catch (err) {
       // Catch agora SÓ para exceções genuínas inesperadas (D-12) — skills não lançam como fluxo.
