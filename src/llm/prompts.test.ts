@@ -4,7 +4,12 @@
 // e percepção espacial híbrida (Phase 11.1): próx(x,y,z) Nm Δy±k para blocos/entidades/jogadores.
 import { test, expect } from 'bun:test'
 import { serializeContext } from './prompts'
-import type { WorldSnapshot, EntityInfo, LookingAtBlock, Position3D, BlockSummary } from '../perception/types'
+import type { WorldSnapshot, EntityInfo, LookingAtBlock, Position3D, BlockSummary, PlayerInfo } from '../perception/types'
+
+/** Helper de teste: PlayerInfo com position opcional (null = fora do chunk). */
+function player(username: string, position: Position3D | null, distance: number | null): PlayerInfo {
+  return { username, displayName: username, gamemode: 0, ping: 0, position, distance }
+}
 
 /** Helper de teste: BlockSummary com count e examples explícitos. */
 function block(count: number, ...examples: Position3D[]): BlockSummary {
@@ -54,8 +59,8 @@ test('entities não-vazio -> "Entidades próximas:" com os nomes, ordenadas por 
     [],
   )
   expect(s).toContain('Entidades próximas:')
-  expect(s).toContain('Creeper (2m)')
-  expect(s).toContain('Zombie (5m)')
+  expect(s).toContain('Creeper próx(')
+  expect(s).toContain('Zombie próx(')
 })
 
 test('entities com >5 itens -> apenas 5 renderizados', () => {
@@ -214,4 +219,81 @@ test('D-02: bloco sem veredito textual de alcançabilidade', () => {
   expect(s).not.toContain('no alto')
   expect(s).not.toContain('fora de alcance')
   expect(s).not.toContain('alto demais')
+})
+
+// === Task 2 (Phase 11.1): percepção espacial de ENTIDADES e JOGADORES ===
+
+test('D-04: entidade com position -> coord+dist+Δy no formato híbrido', () => {
+  // entity('Creeper',5) tem position {x:5,y:64,z:0}; bot y=64 -> Δy+0
+  const s = serializeContext(
+    baseSnapshot({ entities: [entity('Creeper', 5)] }),
+    undefined,
+    undefined,
+    [],
+  )
+  expect(s).toContain('Creeper próx(5,64,0) 5m Δy+0')
+})
+
+test('D-04: Δy de entidade acima (+) e abaixo (-) do bot', () => {
+  const acima: EntityInfo = { ...entity('Bat', 3), position: { x: 0, y: 70, z: 0 } }
+  const abaixo: EntityInfo = { ...entity('Silverfish', 3), position: { x: 0, y: 60, z: 0 } }
+  const s = serializeContext(
+    baseSnapshot({ entities: [acima, abaixo] }),
+    undefined,
+    undefined,
+    [],
+  )
+  expect(s).toMatch(/Bat próx\([^)]*\)[^,]*Δy\+6/)
+  expect(s).toMatch(/Silverfish próx\([^)]*\)[^,]*Δy-4/)
+})
+
+test('D-04: jogador com position -> username próx(x,y,z) Nm Δy±k', () => {
+  const s = serializeContext(
+    baseSnapshot({ players: [player('Steve', { x: 10, y: 68, z: 0 }, 10)] }),
+    undefined,
+    undefined,
+    [],
+  )
+  expect(s).toContain('Jogadores próximos:')
+  expect(s).toMatch(/Steve próx\(10,68,0\)[^,]*Δy\+4/)
+})
+
+test('D-04a: jogador com position null -> sem-pos, sem próx(, não lança', () => {
+  expect(() =>
+    serializeContext(baseSnapshot({ players: [player('Alex', null, null)] }), undefined, undefined, []),
+  ).not.toThrow()
+  const s = serializeContext(
+    baseSnapshot({ players: [player('Alex', null, null)] }),
+    undefined,
+    undefined,
+    [],
+  )
+  expect(s).toContain('Alex')
+  expect(s).toContain('sem-pos')
+  // não há próx( para esse jogador (nenhum outro source de próx neste snapshot)
+  expect(s).not.toContain('próx(')
+})
+
+test('D-04a: jogador com position null mas distance conhecida -> Nm + sem-pos', () => {
+  const s = serializeContext(
+    baseSnapshot({ players: [player('Alex', null, 7)] }),
+    undefined,
+    undefined,
+    [],
+  )
+  expect(s).toContain('Alex 7m sem-pos')
+})
+
+test('D-02: entidades/jogadores sem veredito textual de alcançabilidade', () => {
+  const s = serializeContext(
+    baseSnapshot({
+      entities: [{ ...entity('Ghast', 3), position: { x: 0, y: 200, z: 0 } }],
+      players: [player('Steve', { x: 0, y: 200, z: 0 }, 137)],
+    }),
+    undefined,
+    undefined,
+    [],
+  )
+  expect(s).not.toContain('inalcançável')
+  expect(s).not.toContain('no alto')
 })
