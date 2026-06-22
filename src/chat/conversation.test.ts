@@ -30,12 +30,16 @@ function holderWith(disposition: 'AUTONOMOUS' | 'ASSISTANT'): CognitiveStateHold
   return h
 }
 
-// --- shouldRespond (D-07/D-12) ---
-test('shouldRespond: AUTONOMOUS reactive => false (D-07 conversa mínima)', () => {
-  expect(shouldRespond('AUTONOMOUS', 'reactive', 'Steve', 'MineMind')).toBe(false)
+// --- shouldRespond (reverte D-07: responde em ambos os modos) ---
+test('shouldRespond: AUTONOMOUS reactive => true (responde em ambos os modos)', () => {
+  expect(shouldRespond('AUTONOMOUS', 'reactive', 'Steve', 'MineMind')).toBe(true)
 })
 
-test('shouldRespond: ASSISTANT => true para jogador próximo (D-12)', () => {
+test('shouldRespond: AUTONOMOUS proactive => true (responde em ambos os modos)', () => {
+  expect(shouldRespond('AUTONOMOUS', 'proactive', 'Steve', 'MineMind')).toBe(true)
+})
+
+test('shouldRespond: ASSISTANT => true para jogador próximo (inalterado)', () => {
   expect(shouldRespond('ASSISTANT', 'reactive', 'Steve', 'MineMind')).toBe(true)
 })
 
