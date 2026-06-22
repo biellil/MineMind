@@ -168,12 +168,13 @@ Plans:
 **Goal:** Substituir a deliberação **single-flight (serial)** por execução **concorrente** de tarefas cognitivas distintas (ação, reflexão, resposta a jogador), de modo que elas não disputem mais o mesmo lock `inFlight` — destravando a concorrência autônomo+assistente que a Phase 11 exige e eliminando a contenção que hoje faz a reflexão starvar.
 **Why:** O lock single-flight já produziu bug real — o quick `260621-ir4` corrigiu *starvation da reflexão* (a ação roubava o lock todo tick e `[reflect]` nunca rodava ao vivo) só com priorização via `pickDispatch`, um remendo, não a raiz. A partir da Phase 11 as demandas concorrentes crescem (raciocinar o próprio objetivo **enquanto** responde a um pedido de jogador), e a Phase 14 precisa refletir **enquanto** age. Sem concorrência real, essas fases herdam a mesma contenção.
 **How (escopo a planejar):** Revisitar o gargalo single-flight no loop cognitivo (`src/cognition/`); permitir mais de uma chamada LLM em voo para tarefas independentes (ação vs reflexão vs resposta a jogador) sem corromper o estado compartilhado. ⚠️ **Caveat:** com modelo **local** (LM Studio, 1 GPU) a inferência serializa de qualquer jeito — o ganho de paralelizar é de **responsividade/concorrência de tarefas**, não de throughput bruto; throughput real só com provider **cloud** (GPT-4.1-mini, infra da Phase 6 já existe). Bounds/escopo definitivos saem no `/gsd:plan-phase 10.1`.
-**Requirements**: TBD
+**Requirements**: CONC-SEM, CONC-PROVIDER, CONC-SPENDCAP, CONC-WIRE, CONC-MERGE, CONC-PREEMPT (IDs derivados das decisões D-01..D-15 da CONTEXT.md; sem REQ-ID no ROADMAP original)
 **Depends on:** Phase 10 (precisa dos objetivos autônomos da tech-tree gerando demanda cognitiva real), habilita a Phase 11 (autônomo+assistente concorrente)
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 10.1 to break down)
+- [ ] 10.1-01-PLAN.md — Primitivas/contratos: Semaphore + Gate por tipo (concurrency.ts), maxConcurrency na interface LlmProvider + propagação de AbortSignal, TOCTOU do withSpendCap fechado via reserveCall/releaseCall (D-01/D-02/D-03/D-07/D-09/D-10/D-14)
+- [ ] 10.1-02-PLAN.md — Wiring no loop: troca inFlight por gate+semáforo, roteia handleConversation pelo gate, commit síncrono merge-by-id protege holder.goals, preempção player→ação via AbortController com reflexão protegida (D-01/D-04/D-05/D-06/D-08/D-11/D-12/D-13)
 
 ### Phase 11: Modos Autônomo/Assistente
 **Goal**: Em modo autônomo (default), o agente seleciona o próprio objetivo da hierarquia sem intervenção humana (self-prompting) e NÃO fica grudado em nenhum jogador; sob pedido direto no chat entra em modo assistente (objetivo de alta prioridade com condição-de-saída), executa, e volta sozinho ao autônomo — preservando persona/relacionamento.
@@ -244,7 +245,7 @@ Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 8.1 → 9 → 10 → 
 | 8.1. Refatoração da memória (ChromaDB + fiação + POIs + morte) (INSERTED) | v2.0 | 0/6 | Planned | - |
 | 9. Placement + Crafting/Smelting Grounded | v2.0 | 0/TBD | Not started | - |
 | 10. Tech Tree DAG + Needs | v2.0 | 0/2 | Planned | - |
-| 10.1. Paralelismo no processamento do LLM (deliberação concorrente) (INSERTED) | v2.0 | 0/TBD | Not started | - |
+| 10.1. Paralelismo no processamento do LLM (deliberação concorrente) (INSERTED) | v2.0 | 0/2 | Planned | - |
 | 11. Modos Autônomo/Assistente | v2.0 | 0/TBD | Not started | - |
 | 11.1. Percepção espacial no contexto do LLM (INSERTED) | v2.0 | 0/TBD | Not started | - |
 | 12. Building Deliberado | v2.0 | 0/TBD | Not started | - |
