@@ -162,8 +162,9 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
   // distintas (ação/reflexão/player) sobrepõem de verdade (LM Studio batching / cloud).
   const llmSemaphore = new Semaphore(provider.maxConcurrency)
   const taskGate = createTaskGate()
-  // D-12: AbortController da AÇÃO em voo — recriado a cada dispatch de ação; o player o aborta para
-  // liberar o slot. A REFLEXÃO nunca tem AbortController (D-13).
+  // AbortController da AÇÃO em voo — recriado a cada dispatch de ação (escopo do próprio dispatch:
+  // timeout/sessão). Reverte D-12: o turno de player NÃO o aborta mais (chat roda em paralelo).
+  // A REFLEXÃO nunca tem AbortController (D-13).
   let actionAbort: AbortController | null = null
 
   // Plan 04 (D-22 / Pattern 4): cliente Chroma 1x por sessão — índice vetorial DERIVADO/descartável
@@ -225,10 +226,11 @@ export function startCognitiveLoop(bot: Bot, holder: CognitiveStateHolder): void
       return
     }
     // 3) conversa — única chamada com LLM; não bloqueia o tick reativo (void).
-    // Fase 10.1-02 (D-08): o turno conversacional atravessa o MESMO gate/semáforo (prioridade player=0),
-    // preemptando a AÇÃO em voo (D-12) — fecha a brecha do chat-sem-coordenação.
+    // Fase 10.1-02 (D-08): o turno conversacional atravessa o MESMO gate/semáforo (prioridade player=0).
+    // Reverte D-12: NÃO aborta mais a ação em voo — responde em paralelo, coordenado só pelo gate por
+    // tipo + prioridade 0 no semáforo (com maxConcurrency=1 serializa por permit; com >=2 sobrepõe).
     if (shouldRespond(holder.disposition, config.proactivity, username, bot.username)) {
-      void routePlayerTurn(llmSemaphore, taskGate, () => actionAbort?.abort(), () =>
+      void routePlayerTurn(llmSemaphore, taskGate, () =>
         handleConversation(provider, holder, bot, username, message, Date.now()),
       )
     }
@@ -526,39 +528,32 @@ export function pickDispatch(args: {
 }
 
 /**
- * 10.1-02 (D-08/D-11/D-12): roteia UM turno conversacional pelo gate/semáforo (prioridade player=0).
+ * 10.1-02 (D-08/D-11): roteia UM turno conversacional pelo gate/semáforo (prioridade player=0).
  *
  * - Se o gate 'player' já estiver ocupado, DESCARTA o turno (não enfileira chat duplicado — o jogador
  *   re-fala). Isto evita acumular respostas redundantes sob rajada de chat.
- * - ANTES de adquirir o semáforo, PREEMPTA a AÇÃO em voo (D-12) — o player tem prioridade máxima e
- *   abortar a ação libera o slot via finally para o player adquirir à frente da fila.
+ * - Adquire o semáforo com prioridade 0 (fura a frente da fila: espera o permit, NÃO rouba à força).
  * - release()/leave() SEMPRE no finally (Pitfall 3) — mesmo quando `run` lança.
+ *
+ * Reverte D-12: o turno de player NÃO aborta mais a ação em voo — roda em paralelo, coordenado só
+ * pelo gate por tipo + prioridade 0 no semáforo. Com maxConcurrency=1 (local) serializa por permit;
+ * com >=2 (cloud) sobrepõe de verdade.
  *
  * Helper PURO (sem dependência do bot/provider) p/ testabilidade direta.
  */
 export async function routePlayerTurn(
   semaphore: Semaphore,
   gate: ReturnType<typeof createTaskGate>,
-  preemptAction: () => void,
   run: () => Promise<void>,
 ): Promise<void> {
   if (!gate.tryEnter('player')) return // já há um turno de player em voo → descarta
-  preemptAction() // D-12: aborta a AÇÃO em voo para liberar o slot
-  await semaphore.acquire(0) // prioridade máxima (fura ação=1 e reflexão=2 na fila)
+  await semaphore.acquire(0) // prioridade máxima (fura ação=1 e reflexão=2 na fila; NÃO aborta)
   try {
     await run()
   } finally {
     semaphore.release()
     gate.leave('player')
   }
-}
-
-/**
- * 10.1-02 (D-12): o player só preempta a AÇÃO quando há um turno de player A despachar E uma ação
- * de fato em voo (não há o que abortar se nenhuma ação roda). Função pura.
- */
-export function shouldPreemptAction(hasPlayerTurn: boolean, actionInFlight: boolean): boolean {
-  return hasPlayerTurn && actionInFlight
 }
 
 function pickTrigger(holder: CognitiveStateHolder): DeliberationTrigger {
