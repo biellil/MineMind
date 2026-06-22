@@ -1,17 +1,19 @@
 ---
-status: verifying
+status: resolved
 trigger: "A decisão action=explore do LLM (e os goalUpdates do reflect) são estruturalmente ignorados pelos canais determinísticos do loop cognitivo. Coleta inviável → bot preso re-roteando o mesmo gather:X."
 created: 2026-06-22T19:29:16Z
-updated: 2026-06-22T20:05:00Z
+updated: 2026-06-22T20:40:00Z
 ---
 
 ## Current Focus
 
-hypothesis: ROOT CAUSE (b) confirmada — design de fix APROVADO pelo usuário no checkpoint.
-test: implementar OS DOIS fixes + cobrir com testes; validar com bun test + bunx tsc --noEmit
-expecting: ponte need→DAG pula techTarget em cooldown e escala na ladder; com TODOS os itens
-  em cooldown, action=explore do LLM redireciona o canal para exploring (não fica preso em dig)
-next_action: editar a ponte (observe) e o roteador (execute) em nodes.ts; adicionar testes
+hypothesis: ROOT CAUSE (b) + caminho de freeze permanente + contradição pickTechTarget/escape — TODAS
+  confirmadas. FIX A (abandono limpa DAG) e FIX C (escape por explore fresco) IMPLEMENTADOS e validados.
+test: bunx tsc --noEmit (limpo) + bun test src/cognition (177 pass / 0 fail em run única; nodes.test.ts
+  isolado 29 pass / 0 fail).
+expecting: abandono de sub-goal DAG limpa o holder (sem re-abandono eterno); explore FRESCO do LLM
+  cede o roteador DAG ao ramo exploring SEM exigir cooldown; comportamento padrão (dig) preservado sem escape.
+next_action: RESOLVIDO. Nenhuma ação pendente (commit deixado a cargo do usuário).
 
 ## Symptoms
 
@@ -98,6 +100,39 @@ started: Fase 10 (tech-tree DAG). Documentado como "root cause (b)" da sessão r
     cujo gather:<item> (ou o próprio item) esteja em cooledDownTargets. Reusa a safety existente, não
     altera o módulo puro tech-tree, e respeita o caso comum (item viável nunca entra em cooldown).
 
+- timestamp: 2026-06-22T20:35:00Z  # (placeholder ISO — clock real indisponível no agente)
+  checked: src/cognition/nodes.ts — branch shouldAbandon do execute (~521-539, pré-fix) vs bloco D-03
+    (~660-676, pré-fix) + guard da ponte need→DAG (~257, currentIsTechGoal ~254) + safety.ts recordFailure/decayBackoff
+  found: |
+    CAMINHO DE FREEZE PERMANENTE (sintoma "bot parado ~1h"): o branch shouldAbandon faz recordFailure +
+    recordEvent e dá `return` ANTES do bloco de limpeza D-03 (que mora DEPOIS, no fim do execute). Logo,
+    um sub-goal DAG ABANDONADO nunca é removido do holder. No observe seguinte, currentIsTechGoal continua
+    true → a ponte need→DAG é pulada pelo guard `!currentIsTechGoal` → o MESMO alvo inalcançável é
+    re-selecionado → re-abandonado. Pior: cada tick de abandono chama recordFailure → lastFailureAt=now,
+    então decayBackoff (safety.ts) NUNCA satisfaz `now - lastFailureAt >= backoffRecoveryMs` e o backoff
+    jamais recupera. Loop de re-abandono eterno = bot congelado.
+
+    CONTRADIÇÃO pickTechTarget × escape: pickTechTarget seleciona deliberadamente um techTarget
+    NÃO-resfriado (pula os que estão em cooledDownTargets). Mas o escape `dagRouterYieldsToExplore`
+    (pré-fix) exigia `dagTargetCooledDown && llmWantsEscape` — ou seja, exigia que o currentGoal DAG
+    ESTIVESSE em cooldown. Como a ponte só fixa alvos não-resfriados, o currentGoal DAG quase nunca está
+    em cooldown → o escape praticamente nunca dispara. As duas pré-condições se contradizem.
+  implication: explica o sintoma de longa duração ALÉM da root cause (b). Motivou FIX A (replicar a
+    limpeza D-03 dentro do branch de abandono, antes do return) e FIX C (escape passa a honrar
+    llmWantsEscape SOZINHO, sem exigir cooldown).
+
+- timestamp: 2026-06-22T20:40:00Z  # (placeholder ISO)
+  checked: validação pós-FIX A/FIX C — bunx tsc --noEmit + bun test src/cognition + nodes.test.ts isolado
+  found: |
+    tsc --noEmit: 0 erros. bun test src/cognition (run única): 177 pass / 0 fail. nodes.test.ts isolado:
+    29 pass / 0 fail. Logs confirmam o novo comportamento: "[tech-tree] gather:oak_log — cedendo ao
+    explore/navigate fresco do LLM (escape)" dispara SEM cooldown; "abandonando dig:..." (3x) seguido da
+    limpeza do DAG no holder. Flakiness de reconnect.test.ts (CONN-03, progress 0.5 vs 1) só aparece em
+    RUNS ENCADEADAS no mesmo processo (poluição cross-file do mock skillRegistry.dig) — passa em isolamento
+    e em runs únicas; é PRÉ-EXISTENTE e não causada por estes edits (já documentada na sessão anterior).
+  implication: ambos os fixes verificados; suíte de cognição verde em run única e determinística para
+    nodes.test.ts. dagTargetCooledDown removido (variável morta após FIX C) — tsc confirma sem refs órfãs.
+
 ## Resolution
 
 root_cause: |
@@ -135,21 +170,43 @@ fix: |
      roteador NÃO rota dig — deixa skill=null para o ramo 'exploring' (navigate) assumir. analyze já
      mapeia explore/navigate → cogState 'exploring', então o ramo exploring dispara. É o escape quando
      o escalonamento da ladder se esgota (todos os itens em cooldown e a folha DAG travada reaparece).
+
+  (3) FIX A — abandono limpa o sub-goal DAG (caminho de freeze permanente). No branch shouldAbandon do
+     execute, ANTES do return precoce, replicada a limpeza D-03: se o currentGoal e DAG, remove os goals
+     DAG do holder e zera holder.currentGoal. Sem isto o abandono retornava sem nunca rodar o bloco D-03
+     (que fica depois do return) -> currentIsTechGoal permanecia true -> ponte pulada -> mesmo alvo
+     re-abandonado a cada tick + recordFailure resetando lastFailureAt (decayBackoff nunca recupera =
+     freeze permanente). Com a limpeza, o canal volta ao observe para re-escalonar ou ceder ao explore.
+
+  (4) FIX C — explore fresco do LLM tem poder real sobre o roteador DAG (resolve a contradicao
+     pickTechTarget x escape: pickTechTarget so seleciona alvos NAO-resfriados, mas o escape exigia o
+     alvo EM cooldown -> nunca disparava). DUAS partes:
+     (a) observe: computa llmWantsEscape (holder.llmDecision fresca em replanMinIntervalMs*2 com action
+         explore|navigate). Adicionado `&& !llmWantsEscape` ao guard da ponte need->DAG; e quando
+         llmWantsEscape && currentGoal e DAG, limpa goals DAG + zera currentGoal ANTES da ponte (roda
+         mesmo com o guard da ponte pulado) -> libera o canal exploring sem reconstruir a rota no tick.
+     (b) execute: dagRouterYieldsToExplore agora cede com llmWantsEscape SOZINHO (removido o requisito
+         dagTargetCooledDown — variavel morta eliminada; tsc confirma sem refs orfas).
 verification: |
   - bunx tsc --noEmit: LIMPO (0 erros).
-  - bun test src/cognition: 162 pass / 0 fail (baseline era 153; +9 testes efetivos). Verde em 3 runs
-    consecutivas (sem flakiness na suíte de cognição).
-  - Testes adicionados em src/cognition/nodes.test.ts:
-    * pickTechTarget (6 testes): default→1º item; pula alvo em cooldown na forma nome cru E paramsJson;
-      escala múltiplos cooldowns; pula item já satisfeito; TODOS em cooldown → null.
-    * roteador DAG cede ao explore (3 testes): gather:oak_log em cooldown + explore → navigate (NÃO dig);
-      sem cooldown → dig (comportamento padrão preservado); cooldown + action=gather (não-escape) → dig.
-  - Correção colateral: afterEach de nodes.test.ts agora salva/restaura skillRegistry.navigate (os novos
-    testes o mockam) — evita vazamento de mock para reconnect.test.ts.
-  - NOTA: 2 falhas no `bun test` GLOBAL (config.test.ts "valores default sem .env" e reconnect CONN-03)
-    são PRÉ-EXISTENTES e NÃO relacionadas: ambas passam em isolamento; a de config é o .env de dev
-    sobrescrevendo MC_HOST/MC_PORT; a de CONN-03 é poluição de process.env entre arquivos de OUTRAS
-    suítes. Nenhuma toca os arquivos alterados.
+  - bun test src/cognition (run unica): 177 pass / 0 fail. nodes.test.ts isolado: 29 pass / 0 fail.
+    Deterministico em 12+ runs unicas consecutivas (invocacoes separadas).
+  - Testes adicionados/atualizados em src/cognition/nodes.test.ts (FIX A + FIX C):
+    * FIX A (1 teste): gather:oak_log atinge antiRepeatN (safety pre-semeado via recordAttempt) ->
+      goals DAG removidos do holder e currentGoal=null; evento no_effect/anti-repeat gravado.
+    * FIX C execute (2 testes): gather:oak_log + explore fresco SEM cooldown -> CEDE para navigate
+      (NAO dig); regressao sem decisao fresca -> roteador DAG vence (dig padrao preservado).
+    * FIX C observe (2 testes): explore fresco + currentGoal DAG -> DAG limpo, ponte nao reconstroi;
+      sem decisao de escape -> a ponte roda normalmente (nao bloqueada por escape inexistente).
+    * (mantidos: pickTechTarget 6 testes; escape com cooldown + explore -> navigate; cooldown + gather
+      nao-escape -> dig.)
+  - NOTA: flakiness intermitente de reconnect.test.ts (CONN-03: progress 0.5 vs 1) so aparece em runs
+    ENCADEADAS no MESMO processo (poluicao cross-file do mock skillRegistry.dig). Passa em isolamento e
+    em TODAS as runs unicas. PRE-EXISTENTE, nao causada por estes edits. config.test.ts ".env" idem.
+    Nenhuma toca a logica alterada.
 files_changed:
-  - src/cognition/nodes.ts (pickTechTarget exportado + ponte need→DAG usa-o; guard de escape no roteador DAG)
-  - src/cognition/nodes.test.ts (9 testes novos + restauração de navigate no afterEach)
+  - src/cognition/nodes.ts (FIX A: limpeza DAG no branch shouldAbandon antes do return precoce; FIX C:
+    llmWantsEscape no observe + guard da ponte + limpeza pre-ponte; escape do execute cede com
+    llmWantsEscape sozinho, dagTargetCooledDown removido. Mantidos: pickTechTarget exportado + ponte usa-o.)
+  - src/cognition/nodes.test.ts (FIX A 1 teste; FIX C 4 testes; ajustado o teste "sem cooldown" ao novo
+    contrato; import de recordAttempt adicionado.)
