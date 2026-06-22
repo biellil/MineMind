@@ -6,9 +6,42 @@
 // D-03: auto-percepção honesta como agente, sem ênfase (default).
 // D-04/D-06/D-07: a DISPOSIÇÃO modula proatividade e aceitação de pedidos de jogadores.
 // NÃO há evolução de personalidade aqui — isso é Fase 4.
-import type { WorldSnapshot } from '../perception/types'
+import type { WorldSnapshot, Position3D } from '../perception/types'
 import type { MemEvent } from '../cognition/types'
 import type { PersonalityState } from '../cognition/personality'
+
+// === Phase 11.1: percepção espacial (D-01/D-02/D-03) ===
+// Teto GLOBAL de coordenadas de bloco: único gate de quantas próx() são emitidas (D-03).
+const BLOCK_COORD_BUDGET = 18
+// Até 3 exemplos por tipo (D-03 "2-3 por tipo"), limitado pelos examples reais e pelo orçamento.
+const MAX_EXAMPLES_PER_TYPE = 3
+
+/** Formata o Δaltura cru com sinal explícito; `+0` para zero (nunca `-0`). D-01/D-02. */
+function fmtDelta(d: number): string {
+  const r = Math.round(d)
+  return (r >= 0 ? '+' : '') + r
+}
+
+/**
+ * Render híbrido de um ponto no espaço relativo ao bot (D-01): coord absoluta inteira +
+ * distância euclidiana 3D em metros + Δy cru com sinal. Ex: `próx(12,70,-5) 8m Δy+7`.
+ * Reutilizado por blocos, entidades e jogadores. Sem veredito textual (D-02).
+ */
+function fmtBlockExample(ex: Position3D, botPos: Position3D): string {
+  const dist = Math.round(Math.hypot(ex.x - botPos.x, ex.y - botPos.y, ex.z - botPos.z))
+  return `próx(${Math.round(ex.x)},${Math.round(ex.y)},${Math.round(ex.z)}) ${dist}m Δy${fmtDelta(ex.y - botPos.y)}`
+}
+
+/**
+ * Prioridade de tipo de bloco para distribuir o teto global de coords (D-03), alinhada à ordem
+ * de recursos do buildDecisionGuide: troncos > pedra > minério > lixo. Menor = mais prioritário.
+ */
+function blockPriority(name: string): number {
+  if (/_log$/.test(name)) return 0
+  if (name === 'stone' || name === 'cobblestone') return 1
+  if (/_ore$/.test(name)) return 2
+  return 3
+}
 
 /** Eixo de disposição (D-04). Modula proatividade e relação com jogadores. */
 export type Disposition = 'AUTONOMOUS' | 'ASSISTANT'
@@ -139,10 +172,26 @@ export function serializeContext(
         `pos=(${Math.round(status.position.x)},${Math.round(status.position.y)},${Math.round(status.position.z)})`,
     )
 
-    const blockEntries = Object.entries(snapshot.nearbyBlockTypes).slice(0, 8)
+    // D-03: TODOS os tipos sempre renderizam `name×count` (count nunca some — sem corte de tipos).
+    // O teto global de COORDENADAS (BLOCK_COORD_BUDGET) é o ÚNICO gate de quantas próx() são
+    // emitidas, distribuído por prioridade troncos>pedra>minério>lixo (ordenação estável).
+    const blockEntries = Object.entries(snapshot.nearbyBlockTypes)
     if (blockEntries.length > 0) {
-      const blocks = blockEntries.map(([name, info]) => `${name}×${info.count}`).join(', ')
-      lines.push(`Blocos próximos: ${blocks}`)
+      const ordered = blockEntries
+        .map(([name, info], idx) => ({ name, info, idx }))
+        .sort((a, b) => blockPriority(a.name) - blockPriority(b.name) || a.idx - b.idx)
+
+      let coordsUsed = 0
+      const blocks = ordered.map(({ name, info }) => {
+        let entry = `${name}×${info.count}`
+        for (let i = 0; i < info.examples.length && i < MAX_EXAMPLES_PER_TYPE; i++) {
+          if (coordsUsed >= BLOCK_COORD_BUDGET) break
+          entry += ` ${fmtBlockExample(info.examples[i]!, status.position)}`
+          coordsUsed++
+        }
+        return entry
+      })
+      lines.push(`Blocos próximos: ${blocks.join(', ')}`)
     }
 
     const nearbyPlayers = snapshot.players
