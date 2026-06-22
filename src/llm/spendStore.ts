@@ -54,3 +54,31 @@ export function getCallCount(db: Database, ts: number): number {
     | null
   return row?.calls ?? 0
 }
+
+/**
+ * D-10: reserva 1 slot ATOMICAMENTE (increment-then-check). Retorna true se ficou <= maxCalls,
+ * false se estourou (o caller faz releaseCall + fallback-to-local). O `INSERT...ON CONFLICT
+ * RETURNING` é UMA operação indivisível no single-thread síncrono do bun:sqlite — fecha a janela
+ * TOCTOU que o `getCallCount` (check) + `incrementCall` (act) em 2 passos abria entre o `await`.
+ * Nota: o contador SOBE mesmo quando retorna false (a reserva é especulativa; o caller estorna).
+ */
+export function reserveCall(db: Database, ts: number, maxCalls: number): boolean {
+  ensureSpendTable(db)
+  const row = db
+    .prepare(
+      `INSERT INTO llm_spend (window_key, calls, tokens) VALUES (?, 1, 0)
+       ON CONFLICT(window_key) DO UPDATE SET calls = calls + 1
+       RETURNING calls`,
+    )
+    .get(windowKey(ts)) as { calls: number }
+  return row.calls <= maxCalls
+}
+
+/**
+ * D-10: estorna 1 slot (decrementa com piso 0) quando caímos no fallback-to-local (não consumiu
+ * cloud) ou num erro real do cloud. `MAX(0, calls - 1)` garante que o contador nunca fica negativo.
+ */
+export function releaseCall(db: Database, ts: number): void {
+  ensureSpendTable(db)
+  db.prepare(`UPDATE llm_spend SET calls = MAX(0, calls - 1) WHERE window_key = ?`).run(windowKey(ts))
+}
