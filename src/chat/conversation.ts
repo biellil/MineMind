@@ -30,19 +30,38 @@ const MAX_REPLY_LEN = 256
  * Conjunto FECHADO de tipos de pedido extraíveis de um jogador (Open Question 3 / D-13).
  * Pedido fora deste conjunto recebe resposta conversacional educada, NUNCA um objetivo inválido.
  */
-export const SUPPORTED_REQUEST_KINDS = ['gather', 'follow', 'navigate'] as const
+export const SUPPORTED_REQUEST_KINDS = ['gather', 'follow', 'navigate', 'build'] as const
 export type SupportedRequestKind = (typeof SUPPORTED_REQUEST_KINDS)[number]
 
 /**
  * Heurística literal simples por palavras-chave (pt/en) para detectar a INTENÇÃO de um pedido.
  * Mapeia a um tipo do conjunto fechado, ou null se nenhum casar. Sem LLM, sem eval — só lookup.
+ *
+ * Exportada (Fase 12 Plan 03): conversation.test.ts importa e chama diretamente. A ordem importa —
+ * gather/follow/navigate ANTES de build (comportamento existente preservado); 'build' é o último
+ * casamento (mais específico para "construir/abrigo/parede/torre").
  */
-function detectRequestKind(message: string): SupportedRequestKind | null {
+export function detectRequestKind(message: string): SupportedRequestKind | null {
   const m = message.toLowerCase()
   if (/\b(coletar|coleta|colete|minerar|pegar|gather|collect|mine)\b/.test(m)) return 'gather'
   if (/\b(vem|venha|segue|seguir|me\s+segue|follow|come)\b/.test(m)) return 'follow'
   if (/\b(vai|leva|leve|ir\s+para|navegar|navigate|go\s+to|goto)\b/.test(m)) return 'navigate'
+  if (/\b(constr[uoói]\w*|build|abrigo|parede|muro|torre|estação|estacao|shelter|wall|tower|station)\b/.test(m)) return 'build'
   return null
+}
+
+/**
+ * Fase 12 Plan 03: resolve o SUB-tipo de building a partir da mensagem (pt/en). O id do goal
+ * precisa começar com `build:` para ser roteável por buildGoalToSkillParams (Plan 02). Default
+ * seguro = 'shelter' (abrigo) quando o sub-tipo é ambíguo.
+ */
+function detectBuildSub(message: string): 'shelter' | 'wall' | 'tower' | 'station' {
+  const m = message.toLowerCase()
+  if (/\b(abrigo|shelter|casa)\b/.test(m)) return 'shelter'
+  if (/\b(parede|muro|wall)\b/.test(m)) return 'wall'
+  if (/\b(torre|tower)\b/.test(m)) return 'tower'
+  if (/\b(estação|estacao|station|bancada|fornalha)\b/.test(m)) return 'station'
+  return 'shelter' // default seguro: abrigo
 }
 
 /**
@@ -64,10 +83,19 @@ export function shouldRespond(
   return true // reverte D-07: responde em AUTONOMOUS e ASSISTANT (chat uniforme)
 }
 
-/** Cria um Goal candidato source:'player_request' (priority alta, progress 0). */
-function makePlayerRequestGoal(kind: SupportedRequestKind, now: number): Goal {
+/**
+ * Cria um Goal candidato source:'player_request' (priority alta, progress 0).
+ *
+ * Fase 12 Plan 03: para kind 'build', o id segue o prefixo ROTEÁVEL `build:<sub>` que o
+ * buildGoalToSkillParams (Plan 02) consome — o sub-tipo é derivado da mensagem (detectBuildSub).
+ * Os demais kinds mantêm o id histórico `player_request:<kind>:<now>`.
+ */
+function makePlayerRequestGoal(kind: SupportedRequestKind, now: number, message: string): Goal {
+  const id = kind === 'build'
+    ? `build:${detectBuildSub(message)}` // roteável por buildGoalToSkillParams (Plan 02)
+    : `player_request:${kind}:${now}`
   return {
-    id: `player_request:${kind}:${now}`,
+    id,
     kind,
     priority: 1, // pedido de jogador em ASSISTANT preempta (D-13/D-15b) — prioridade alta
     progress: 0,
@@ -157,7 +185,7 @@ export async function handleConversation(
     const trust = prof?.trust ?? 0
     if (kind !== null && trust >= config.trustRequestThreshold) {
       holder.playerRequestPending = true // o reset é feito pelo observe após selectGoal consumir
-      holder.goals.push(makePlayerRequestGoal(kind, now))
+      holder.goals.push(makePlayerRequestGoal(kind, now, message))
     }
   }
 }
