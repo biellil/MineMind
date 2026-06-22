@@ -194,10 +194,10 @@ Plans:
 **How:** Não descartar `nearbyBlockTypes[].examples` na serialização; incluir posição/distância do exemplo mais próximo por tipo de bloco e a posição (não só distância) de mobs/entidades. Entra como mensagem **user/human** (contexto), nunca como assistant.
 **Requirements**: TBD
 **Depends on:** Phase 11
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 11.1-01-PLAN.md — Enriquecer serializeContext com posicao+distancia+Δy de blocos/entidades/jogadores (formato hibrido, teto global, null-safe)
+- [x] 11.1-01-PLAN.md — Enriquecer serializeContext com posicao+distancia+Δy de blocos/entidades/jogadores (formato hibrido, teto global, null-safe)
 
 ### Phase 12: Building Deliberado
 **Goal**: O agente implementa o estado `building` real (hoje stub) além do abrigo de emergência reflexo: constrói um abrigo funcional e estruturas simples (parede/torre/posicionar estação), reusando o primitivo `placeBlock` robusto da Fase 9.
@@ -247,7 +247,7 @@ Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 8.1 → 9 → 10 → 
 | 10. Tech Tree DAG + Needs | v2.0 | 0/2 | Planned | - |
 | 10.1. Paralelismo no processamento do LLM (deliberação concorrente) (INSERTED) | v2.0 | 2/2 | Complete    | 2026-06-22 |
 | 11. Modos Autônomo/Assistente | v2.0 | 0/TBD | Not started | - |
-| 11.1. Percepção espacial no contexto do LLM (INSERTED) | v2.0 | 0/TBD | Not started | - |
+| 11.1. Percepção espacial no contexto do LLM (INSERTED) | v2.0 | 1/1 | Complete   | 2026-06-22 |
 | 12. Building Deliberado | v2.0 | 0/TBD | Not started | - |
 | 13. Combate Completo | v2.0 | 0/TBD | Not started | - |
 | 14. Aprendizado por Reflexão | v2.0 | 0/TBD | Not started | - |
