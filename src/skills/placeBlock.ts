@@ -47,8 +47,9 @@ function makeVec(x: number, y: number, z: number): Vec3 {
   return { x, y, z } as unknown as Vec3
 }
 
-/** Verdade-do-mundo: a posição tem um bloco sólido (não-ar)? */
-function isFilled(bot: Bot, pos: { x: number; y: number; z: number }): boolean {
+/** Verdade-do-mundo: a posição tem um bloco sólido (não-ar)? Exportado (Fase 12): o builder e o
+ * blueprint precisam da MESMA fonte única da verdade air-vs-sólido usada aqui. */
+export function isFilled(bot: Bot, pos: { x: number; y: number; z: number }): boolean {
   const b = bot.blockAt(pos as Parameters<typeof bot.blockAt>[0])
   return b != null && b.name !== 'air' && b.name !== 'cave_air'
 }
