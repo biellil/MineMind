@@ -194,10 +194,10 @@ Plans:
 **How:** Não descartar `nearbyBlockTypes[].examples` na serialização; incluir posição/distância do exemplo mais próximo por tipo de bloco e a posição (não só distância) de mobs/entidades. Entra como mensagem **user/human** (contexto), nunca como assistant.
 **Requirements**: TBD
 **Depends on:** Phase 11
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 11.1 to break down)
+- [ ] 11.1-01-PLAN.md — Enriquecer serializeContext com posicao+distancia+Δy de blocos/entidades/jogadores (formato hibrido, teto global, null-safe)
 
 ### Phase 12: Building Deliberado
 **Goal**: O agente implementa o estado `building` real (hoje stub) além do abrigo de emergência reflexo: constrói um abrigo funcional e estruturas simples (parede/torre/posicionar estação), reusando o primitivo `placeBlock` robusto da Fase 9.
