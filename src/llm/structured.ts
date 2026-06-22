@@ -19,23 +19,27 @@ import type { LlmProvider } from './provider'
  * @param provider  cliente LLM abstraído (LlmProvider).
  * @param messages  mensagens de contexto (system persona + contexto serializado).
  * @param fallback  produtor determinístico de ação usado quando o LLM falha/está off (D-17).
+ * @param opts      10.1-02/D-12: `signal` de preempção propagado a provider.decide (o player aborta
+ *                  a AÇÃO em voo via AbortController do loop). Abortar libera o slot do semáforo no
+ *                  finally; a ação re-despacha no próximo tick.
  */
 export async function decideAction(
   provider: LlmProvider,
   messages: BaseMessage[],
   fallback: () => ActionDecision,
+  opts?: { signal?: AbortSignal },
 ): Promise<ActionDecision> {
   // D-17: LLM indisponível -> fallback imediato, sem custo de inferência.
   if (!(await provider.available())) return fallback()
 
   try {
-    const raw = await provider.decide(ActionDecisionSchema, messages)
+    const raw = await provider.decide(ActionDecisionSchema, messages, opts)
     return ActionDecisionSchema.parse(raw)
   } catch (e1) {
     // Tentativa única de reparo: re-prompt curto citando o erro, exigindo JSON válido.
     try {
       const hint = repairHint(e1)
-      const repaired = await provider.decide(ActionDecisionSchema, [...messages, hint])
+      const repaired = await provider.decide(ActionDecisionSchema, [...messages, hint], opts)
       return ActionDecisionSchema.parse(repaired)
     } catch {
       // D-17: irreparável -> fallback determinístico (nunca lança para fora).

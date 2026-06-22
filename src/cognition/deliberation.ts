@@ -1,20 +1,26 @@
 // src/cognition/deliberation.ts
-// COG-03 / D-19: deliberação LLM single-flight, event-driven, FORA do grafo (Pattern 3).
+// COG-03 / D-19 / 10.1-02: deliberação LLM event-driven, FORA do grafo (Pattern 3).
 //
 // A camada reativa (grafo da Fase 2) roda no tick rápido e NUNCA espera o LLM. Esta deliberação
 // "lenta" roda em paralelo: quando dispara, chama decideAction (Plan 01) com o arbiter como
 // fallback (D-17) e escreve a decisão no holder. O nó analyze/decide lê a decisão PRONTA.
 //
-// Garantias (Pitfall 3 / T-03-09):
-//  - single-flight: nunca há duas inferências concorrentes (inFlight).
-//  - orçamento de replanejamento: respeita config.replanMinIntervalMs entre disparos (D-19).
-//  - event-driven: só dispara em eventos relevantes (shouldTrigger).
+// Garantias (Pitfall 3 / T-03-09 + 10.1):
+//  - gate por TIPO (D-01): nunca há duas inferências concorrentes do MESMO tipo (action/reflection).
+//    Tipos distintos PODEM coexistir quando o semáforo tem permits (deixa de ser XOR — Pitfall 6).
+//  - semáforo global (D-01/D-07): teto = provider.maxConcurrency; serializa quando permits=1 (D-03).
+//  - commit síncrono merge-by-id (D-04/D-05): runReflection re-lê holder.goals no instante do write,
+//    protegendo um goal de player empurrado durante o await (Pitfall 2).
+//  - orçamento de replanejamento: respeita config.replanMinIntervalMs entre disparos de AÇÃO (D-19).
+//  - reflexão nunca recebe signal (D-13): roda até o flush B2, nunca abortada pela preempção do player.
+//  - release()/leave() SEMPRE no finally (Pitfall 3): sem permit/gate leak após throw/abort.
 //  - ISTO NÃO É UM NÓ DO GRAFO — a inferência lenta jamais entra no tick rápido.
 import { SystemMessage, HumanMessage, type BaseMessage } from '@langchain/core/messages'
 import type { WorldSnapshot } from '../perception/types'
 import type { CognitiveStateHolder } from './state'
 import type { LlmProvider } from '../llm/provider'
 import { decideAction } from '../llm/structured'
+import { Semaphore, createTaskGate, type TaskType } from './concurrency'
 import { buildPersonaPrompt, buildDecisionGuide, serializeContext } from '../llm/prompts'
 import type { ActionDecision } from '../llm/schemas'
 import { ReflectionOutputSchema, type ReflectionOutput } from '../llm/schemas'
@@ -68,9 +74,13 @@ export async function computeGoalQueryEmbedding(
   return holder.queryEmbedding
 }
 
-/** Estado single-flight da deliberação (vive no closure do deliberator — testável/sem global). */
+/**
+ * Estado da deliberação (vive no closure do deliberator — testável/sem global).
+ * 10.1-02 (D-01): o controle de sobreposição NÃO mora mais aqui (foi o `inFlight` booleano único) —
+ * agora é o `gate` por tipo + o `semaphore` global, injetados em maybeDeliberate. Resta só o
+ * orçamento de replan de AÇÃO (`lastRunAt`).
+ */
 export interface DeliberationState {
-  inFlight: boolean
   lastRunAt: number
 }
 
@@ -90,7 +100,8 @@ export function shouldTrigger(trigger: DeliberationTrigger, holder: CognitiveSta
     case 'periodic':
       return true
     case 'reflect':
-      // QUANDO refletir é decidido por shouldReflect no loop; aqui o single-flight só evita sobreposição.
+      // QUANDO refletir é decidido por shouldReflect no loop; aqui o gate por tipo só evita sobreposição
+      // de duas reflexões simultâneas (D-01).
       return true
     default:
       return false
@@ -124,17 +135,26 @@ export function arbiterToDecision(snapshot: WorldSnapshot, mode: ControlMode): A
 }
 
 /**
- * Tenta deliberar (single-flight + orçamento de replan + event-driven). NÃO bloqueia o tick:
- * o chamador dispara com `void` e segue para o próximo tick (Pattern 3/Pitfall 3).
+ * Tenta deliberar (gate por tipo + semáforo + orçamento de replan + event-driven). NÃO bloqueia o
+ * tick: o chamador dispara com `void` e segue para o próximo tick (Pattern 3/Pitfall 3).
  *
  * Retorna `true` SOMENTE quando o trabalho de deliberação/reflexão de fato executou; `false`
- * quando faz no-op (inFlight, orçamento de replan, ou shouldTrigger=false). O loop usa esse
- * booleano para só rearmar o gatilho de reflexão quando a reflexão realmente rodou (B1).
+ * quando faz no-op (gate ocupado pelo MESMO tipo, orçamento de replan, ou shouldTrigger=false).
+ * O loop usa esse booleano para só rearmar o gatilho de reflexão quando a reflexão rodou (B1).
+ *
+ * 10.1-02 (D-01): o controle de sobreposição é POR TIPO — `gate.tryEnter(taskType)`. Tipos distintos
+ * (ação vs reflexão) PODEM coexistir; só o MESMO tipo não sobrepõe (Pitfall 6). O `semaphore` impõe o
+ * teto GLOBAL (= provider.maxConcurrency): com permits=1 serializa (D-03), com >=2 sobrepõe de verdade.
+ *
+ * D-12/D-13: `signal` é propagado SÓ ao caminho de AÇÃO (preempção do player). A REFLEXÃO NUNCA recebe
+ * signal — roda até o flush B2, jamais abortada.
  *
  * D-19: o orçamento `replanMinIntervalMs` é o teto de REPLANEJAMENTO DE AÇÃO. A reflexão
  * (`trigger === 'reflect'`) tem cadência própria via shouldReflect no loop (D-10) e NÃO é
- * limitada por esse orçamento — mas continua sob o lock single-flight `inFlight` para nunca
- * sobrepor uma ação (D-12 — o modelo local é fraco; uma inferência por vez).
+ * limitada por esse orçamento — evita que o budget de ação a deixe faminta (B1).
+ *
+ * INVARIANTE (Pitfall 3): `semaphore.release()` e `gate.leave()` SEMPRE no finally — mesmo em
+ * throw/abort — senão o permit vaza e o semáforo seca (deadlock progressivo).
  */
 export async function maybeDeliberate(
   state: DeliberationState,
@@ -144,18 +164,34 @@ export async function maybeDeliberate(
   trigger: DeliberationTrigger,
   now: number,
   chroma: ChromaMemoryClient | null = null,
+  gate: ReturnType<typeof createTaskGate> = createTaskGate(),
+  semaphore: Semaphore = new Semaphore(1),
+  signal?: AbortSignal,
 ): Promise<boolean> {
-  if (state.inFlight) return false // single-flight (D-02/D-19/D-12) — vale p/ ação E reflexão
-  // D-19: o orçamento de replan é APENAS para o caminho de AÇÃO. A reflexão pula este gate
-  // (sua cadência é governada por shouldReflect no loop, D-10), evitando que o budget de ação
-  // a deixe faminta (B1).
-  if (trigger !== 'reflect' && now - state.lastRunAt < config.replanMinIntervalMs) return false
-  if (!shouldTrigger(trigger, holder)) return false // event-driven (D-19)
+  // D-01: mapeia o trigger → TaskType. Prioridade: player(0) é roteado pelo loop, não aqui;
+  // aqui só ação(1) e reflexão(2). Menor número = mais urgente (ação fura reflexão na fila).
+  const taskType: TaskType = trigger === 'reflect' ? 'reflection' : 'action'
+  const priority = trigger === 'reflect' ? 2 : 1
 
-  state.inFlight = true
+  // Gate por tipo (D-01/Pitfall 6): não sobrepõe o MESMO tipo; tipos distintos coexistem.
+  if (!gate.tryEnter(taskType)) return false
+  // D-19: orçamento de replan APENAS para o caminho de AÇÃO (a reflexão pula este gate — sua
+  // cadência é governada por shouldReflect no loop, D-10). Libera o gate antes de sair.
+  if (taskType === 'action' && now - state.lastRunAt < config.replanMinIntervalMs) {
+    gate.leave(taskType)
+    return false
+  }
+  if (!shouldTrigger(trigger, holder)) {
+    gate.leave(taskType)
+    return false // event-driven (D-19)
+  }
+
+  // Teto GLOBAL de concorrência (D-01/D-07): aguarda um slot do semáforo. A serialização emerge
+  // quando permits=1 (D-03); com permits>=2 ação e reflexão coexistem de fato.
+  await semaphore.acquire(priority)
   try {
     if (trigger === 'reflect') {
-      // REFL-01/D-12: ramo de reflexão — reusa o lock single-flight herdado (não sobrepõe ação).
+      // REFL-01/D-12/D-13: ramo de reflexão — NUNCA recebe signal (roda até o flush B2, não abortada).
       await runReflection(holder, provider, snapshot, now, chroma)
     } else {
       // D-11/D-12/D-13: recuperação de memórias no caminho de AÇÃO (correção central da fase).
@@ -188,8 +224,9 @@ export async function maybeDeliberate(
         ),
       ]
       // D-17: arbiter como fallback determinístico (decideAction nunca lança — Plan 01).
+      // D-12: propaga o `signal` de preempção (o player aborta a AÇÃO em voo via AbortController do loop).
       const fallback = () => arbiterToDecision(snapshot, holder.control.getMode())
-      const decision = await decideAction(provider, messages, fallback)
+      const decision = await decideAction(provider, messages, fallback, { signal })
       holder.llmDecision = { decision, at: now }
       // Observabilidade do caminho de DECISÃO (vale p/ local e cloud — o cloud não loga no LM Studio).
       console.log(
@@ -197,7 +234,9 @@ export async function maybeDeliberate(
       )
     }
   } finally {
-    state.inFlight = false
+    // Pitfall 3 (D-02): release/leave SEMPRE — mesmo em throw/abort — ou o semáforo seca.
+    semaphore.release()
+    gate.leave(taskType)
     state.lastRunAt = now
   }
   return true // executou o trabalho de deliberação/reflexão (B1)
@@ -274,16 +313,24 @@ export async function runReflection(
     console.log(`[reflect] consolidado #${idConsolidado} (vetor enviado ao chroma se online)`)
   }
 
-  // Atualiza objetivos (fallback no-op se vazio):
+  // COMMIT SÍNCRONO MERGE-BY-ID (D-04/D-05/Pitfall 2): a partir daqui NÃO HÁ `await` até o
+  // persistHolder. Todo o `await` longo (provider.decide/embed/chroma.addVector acima) já terminou
+  // FORA do holder. A reatribuição RE-LÊ `holder.goals` NO INSTANTE do write — então um goal de
+  // player empurrado (conversation.ts: holder.goals.push) DURANTE aquele await está presente no
+  // array atual. applyGoalUpdates é merge-by-id: um goal sem id no `updates` cai no ramo "inalterado"
+  // e SOBREVIVE (D-06 — goal de player nunca é clobberado; no pior caso perde-se um reprioritize).
+  // No event loop single-thread, este bloco sem await é atômico por construção — nenhum push pode
+  // intercalar entre este read e o persistHolder.
   holder.goals = applyGoalUpdates(holder.goals, updates, now)
 
-  // Flush da mente ao fim do ciclo de reflexão (D-02):
+  // Flush da mente ao fim do ciclo de reflexão (D-02) — ainda dentro do bloco síncrono do commit.
   if (holder.db) persistHolder(holder.db, holder, now)
 }
 
 /**
- * Cria um deliberator com estado single-flight encapsulado no closure (testável, sem global).
- * Uma instância por sessão de loop é suficiente.
+ * Cria um deliberator com estado (orçamento de replan) encapsulado no closure (testável, sem global).
+ * Uma instância por sessão de loop é suficiente. O gate por tipo + semáforo são instanciados pelo
+ * loop (1x por sessão, dimensionados por provider.maxConcurrency) e passados a maybeDeliberate.
  */
 export function createDeliberator(): {
   state: DeliberationState
@@ -295,8 +342,11 @@ export function createDeliberator(): {
     trigger: DeliberationTrigger,
     now: number,
     chroma?: ChromaMemoryClient | null,
+    gate?: ReturnType<typeof createTaskGate>,
+    semaphore?: Semaphore,
+    signal?: AbortSignal,
   ) => Promise<boolean>
 } {
-  const state: DeliberationState = { inFlight: false, lastRunAt: -Infinity }
+  const state: DeliberationState = { lastRunAt: -Infinity }
   return { state, maybeDeliberate }
 }
