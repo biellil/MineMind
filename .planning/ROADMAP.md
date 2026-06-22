@@ -247,7 +247,7 @@ Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 8.1 → 9 → 10 → 
 | 10. Tech Tree DAG + Needs | v2.0 | 0/2 | Planned | - |
 | 10.1. Paralelismo no processamento do LLM (deliberação concorrente) (INSERTED) | v2.0 | 2/2 | Complete    | 2026-06-22 |
 | 11. Modos Autônomo/Assistente | v2.0 | 0/TBD | Not started | - |
-| 11.1. Percepção espacial no contexto do LLM (INSERTED) | v2.0 | 1/1 | Complete   | 2026-06-22 |
+| 11.1. Percepção espacial no contexto do LLM (INSERTED) | v2.0 | 1/1 | Complete    | 2026-06-22 |
 | 12. Building Deliberado | v2.0 | 0/TBD | Not started | - |
 | 13. Combate Completo | v2.0 | 0/TBD | Not started | - |
 | 14. Aprendizado por Reflexão | v2.0 | 0/TBD | Not started | - |
