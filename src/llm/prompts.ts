@@ -194,9 +194,12 @@ export function serializeContext(
       lines.push(`Blocos próximos: ${blocks.join(', ')}`)
     }
 
-    const nearbyPlayers = snapshot.players
-      .slice(0, 5)
-      .map((p) => `${p.username}${p.distance != null ? ` (${Math.round(p.distance)}m)` : ''}`)
+    // D-04/D-04a: jogadores no formato híbrido; position null degrada para "sem-pos" (nunca lança).
+    const nearbyPlayers = snapshot.players.slice(0, 5).map((p) => {
+      if (p.position) return `${p.username} ${fmtBlockExample(p.position, status.position)}`
+      const d = p.distance != null ? ` ${Math.round(p.distance)}m` : ''
+      return `${p.username}${d} sem-pos`
+    })
     if (nearbyPlayers.length > 0) {
       lines.push(`Jogadores próximos: ${nearbyPlayers.join(', ')}`)
     }
@@ -209,10 +212,10 @@ export function serializeContext(
     // Bloco sob os pés (NOVO)
     lines.push(`Sob os pés: ${snapshot.underfoot}`)
 
-    // Entidades/mobs próximos (JÁ capturados; render NOVO, limite ~5, compacto)
+    // D-04: entidades/mobs no formato híbrido (EntityInfo.position é sempre presente — sem guarda).
     const nearbyEntities = snapshot.entities
       .slice(0, 5)
-      .map((e) => `${e.name} (${Math.round(e.distance)}m)`)
+      .map((e) => `${e.name} ${fmtBlockExample(e.position, status.position)}`)
     if (nearbyEntities.length > 0) {
       lines.push(`Entidades próximas: ${nearbyEntities.join(', ')}`)
     }
