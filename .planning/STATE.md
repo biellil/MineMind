@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
-status: completed
-stopped_at: Phase 10.1 context gathered
-last_updated: "2026-06-22T16:45:54.664Z"
-last_activity: 2026-06-21
+status: executing
+stopped_at: Completed 10.1-01-PLAN.md
+last_updated: "2026-06-22T17:46:54.914Z"
+last_activity: 2026-06-22
 progress:
   total_phases: 13
   completed_phases: 7
-  total_plans: 29
-  completed_plans: 29
+  total_plans: 31
+  completed_plans: 30
   percent: 95
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-19)
 
 **Core value:** O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com base em objetivos próprios e memória — sem intervenção humana. Se tudo falhar, o loop cognitivo (perceber → decidir → agir) precisa funcionar.
-**Current focus:** Phase 09 — placement-crafting-smelting-grounded
+**Current focus:** Phase 10.1 — paralelismo-no-processamento-do-llm-deliberacao-concorrente
 
 ## Current Position
 
-Phase: 10.1
-Plan: Not started
-Status: Phase 09 complete (gap-closure G-01 fechado)
-Last activity: 2026-06-21
+Phase: 10.1 (paralelismo-no-processamento-do-llm-deliberacao-concorrente) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-06-22
 
 Progress: [█████████░] 95%
 
@@ -74,6 +74,7 @@ Progress: [█████████░] 95%
 | Phase 09 P02 | 5 | 1 tasks | 2 files |
 | Phase 09 P03 | 13 | 3 tasks | 9 files |
 | Phase 09 P05 | 5 | 3 tasks | 4 files |
+| Phase 10.1 P01 | 26 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,9 @@ Recent decisions affecting current work:
 - [Phase 09]: 09-02 (D-05/BUILD-01): shelter consome o wrapper único placeBlockSafe/getRefAndFace em vez de bot.placeBlock cru (cavar-e-tampar via getRefAndFace no topo; pilar 1×1 via belowRef+face para cima). Herda o swallow do timeout de blockUpdate e a verificação por blockAt; captura o reason engolido pelo wrapper para manter o diagnóstico de falha. Guarda anti-lava, mecânica do pilar e grounding por cobertura real preservados; 6 testes do shelter verdes
 - [Phase 09]: 09-03 (CRAFT-01..03/BUILD-01): ensureStation (findBlock→navigate→placeBlock fallback + POI station best-effort, re-validado por findBlock — D-12/D-13); craft resolve receita 2x2→bancada com gate de mesa (no_effect SEM deixar bot.craft lançar — Pitfall 4/D-15); smelt funde 1 item/chamada com close() no finally (Pitfall 3) grounded por delta (D-20); 4 skills (placeBlock/craft/smelt/equip) registradas em skillRegistry/toolRegistry; bot.mineMindDb expõe o handle do DB p/ o POI; seam de injeção __deps em vez de mock.module (vaza global no bun)
 - [Phase 09]: 09-05 (G-01): enum de ação estendido com craft/smelt/equip/place (FECHADO); branch state==='building' resolve o verbo de fresh.decision.action e monta params físicos do target; grounding/memória reusados — G-01 fechado no nível comportamental sem lógica de tech-tree (Phase 10 intacta)
+- [Phase 10.1]: 10.1-01: Semaphore zero-dep (acquire por prioridade via findIndex + FIFO no desempate; release passa permit direto) + createTaskGate (3 flags independentes) — fundação que substitui o inFlight único; loop ainda intacto (fiação é o Plan 02)
+- [Phase 10.1]: 10.1-01: LlmProvider ganha readonly maxConcurrency (local=4/cloud=3) + opts?.signal propagado a RunnableConfig.signal nos 3 providers e no withSpendCap (LangChain compõe com o timeout interno, sem AbortSignal.any manual)
+- [Phase 10.1]: 10.1-01: TOCTOU do withSpendCap fechado com reserveCall (INSERT...ON CONFLICT RETURNING, increment-then-check atômico) + releaseCall (MAX(0,calls-1)); decide/chat reservam antes de disparar e estornam no fallback-to-local E no erro real; incrementCall vira métrica legada (D-10)
 
 ### Roadmap Evolution
 
@@ -143,6 +147,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-22T16:45:54.642Z
-Stopped at: Phase 10.1 context gathered
-Resume file: .planning/phases/10.1-paralelismo-no-processamento-do-llm-deliberacao-concorrente/10.1-CONTEXT.md
+Last session: 2026-06-22T17:46:37.173Z
+Stopped at: Completed 10.1-01-PLAN.md
+Resume file: None

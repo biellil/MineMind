@@ -170,10 +170,10 @@ Plans:
 **How (escopo a planejar):** Revisitar o gargalo single-flight no loop cognitivo (`src/cognition/`); permitir mais de uma chamada LLM em voo para tarefas independentes (ação vs reflexão vs resposta a jogador) sem corromper o estado compartilhado. ⚠️ **Caveat:** com modelo **local** (LM Studio, 1 GPU) a inferência serializa de qualquer jeito — o ganho de paralelizar é de **responsividade/concorrência de tarefas**, não de throughput bruto; throughput real só com provider **cloud** (GPT-4.1-mini, infra da Phase 6 já existe). Bounds/escopo definitivos saem no `/gsd:plan-phase 10.1`.
 **Requirements**: CONC-SEM, CONC-PROVIDER, CONC-SPENDCAP, CONC-WIRE, CONC-MERGE, CONC-PREEMPT (IDs derivados das decisões D-01..D-15 da CONTEXT.md; sem REQ-ID no ROADMAP original)
 **Depends on:** Phase 10 (precisa dos objetivos autônomos da tech-tree gerando demanda cognitiva real), habilita a Phase 11 (autônomo+assistente concorrente)
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
-- [ ] 10.1-01-PLAN.md — Primitivas/contratos: Semaphore + Gate por tipo (concurrency.ts), maxConcurrency na interface LlmProvider + propagação de AbortSignal, TOCTOU do withSpendCap fechado via reserveCall/releaseCall (D-01/D-02/D-03/D-07/D-09/D-10/D-14)
+- [x] 10.1-01-PLAN.md — Primitivas/contratos: Semaphore + Gate por tipo (concurrency.ts), maxConcurrency na interface LlmProvider + propagação de AbortSignal, TOCTOU do withSpendCap fechado via reserveCall/releaseCall (D-01/D-02/D-03/D-07/D-09/D-10/D-14)
 - [ ] 10.1-02-PLAN.md — Wiring no loop: troca inFlight por gate+semáforo, roteia handleConversation pelo gate, commit síncrono merge-by-id protege holder.goals, preempção player→ação via AbortController com reflexão protegida (D-01/D-04/D-05/D-06/D-08/D-11/D-12/D-13)
 
 ### Phase 11: Modos Autônomo/Assistente
@@ -245,7 +245,7 @@ Phases execute in numeric order: 6 → 7 → 7.1 → 8 → 8.1 → 9 → 10 → 
 | 8.1. Refatoração da memória (ChromaDB + fiação + POIs + morte) (INSERTED) | v2.0 | 0/6 | Planned | - |
 | 9. Placement + Crafting/Smelting Grounded | v2.0 | 0/TBD | Not started | - |
 | 10. Tech Tree DAG + Needs | v2.0 | 0/2 | Planned | - |
-| 10.1. Paralelismo no processamento do LLM (deliberação concorrente) (INSERTED) | v2.0 | 0/2 | Planned | - |
+| 10.1. Paralelismo no processamento do LLM (deliberação concorrente) (INSERTED) | v2.0 | 1/2 | In Progress|  |
 | 11. Modos Autônomo/Assistente | v2.0 | 0/TBD | Not started | - |
 | 11.1. Percepção espacial no contexto do LLM (INSERTED) | v2.0 | 0/TBD | Not started | - |
 | 12. Building Deliberado | v2.0 | 0/TBD | Not started | - |
