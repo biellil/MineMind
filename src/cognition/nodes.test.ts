@@ -8,7 +8,8 @@
 // Convenção de injeção SEM mock.module (vaza global no bun — ver __craftDeps em craft.ts): o teste
 // monkeypatcha pontualmente as entradas do objeto skillRegistry importado e restaura no afterEach.
 import { test, describe, expect, afterEach } from 'bun:test'
-import { createNodes, goalToSkillParams, type LoopState, type NodeDeps } from './nodes'
+import { createNodes, goalToSkillParams, parseDigTarget, type LoopState, type NodeDeps } from './nodes'
+import type { Goal } from '../motivation/types'
 import { createCognitiveStateHolder, type CognitiveStateHolder } from './state'
 import { TriggerBus } from './trigger-bus'
 import { skillRegistry, type SkillFunction } from '../skills/index'
@@ -102,12 +103,14 @@ const original: Record<string, SkillFunction> = {
   smelt: skillRegistry.smelt!,
   equip: skillRegistry.equip!,
   placeBlock: skillRegistry.placeBlock!,
+  dig: skillRegistry.dig!,
 }
 afterEach(() => {
   skillRegistry.craft = original.craft
   skillRegistry.smelt = original.smelt
   skillRegistry.equip = original.equip
   skillRegistry.placeBlock = original.placeBlock
+  skillRegistry.dig = original.dig
 })
 
 // Última ação gravada na memória de curto prazo do holder.
@@ -257,5 +260,58 @@ describe('goalToSkillParams — roteador determinístico DAG (D-09/D-10 Fase 10)
   test('Teste 6: goalId sem ":" → retorna null (malformado, T-10-08)', () => {
     const result = goalToSkillParams('gatheroaklog')
     expect(result).toBeNull()
+  })
+})
+
+// === Fix dig-no-effect-loop (c): normalização do target do dig (param-passing bug) ===
+
+describe('parseDigTarget — normaliza target do dig (DAG paramsJson vs nome cru)', () => {
+  test('paramsJson do roteador DAG → extrai {target, count}', () => {
+    // goalToSkillParams('gather:oak_log') produz exatamente esta string.
+    expect(parseDigTarget('{"target":"oak_log","count":1}')).toEqual({ target: 'oak_log', count: 1 })
+  })
+
+  test('nome de bloco cru (ramo gathering) → {target} sem count', () => {
+    expect(parseDigTarget('oak_log')).toEqual({ target: 'oak_log' })
+  })
+
+  test('paramsJson com target posicional {x,y,z} → preserva o objeto de posição', () => {
+    expect(parseDigTarget('{"target":{"x":1,"y":2,"z":3},"count":1}')).toEqual({
+      target: { x: 1, y: 2, z: 3 },
+      count: 1,
+    })
+  })
+
+  test('JSON sem .count → omite count (default do schema decide)', () => {
+    expect(parseDigTarget('{"target":"birch_log"}')).toEqual({ target: 'birch_log' })
+  })
+
+  test('nome cru com caractere especial não-JSON → tratado como nome cru', () => {
+    // não começa com {, [, " → fast-path de nome cru
+    expect(parseDigTarget('coal_ore')).toEqual({ target: 'coal_ore' })
+  })
+})
+
+describe('roteador DAG → dig recebe nome de bloco, NÃO o paramsJson inteiro (regressão dig-no-effect-loop)', () => {
+  function dagGoal(id: string): Goal {
+    return { id, kind: 'resources', priority: 1, progress: 0, dependsOn: [], source: 'need', committedAt: 0 }
+  }
+
+  test('currentGoal=gather:oak_log → skillRegistry.dig chamado com {target:"oak_log", count:1}', async () => {
+    const holder = createCognitiveStateHolder()
+    holder.currentGoal = dagGoal('gather:oak_log')
+    holder.goals = [holder.currentGoal]
+    const cap = patchSkill('dig', fixed('success'))
+    const { execute } = createNodes(makeDeps(holder, new TriggerBus()))
+
+    // cogState irrelevante: o roteador DAG seta a skill ANTES de qualquer ramo de estado.
+    const s = buildingState()
+    s.cogState = 'idle'
+    await execute(s)
+
+    expect(cap.calledWith).not.toBeNull()
+    // O bug: dig recebia target = '{"target":"oak_log","count":1}' (JSON inteiro como nome de bloco).
+    expect(cap.calledWith.target).toBe('oak_log')
+    expect(cap.calledWith.count).toBe(1)
   })
 })

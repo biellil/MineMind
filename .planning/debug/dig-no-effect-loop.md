@@ -1,16 +1,21 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: "UAT Fase 08 SURV-02: bot preso em laço infinito gather:oak_log → dig NO_EFFECT (0/1) → limpa DAG → reconstrói. deliberate decide explore mas nunca muda o comportamento."
 created: 2026-06-22T00:00:00Z
-updated: 2026-06-22T19:15:00Z
+updated: 2026-06-22T21:00:00Z
+verified_live: "2026-06-22 — re-teste ao vivo confirma SUCCESS dig {target:oak_log} (1/1) e goal gather:oak_log progress=1. Laço quebrado. NO_EFFECT só na 1ª tick (spawn -28,75,-10 sem tronco no raio), benigno."
+follow_up: "Root cause (b) permanece aberta — nova sessão de debug criada para honrar explore/escalonar quando o DAG não progride (coleta genuinamente inviável)."
 ---
 
 ## Current Focus
 
-hypothesis: (a) dig oak_log dá no_effect porque o hard-gate de ferramenta (D-13) recusa cavar sem axe no inventário; (b) explore é ignorado porque o roteador DAG no execute roteia por holder.currentGoal.id (sub-goal DAG) ANTES de olhar llmDecision, e a ponte need→DAG no observe re-injeta gather:oak_log todo tick.
-test: leitura completa de loop.ts, nodes.ts, dig.ts, tool-selector.ts, deliberation.ts, tech-tree.ts, config.ts
-expecting: confirmar dois root causes independentes
-next_action: retornar diagnóstico (find_root_cause_only)
+hypothesis: (c) RESOLVIDA — dig recebia o paramsJson INTEIRO ('{"target":"oak_log","count":1}') como
+  nome de bloco. Mismatch de contrato entre dois ramos do execute que setam `target`: o roteador DAG
+  (nodes.ts:304) coloca o JSON de params; o ramo gathering (nodes.ts:328) coloca o nome cru. A invocação
+  de dig (nodes.ts:458) não parseava → findBlocks por b.name===JSON-string → no_effect em loop.
+test: parseDigTarget normaliza ambas as formas; tsc limpo; 267 testes passam
+expecting: ao vivo, dig oak_log do roteador DAG deve agora encontrar e coletar o bloco
+next_action: aguardar verificação humana ao vivo (coleta de oak_log progride; loop quebra)
 
 ## Symptoms
 
@@ -82,10 +87,43 @@ started: Phase 10 (tech-tree DAG) — comportamento de gather/tech-tree, surgido
     fora de alcance, sem oak_log no raio). (b) permanece em aberto, pendente de decisão do
     usuário sobre como honrar explore quando o DAG não progride.
 
+- timestamp: 2026-06-22T20:45:00Z
+  checked: src/cognition/nodes.ts:300-305 (roteador DAG) + nodes.ts:457-461 (invocação dig) + src/skills/dig.ts:14-25,41,79-88 (DigSchema/findBlocks)
+  found: |
+    CAUSA-RAIZ (c) — CONFIRMADA POR CÓDIGO. A string de reason ao vivo
+    ("Bloco do tipo '{\"target\":\"oak_log\",\"count\":1}' não encontrado") veio de dig.ts:87,
+    onde `target` (validado pelo DigSchema como string ≤64 chars) é a JSON-string INTEIRA, não 'oak_log'.
+
+    A variável `target` do execute recebe DUAS formas incompatíveis conforme o ramo:
+      - roteador DAG (nodes.ts:304): `target = routing.paramsJson` = JSON.stringify({target:'oak_log',count:1})
+        produzido por goalToSkillParams('gather:oak_log') (nodes.ts:104).
+      - ramo gathering (nodes.ts:328): `target = t` = nome de bloco CRU ('oak_log').
+    A invocação de dig (nodes.ts:458, ANTES do fix) era:
+      `skill === 'dig' ? { target, signal } : ...`
+    — embrulhava `target` COMO ESTÁ, assumindo nome cru. Para o caminho DAG, isso passa
+    `{ target: '{"target":"oak_log","count":1}', signal }` ao dig. DigSchema.parse aceita (32 chars < 64),
+    e findBlocks(b => b.name === '{"target":"oak_log","count":1}') não acha nada → no_effect (dig.ts:87).
+    O ramo navigate (nodes.ts:460) JÁ parseava (JSON.parse(target)); os 4 verbos G-01 (nodes.ts:461)
+    espalham JSON.parse(target). Só o ramo dig confiava num formato cru — daí a falha SÓ pelo caminho DAG.
+  implication: |
+    EXPLICA por que o fix (a) não mudou o sintoma ao vivo: o bloco nunca é encontrado (buscado por nome-lixo),
+    então dig retorna no_effect ANTES de qualquer lógica de ferramenta/mineração. Causa puramente de
+    param-passing/serialização — o tool-gate de (a) era irrelevante neste caminho. (c) é a causa DOMINANTE
+    do no_effect ao vivo observado; (b) (explore ignorado) é estrutural mas o loop só persistia porque (c)
+    impedia QUALQUER coleta.
+
 ## Resolution
 
 root_cause: |
-  Duas causas-raiz independentes:
+  TRÊS causas-raiz; (c) é a dominante do sintoma ao vivo:
+
+  (c) PARAM-PASSING: o nó execute monta a skill `dig` com a variável `target` que chega em duas formas
+  incompatíveis — JSON de params completo pelo roteador DAG (nodes.ts:304, '{"target":"oak_log","count":1}')
+  vs nome de bloco cru pelo ramo gathering (nodes.ts:328, 'oak_log'). A invocação de dig (nodes.ts:458)
+  embrulhava `{ target, signal }` SEM parsear, tratando sempre como nome cru. Pelo caminho DAG, o dig recebia
+  a JSON-string inteira como nome de bloco; findBlocks por b.name===essa-string não acha nada → no_effect em
+  loop infinito (a reconstrução DAG D-03 re-injeta a mesma rota). Esta é a causa observável ao vivo após (a).
+
 
   (a) dig oak_log retorna no_effect por um HARD-GATE de ferramenta (D-13, Fase 10).
   dig.ts:49-56 chama selectToolFor(bot, 'oak_log'); tool-selector.ts mapeia oak_log→'axe'
@@ -109,7 +147,16 @@ root_cause: |
   holder.llmDecision mas nunca toca holder.currentGoal, então a decisão LLM nunca redireciona
   o canal DAG.
 fix: |
-  ROOT CAUSE (a) — RESOLVIDO (TDD).
+  ROOT CAUSE (c) — RESOLVIDO (esta sessão).
+  Nova função exportada `parseDigTarget(raw)` em src/cognition/nodes.ts normaliza a variável `target`
+  do dig para SEMPRE { target:<nome|pos>, count? }:
+    - se `raw` começa com '{'/'['/'"' e parseia como objeto com .target → usa o objeto de params (caminho DAG),
+      preservando count e target posicional {x,y,z};
+    - senão → trata `raw` como nome de bloco cru (caminho gathering) → { target: raw }.
+  A invocação de dig (nodes.ts) passou de `{ target, signal }` para `{ ...parseDigTarget(target), signal }`.
+  Os demais ramos (navigate/craft/smelt/equip/placeBlock) já parseavam corretamente e não foram tocados.
+
+  ROOT CAUSE (a) — RESOLVIDO (sessão anterior, TDD).
   Regra correta: o hard-gate de ferramenta em dig.ts só deve bloquear blocos que NÃO
   dropam nada à mão — ou seja, categoria 'pickaxe' (pedra, minérios, deepslate). Madeira
   ('axe') e terra/areia/cascalho ('shovel') são quebráveis à mão (a ferramenta só acelera).
@@ -134,7 +181,16 @@ fix: |
   porque a coleta agora progride; (b) ainda precisa de fix próprio para honrar explore
   quando a coleta genuinamente não for viável (ex: alvo inalcançável).
 verification: |
-  TDD (red→green):
+  ROOT CAUSE (c):
+  - nodes.test.ts: 5 testes unitários de parseDigTarget (paramsJson DAG → {target,count}; nome cru →
+    {target}; target posicional {x,y,z} preservado; JSON sem count omite count; nome cru com char especial).
+  - nodes.test.ts: teste de regressão agent-level — currentGoal=gather:oak_log dispara o roteador DAG;
+    asserta que skillRegistry.dig é chamado com { target:'oak_log', count:1 } (NÃO a JSON-string inteira).
+    Log confirma: "[tech-tree] roteando gather:oak_log → dig" → "SUCCESS dig {target:oak_log,count:1}".
+  - bunx tsc --noEmit: limpo.
+  - bun test src/skills/ src/cognition/: 267 pass / 0 fail (sem regressões).
+
+  ROOT CAUSE (a) — TDD (red→green):
   - tool-selector.test.ts: 'toolRequiredForDrop' — pickaxe(stone/iron_ore/deepslate_diamond_ore/
     cobblestone)=true; axe(oak_log/birch_log/crafting_table)=false; shovel(dirt/sand/gravel)=false;
     desconhecido(short_grass/unknown)=false. (4 novos testes)
@@ -144,7 +200,9 @@ verification: |
   - bunx tsc --noEmit: limpo.
   - bun test src/skills/: 114 pass / 0 fail (sem regressões).
 files_changed:
-  - src/skills/tool-selector.ts (novo predicado toolRequiredForDrop)
-  - src/skills/dig.ts (gate condicionado a toolRequiredForDrop; equip condicional a tool!==null)
-  - src/skills/tool-selector.test.ts (4 testes do predicado)
-  - src/skills/dig.test.ts (3 testes do gate seletivo + mock parametrizado por blockName/inventory)
+  - src/cognition/nodes.ts (fix c: parseDigTarget + invocação dig usa { ...parseDigTarget(target), signal })
+  - src/cognition/nodes.test.ts (fix c: 5 testes de parseDigTarget + 1 regressão agent-level do roteador DAG)
+  - src/skills/tool-selector.ts (fix a: novo predicado toolRequiredForDrop)
+  - src/skills/dig.ts (fix a: gate condicionado a toolRequiredForDrop; equip condicional a tool!==null)
+  - src/skills/tool-selector.test.ts (fix a: 4 testes do predicado)
+  - src/skills/dig.test.ts (fix a: 3 testes do gate seletivo + mock parametrizado por blockName/inventory)

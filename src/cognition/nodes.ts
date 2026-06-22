@@ -115,6 +115,37 @@ export function goalToSkillParams(goalId: string): { skill: string; paramsJson: 
   }
 }
 
+/**
+ * Normaliza o `target` que o nó execute monta para a skill `dig`, que chega em DUAS formas:
+ *   - roteador DAG (goalToSkillParams): JSON string de params completos, ex '{"target":"oak_log","count":1}'
+ *   - ramo gathering: nome de bloco cru, ex 'oak_log'
+ * dig.ts espera SEMPRE { target:<nome|pos>, count? }. Aqui devolvemos esse objeto:
+ *   - se `raw` parsear como objeto com .target → usa o objeto de params do DAG direto;
+ *   - senão → trata `raw` como nome de bloco cru e devolve { target: raw }.
+ * Bug que isto conserta: sem o parse, o ramo DAG passava a JSON-string inteira como nome de bloco
+ * (findBlocks(b => b.name === '{"target":"oak_log",...}') → nada encontrado → no_effect em loop).
+ */
+export function parseDigTarget(raw: string): { target: string | { x: number; y: number; z: number }; count?: number } {
+  // Fast-path: nome de bloco cru não começa com '{' nem '[' nem '"'
+  const trimmed = raw.trim()
+  if (trimmed.length > 0 && (trimmed[0] === '{' || trimmed[0] === '[' || trimmed[0] === '"')) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      // params do DAG: { target, count }. Também aceita target sendo posição {x,y,z}.
+      if (parsed && typeof parsed === 'object' && 'target' in parsed) {
+        const out: { target: string | { x: number; y: number; z: number }; count?: number } = { target: parsed.target }
+        if (typeof parsed.count === 'number') out.count = parsed.count
+        return out
+      }
+      // JSON válido mas sem .target (ex: uma string JSON "oak_log") → usa o valor como nome cru.
+      if (typeof parsed === 'string') return { target: parsed }
+    } catch {
+      /* não é JSON — cai no fast-path de nome cru abaixo */
+    }
+  }
+  return { target: raw }
+}
+
 export function createNodes(deps: NodeDeps) {
   const { bot, holder, triggerBus } = deps
   const control = holder.control
@@ -452,10 +483,17 @@ export function createNodes(deps: NodeDeps) {
     // CRITÉRIO DE ORDEM: emit SEMPRE após holder.lastObservedDelta atribuído (Pitfall 1 da research).
     let skillOutcome: import('../grounding/types').SkillOutcome | null = null
     try {
-      // dig recebe target string cru; navigate recebe {target:{x,y,z}}; os 4 verbos G-01
-      // (craft/smelt/equip/placeBlock) recebem o OBJETO de params completo no topo (spread).
+      // dig recebe params completo {target, count?}; navigate recebe {target:{x,y,z}}; os 4 verbos
+      // G-01 (craft/smelt/equip/placeBlock) recebem o OBJETO de params completo no topo (spread).
+      //
+      // IMPORTANTE (bug param-passing): `target` chega em DUAS formas incompatíveis conforme o ramo:
+      //   - roteador DAG (nodes.ts:304): target = paramsJson = '{"target":"oak_log","count":1}'
+      //   - ramo gathering (nodes.ts:328): target = nome de bloco cru = 'oak_log'
+      // dig DEVE receber sempre { target:<nome|pos>, count? }. Normalizamos: se `target` parsear como
+      // objeto JSON, usamos-o direto (DAG); senão tratamos como nome de bloco cru (gathering). Sem isso
+      // o ramo DAG passava a JSON-string inteira como nome de bloco → findBlocks não acha nada → no_effect.
       const params = skill === 'dig'
-        ? { target, signal: skillAbort.signal }
+        ? { ...parseDigTarget(target), signal: skillAbort.signal }
         : skill === 'navigate'
           ? { target: JSON.parse(target), signal: skillAbort.signal }
           : { ...JSON.parse(target), signal: skillAbort.signal } // craft/smelt/equip/placeBlock
