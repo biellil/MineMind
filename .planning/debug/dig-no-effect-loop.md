@@ -2,7 +2,7 @@
 status: awaiting_human_verify
 trigger: "UAT Fase 08 SURV-02: bot preso em laço infinito gather:oak_log → dig NO_EFFECT (0/1) → limpa DAG → reconstrói. deliberate decide explore mas nunca muda o comportamento."
 created: 2026-06-22T00:00:00Z
-updated: 2026-06-22T18:40:00Z
+updated: 2026-06-22T19:15:00Z
 ---
 
 ## Current Focus
@@ -55,6 +55,32 @@ started: Phase 10 (tech-tree DAG) — comportamento de gather/tech-tree, surgido
   checked: src/cognition/nodes.ts:405-425 (anti-repeat / abandonando)
   found: recordAttempt/shouldAbandon dispara "abandonando" e recordFailure(target) com cooldown por-tipo (targetCooldownMs 15s). Mas o currentGoal continua sendo gather:oak_log e a ponte need→DAG re-seleciona oak_log independentemente do cooldown do alvo da safety (a ponte percorre a ladder por inventário, não consulta cooledDownTargets). O cooldown só afeta o ramo gathering NÃO-DAG (nodes.ts:322-324), não o roteador DAG.
   implication: o mecanismo anti-repeat existe mas é contornado pelo caminho DAG — o abandono não impede a re-seleção do mesmo goal.
+
+- timestamp: 2026-06-22T19:15:00Z
+  checked: RE-TESTE AO VIVO com fix (a) ativo (tool-gate seletivo por toolRequiredForDrop) + leitura do log do bot real
+  found: |
+    Após reiniciar o bot com fix (a) aplicado, o sintoma PERSISTE: dig oak_log ainda
+    retorna NO_EFFECT (0/1) repetidamente. Confirmações:
+    - Não é mais o tool-gate: esse caminho foi removido por (a). As entradas [recall]
+      "falta de ferramenta" no log são MEMÓRIAS PERSISTIDAS de runs anteriores, não o
+      no_effect atual.
+    - O LLM agora decide CORRETAMENTE action=explore reason="não há ferramenta adequada
+      para minerar oak_log" / "buscar alternativa" MÚLTIPLAS vezes — mas o roteador DAG
+      continua forçando gather:oak_log → dig. A decisão explore não tem poder sobre o
+      canal DAG.
+    - A causa atual do no_effect estava OCULTA: a linha de log do loop só imprimia
+      outcome/skill/target/(observed/expected), nunca result.reason.
+    - Posição do bot ao travar: ~(-1, 72, -12). Provavelmente sem oak_log alcançável por
+      perto, mas não confirmável sem a string de reason.
+  implication: |
+    ROOT CAUSE (b) é agora o BLOQUEADOR DOMINANTE ao vivo — com (a) resolvido, o deadlock
+    de bootstrap sumiu, mas o loop persiste porque a decisão explore do LLM continua
+    estruturalmente ignorada pelo roteador DAG. (a) sozinho NÃO resolve o sintoma quando
+    a coleta é genuinamente inviável (alvo inalcançável). Gap de observabilidade corrigido:
+    o log do loop agora anexa result.reason em outcome não-sucesso (nodes.ts:504, commit
+    2e749ac) — o próximo re-teste ao vivo revelará a causa exata do no_effect (ex: bloco
+    fora de alcance, sem oak_log no raio). (b) permanece em aberto, pendente de decisão do
+    usuário sobre como honrar explore quando o DAG não progride.
 
 ## Resolution
 
