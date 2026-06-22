@@ -1,8 +1,8 @@
 ---
-status: diagnosed
+status: awaiting_human_verify
 trigger: "UAT Fase 08 SURV-02: bot preso em laço infinito gather:oak_log → dig NO_EFFECT (0/1) → limpa DAG → reconstrói. deliberate decide explore mas nunca muda o comportamento."
 created: 2026-06-22T00:00:00Z
-updated: 2026-06-22T00:00:00Z
+updated: 2026-06-22T18:40:00Z
 ---
 
 ## Current Focus
@@ -82,6 +82,43 @@ root_cause: |
   sem escalonar nem trocar de alvo → loop infinito sem escape. maybeDeliberate grava
   holder.llmDecision mas nunca toca holder.currentGoal, então a decisão LLM nunca redireciona
   o canal DAG.
-fix: ""
-verification: ""
-files_changed: []
+fix: |
+  ROOT CAUSE (a) — RESOLVIDO (TDD).
+  Regra correta: o hard-gate de ferramenta em dig.ts só deve bloquear blocos que NÃO
+  dropam nada à mão — ou seja, categoria 'pickaxe' (pedra, minérios, deepslate). Madeira
+  ('axe') e terra/areia/cascalho ('shovel') são quebráveis à mão (a ferramenta só acelera).
+
+  Mudanças:
+  - src/skills/tool-selector.ts: novo predicado exportado `toolRequiredForDrop(blockName)` —
+    true SOMENTE quando BLOCK_TO_TOOL_CATEGORY[blockName] === 'pickaxe' (false p/ axe/shovel
+    e p/ blocos desconhecidos).
+  - src/skills/dig.ts: o gate `tool === null → no_effect` agora exige TAMBÉM
+    `toolRequiredForDrop(blockNameForTool)`. Sem ferramenta + bloco hand-breakable → cai
+    no fluxo de mineração e cava à mão. O passo de equip vira condicional (`tool !== null`),
+    preservando o equip-best-tool (ranking D-12) quando há ferramenta.
+
+  Isso destrava o deadlock de bootstrap: oak_log agora coleta à mão → madeira entra no
+  inventário → o 1º item da gatheringLadder deixa de ficar permanentemente insatisfeito.
+
+  ROOT CAUSE (b) — AINDA ABERTO (fora do escopo desta sessão).
+  A decisão LLM action=explore continua estruturalmente ignorada pelo roteador DAG
+  (nodes.ts) e pela ponte need→DAG (nodes.ts), que têm precedência sobre llmDecision.
+  Não tocado nesta sessão (não modificar nodes.ts/loop.ts/deliberation.ts). Com (a)
+  resolvido, o sintoma observável (loop oak_log sem progresso) deve sumir no caso comum
+  porque a coleta agora progride; (b) ainda precisa de fix próprio para honrar explore
+  quando a coleta genuinamente não for viável (ex: alvo inalcançável).
+verification: |
+  TDD (red→green):
+  - tool-selector.test.ts: 'toolRequiredForDrop' — pickaxe(stone/iron_ore/deepslate_diamond_ore/
+    cobblestone)=true; axe(oak_log/birch_log/crafting_table)=false; shovel(dirt/sand/gravel)=false;
+    desconhecido(short_grass/unknown)=false. (4 novos testes)
+  - dig.test.ts: caso 4 (oak_log SEM axe → não hard-gate, collect chamado), caso 5 (dirt SEM
+    shovel → cava à mão), caso 6 (iron_ore SEM picareta → hard-gate no_effect, collect NÃO
+    chamado). Casos 4/5 falhavam antes do fix; caso 6 já passava (gate correto p/ pickaxe).
+  - bunx tsc --noEmit: limpo.
+  - bun test src/skills/: 114 pass / 0 fail (sem regressões).
+files_changed:
+  - src/skills/tool-selector.ts (novo predicado toolRequiredForDrop)
+  - src/skills/dig.ts (gate condicionado a toolRequiredForDrop; equip condicional a tool!==null)
+  - src/skills/tool-selector.test.ts (4 testes do predicado)
+  - src/skills/dig.test.ts (3 testes do gate seletivo + mock parametrizado por blockName/inventory)
