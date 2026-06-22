@@ -3,7 +3,7 @@
 // Usa Database(':memory:') (mesmo padrão dos testes da Fase 4) — sem arquivo no disco.
 import { test, expect } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { ensureSpendTable, windowKey, incrementCall, getCallCount } from './spendStore'
+import { ensureSpendTable, windowKey, incrementCall, getCallCount, reserveCall, releaseCall } from './spendStore'
 
 /** Timestamp UTC determinístico para um dado dia/hora (evita depender do relógio do CI). */
 function ts(year: number, month: number, day: number, hour = 12): number {
@@ -72,4 +72,40 @@ test('incrementCall/getCallCount são robustos sem ensureSpendTable explícito (
   expect(getCallCount(db, t)).toBe(0)
   incrementCall(db, t)
   expect(getCallCount(db, t)).toBe(1)
+})
+
+// === Fase 10.1 / D-10: reserva atômica (increment-then-check) + estorno (MAX(0,..)) ===
+
+test('reserveCall: increment-then-check — sob o teto retorna true; ao estourar retorna false (calls ainda sobe)', () => {
+  const db = new Database(':memory:')
+  const t = ts(2026, 6, 19)
+
+  expect(reserveCall(db, t, 2)).toBe(true) // calls 0→1, 1<=2
+  expect(getCallCount(db, t)).toBe(1)
+  expect(reserveCall(db, t, 2)).toBe(true) // calls 1→2, 2<=2
+  expect(getCallCount(db, t)).toBe(2)
+  expect(reserveCall(db, t, 2)).toBe(false) // calls 2→3, 3>2 (estourou)
+  expect(getCallCount(db, t)).toBe(3) // o contador SOBE mesmo quando retorna false (reserva especulativa)
+})
+
+test('reserveCall em janela inexistente: cria a linha com calls=1 (INSERT) e retorna 1<=maxCalls', () => {
+  const db = new Database(':memory:')
+  const t = ts(2026, 6, 19)
+  expect(reserveCall(db, t, 5)).toBe(true)
+  expect(getCallCount(db, t)).toBe(1)
+})
+
+test('releaseCall: estorna uma reserva (decrementa); piso 0 — release num contador 0 mantém 0', () => {
+  const db = new Database(':memory:')
+  const t = ts(2026, 6, 19)
+
+  reserveCall(db, t, 3) // calls=1
+  reserveCall(db, t, 3) // calls=2
+  releaseCall(db, t)
+  expect(getCallCount(db, t)).toBe(1) // estornou de 2 para 1
+
+  releaseCall(db, t)
+  expect(getCallCount(db, t)).toBe(0)
+  releaseCall(db, t) // já em 0 → MAX(0, -1) = 0
+  expect(getCallCount(db, t)).toBe(0)
 })

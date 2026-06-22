@@ -1,5 +1,6 @@
 // src/llm/spendCap.test.ts
-// PROV-05 / D-06 / D-07 / D-08: decorator withSpendCap (hard-cap -> fallback-to-local).
+// PROV-05 / D-06 / D-07 / D-08 + 10.1 D-10: decorator withSpendCap (hard-cap -> fallback-to-local)
+// com reserva ATÔMICA (reserveCall/releaseCall) fechando o TOCTOU.
 // Sem rede e sem SQLite real — usa mocks de LlmProvider e um SpendStore fake injetado.
 import { test, expect } from 'bun:test'
 import { withSpendCap, type SpendStore } from './spendCap'
@@ -35,22 +36,55 @@ function mockProvider(tag: 'cloud' | 'local', calls: Record<string, number>): Ll
   }
 }
 
-/** SpendStore fake in-memory com contador fixo configurável e rastreio de increments. */
-function fakeStore(initialCount: number): SpendStore & { count: number; increments: number } {
+/** Cloud cujo decide/chat SEMPRE lançam (para testar o estorno no catch — D-10). */
+function throwingCloud(calls: Record<string, number>): LlmProvider {
+  return {
+    maxConcurrency: 1,
+    decide: (async () => {
+      calls['cloud.decide'] = (calls['cloud.decide'] ?? 0) + 1
+      throw new Error('cloud boom')
+    }) as LlmProvider['decide'],
+    chat: async () => {
+      calls['cloud.chat'] = (calls['cloud.chat'] ?? 0) + 1
+      throw new Error('cloud boom')
+    },
+    available: async () => true,
+    embed: async () => [1, 2, 3],
+  }
+}
+
+/**
+ * SpendStore fake in-memory: reserveCall faz increment-then-check (count++ e compara com maxCalls),
+ * releaseCall decrementa com piso 0. Rastreia reserves/releases e getCallCount p/ available().
+ */
+function fakeStore(initialCount: number): SpendStore & {
+  count: number
+  reserves: number
+  releases: number
+} {
   return {
     count: initialCount,
-    increments: 0,
+    reserves: 0,
+    releases: 0,
     getCallCount(_now: number): number {
       return this.count
     },
     incrementCall(_now: number, _tokens?: number): void {
       this.count += 1
-      this.increments += 1
+    },
+    reserveCall(_now: number, maxCalls: number): boolean {
+      this.reserves += 1
+      this.count += 1 // increment-then-check (especulativo)
+      return this.count <= maxCalls
+    },
+    releaseCall(_now: number): void {
+      this.releases += 1
+      this.count = Math.max(0, this.count - 1)
     },
   }
 }
 
-test('abaixo do teto: decide chama cloud.decide e incrementa o contador 1x', async () => {
+test('abaixo do teto: decide chama cloud.decide; reserveCall 1x; releaseCall NÃO chamado (sucesso)', async () => {
   const calls: Record<string, number> = {}
   const cloud = mockProvider('cloud', calls)
   const local = mockProvider('local', calls)
@@ -62,10 +96,11 @@ test('abaixo do teto: decide chama cloud.decide e incrementa o contador 1x', asy
   expect(res.action).toBe('cloud') // roteou para a cloud
   expect(calls['cloud.decide']).toBe(1)
   expect(calls['local.decide']).toBeUndefined()
-  expect(store.increments).toBe(1) // contou a chamada cloud
+  expect(store.reserves).toBe(1) // reservou o slot atomicamente
+  expect(store.releases).toBe(0) // sucesso → não estorna
 })
 
-test('no teto (>=maxCalls): decide cai para local.decide SEM incrementar o contador cloud', async () => {
+test('no teto: decide cai para local.decide; reserveCall=false; releaseCall 1x (estorna a reserva especulativa)', async () => {
   const calls: Record<string, number> = {}
   const cloud = mockProvider('cloud', calls)
   const local = mockProvider('local', calls)
@@ -76,23 +111,41 @@ test('no teto (>=maxCalls): decide cai para local.decide SEM incrementar o conta
 
   expect(res.action).toBe('local') // fallback-to-local (D-08)
   expect(calls['cloud.decide']).toBeUndefined() // NÃO chamou a cloud
-  expect(store.increments).toBe(0) // não conta o fallback
+  expect(store.reserves).toBe(1) // tentou reservar (especulativo)
+  expect(store.releases).toBe(1) // estornou o slot que não vai usar
 })
 
-test('chat segue a mesma regra do teto (cap -> local.chat)', async () => {
+test('erro real do cloud.decide: releaseCall é chamado no catch e o erro é re-lançado (D-10)', async () => {
+  const calls: Record<string, number> = {}
+  const cloud = throwingCloud(calls)
+  const local = mockProvider('local', calls)
+  const store = fakeStore(0)
+
+  const provider = withSpendCap(cloud, local, store, { maxCalls: 3 })
+  await expect(provider.decide(schema, messages)).rejects.toThrow('cloud boom')
+  expect(calls['cloud.decide']).toBe(1)
+  expect(store.reserves).toBe(1)
+  expect(store.releases).toBe(1) // estorna no erro real (decisão de discrição D-10)
+})
+
+test('chat segue a mesma regra: sob o teto vai à cloud; no teto cai para local com estorno', async () => {
   const calls: Record<string, number> = {}
   const cloud = mockProvider('cloud', calls)
   const local = mockProvider('local', calls)
 
-  const under = withSpendCap(cloud, local, fakeStore(0), { maxCalls: 2 })
+  const underStore = fakeStore(0)
+  const under = withSpendCap(cloud, local, underStore, { maxCalls: 2 })
   expect(await under.chat(messages)).toBe('cloud')
   expect(calls['cloud.chat']).toBe(1)
+  expect(underStore.releases).toBe(0)
 
-  const over = withSpendCap(cloud, local, fakeStore(2), { maxCalls: 2 })
+  const overStore = fakeStore(2)
+  const over = withSpendCap(cloud, local, overStore, { maxCalls: 2 })
   expect(await over.chat(messages)).toBe('local')
+  expect(overStore.releases).toBe(1) // estornou
 })
 
-test('embed SEMPRE delega ao cloud (local por composição no Plano 01) — nunca conta para o teto', async () => {
+test('embed SEMPRE delega ao cloud — nunca chama reserveCall nem conta para o teto', async () => {
   const calls: Record<string, number> = {}
   const cloud = mockProvider('cloud', calls)
   const local = mockProvider('local', calls)
@@ -104,18 +157,20 @@ test('embed SEMPRE delega ao cloud (local por composição no Plano 01) — nunc
   expect(vec).toEqual([1, 2, 3])
   expect(calls['cloud.embed']).toBe(1) // embed via cloud mesmo sob cap
   expect(calls['local.embed']).toBeUndefined()
-  expect(store.increments).toBe(0) // embed não conta
+  expect(store.reserves).toBe(0) // embed nunca reserva
 })
 
-test('available() reflete o provider roteado (sob cap -> local.available)', async () => {
+test('available() reflete o provider roteado por getCallCount (probe, NÃO consome slot)', async () => {
   const calls: Record<string, number> = {}
   const cloud = mockProvider('cloud', calls)
   const local = mockProvider('local', calls)
 
-  const under = withSpendCap(cloud, local, fakeStore(0), { maxCalls: 1 })
+  const underStore = fakeStore(0)
+  const under = withSpendCap(cloud, local, underStore, { maxCalls: 1 })
   await under.available()
   expect(calls['cloud.available']).toBe(1)
   expect(calls['local.available']).toBeUndefined()
+  expect(underStore.reserves).toBe(0) // available não reserva
 
   const over = withSpendCap(cloud, local, fakeStore(1), { maxCalls: 1 })
   await over.available()
