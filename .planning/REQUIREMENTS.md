@@ -58,8 +58,8 @@ Escopo comprometido deste milestone. Cada requisito mapeia para uma fase do road
 ### Building (BUILD)
 
 - [x] **BUILD-01**: O agente coloca blocos de forma confiável (placeBlock com verificação e timeout)
-- [ ] **BUILD-02**: O agente constrói um abrigo funcional (estado building real, além do abrigo de emergência reflexo)
-- [ ] **BUILD-03**: O agente constrói estruturas simples (parede / torre / posicionar estação)
+- [x] **BUILD-02**: O agente constrói um abrigo funcional (estado building real, além do abrigo de emergência reflexo)
+- [x] **BUILD-03**: O agente constrói estruturas simples (parede / torre / posicionar estação)
 
 ### Combate (FIGHT)
 
@@ -135,8 +135,8 @@ Quais fases cobrem quais requisitos. Preenchido durante a criação do roadmap.
 | MODE-03 | Phase 11 | Pending |
 | MODE-04 | Phase 11 | Pending |
 | MODE-05 | Phase 11 | Pending |
-| BUILD-02 | Phase 12 | Pending |
-| BUILD-03 | Phase 12 | Pending |
+| BUILD-02 | Phase 12 | Complete |
+| BUILD-03 | Phase 12 | Complete |
 | FIGHT-01 | Phase 13 | Pending |
 | FIGHT-02 | Phase 13 | Pending |
 | FIGHT-03 | Phase 13 | Pending |

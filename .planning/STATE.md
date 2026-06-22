@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Autonomia de Verdade
-status: verifying
-stopped_at: Phase 12 context gathered
-last_updated: "2026-06-22T20:20:19.064Z"
-last_activity: "2026-06-22 - Completed quick task 260622-nif: AUTONOMOUS responde sem abortar a tarefa em voo (reverte D-07/D-12)"
+status: executing
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-06-22T20:53:51.343Z"
+last_activity: 2026-06-22
 progress:
   total_phases: 13
   completed_phases: 9
-  total_plans: 32
-  completed_plans: 32
+  total_plans: 35
+  completed_plans: 33
   percent: 95
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-19)
 
 **Core value:** O agente permanece ativo de forma autônoma, percebe o mundo e age sobre ele com base em objetivos próprios e memória — sem intervenção humana. Se tudo falhar, o loop cognitivo (perceber → decidir → agir) precisa funcionar.
-**Current focus:** Phase 11.1 — llm-recebe-posi-es-e-dist-ncias-de-blocos-mobs-e-entidades-percep-o-espacial-no-contexto-user-human
+**Current focus:** Phase 12 — building-deliberado
 
 ## Current Position
 
-Phase: 12
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-06-22 - Completed quick task 260622-nif: AUTONOMOUS responde sem abortar a tarefa em voo (reverte D-07/D-12)
+Phase: 12 (building-deliberado) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-06-22
 
 Progress: [█████████░] 95%
 
@@ -77,6 +77,7 @@ Progress: [█████████░] 95%
 | Phase 10.1 P01 | 26 | 3 tasks | 6 files |
 | Phase 10.1 P02 | 18 | 2 tasks | 8 files |
 | Phase 11.1 P01 | 18 | 2 tasks | 2 files |
+| Phase 12 P01 | 7 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -119,6 +120,7 @@ Recent decisions affecting current work:
 - [Phase 10.1]: 10.1-02: handleConversation roteado por routePlayerTurn (gate player, prioridade 0, preempta a AÇÃO via actionAbort.abort(), release/leave no finally) — fecha a brecha do chat-sem-coordenação (D-08)
 - [Phase 10.1]: 10.1-02: holder.goals protegido do clobber por commit síncrono merge-by-id na runReflection (re-lê holder.goals no write; goal de player empurrado durante o await sobrevive — D-04/D-05/D-06/Pitfall 2); reflexão nunca recebe signal (D-13)
 - [Phase 11.1]: 11.1-01: serializeContext expõe percepção espacial híbrida próx(x,y,z) Nm Δy±k para blocos/entidades/jogadores; Δy cru sem veredito (D-02); teto global BLOCK_COORD_BUDGET=18 vira único gate priorizado (troncos>pedra>minério>lixo, count de todos os tipos preservado, .slice(0,8) removido — D-03); jogador position null degrada para sem-pos sem lançar (D-04a); assinatura/call-sites/types/snapshot intactos
+- [Phase 12]: 12-01: núcleo determinístico de building — geradores puros (genShelter casca-oca 6 lados/genWall/genTower) + runBlueprint idempotente (orderForReach bot-cell-last/baixo→cima/fora→dentro D-05; placeOneWithRetry liga placeRetries 0→2 D-02; grounding por cobertura real D-03/D-10); skill build resolve shelter/wall/tower/station/custom; isFilled exportado; shelter.ts/nodes.ts intactos
 
 ### Roadmap Evolution
 
@@ -154,6 +156,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-06-22T20:20:19.057Z
-Stopped at: Phase 12 context gathered
-Resume file: .planning/phases/12-building-deliberado/12-CONTEXT.md
+Last session: 2026-06-22T20:53:51.336Z
+Stopped at: Completed 12-01-PLAN.md
+Resume file: None
